@@ -72,6 +72,8 @@ JOBS_OTHER = [
     ("Solutions Architect", "Cloudmere", "US", "https://www.linkedin.com/jobs/view/0000000003/"),
     ("BI Developer", "Grayline Retail Group", "Chicago, IL", "https://www.linkedin.com/jobs/view/0000000004/"),
 ]
+JOBS_RANKED_NOTE = "ranked: data engineering \u00b7 Python \u00b7 streaming platforms first"
+JOBS_TEAL_LABEL = "remote or preferred location \u00b7 adjacent AI/ML fit"
 ALIGNERR = "Gig-platform digest (Mon 9:35 AM EST): hourly contract listings, $40–95/hr, none matching the configured interests — tracking links only."
 JOBS_SKIPPED = "Skipped as off-target: two sales roles, a staffing-agency blast with no named employer, and a job-board newsletter with no actual postings."
 
@@ -187,7 +189,7 @@ def job_fit(role):
     return "", ""
 def loc_tier(loc):
     l = loc.lower()
-    if any(k in l for k in ("san francisco", "berkeley", "emeryville", "redwood city", "brisbane, ca", "novato", "bay area", "california")): return "accent", "Bay Area/CA"
+    if any(k in l for k in ("boston", "denver", "preferred")): return "accent", "Preferred area"
     if "remote" in l: return "accent", "Remote"
     return "", ""
 
@@ -298,7 +300,7 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
         o.append(f'<div class="act {sev}"><div class="stripe"></div><div class="body"><div class="act-title"><span class="tag">{tagmap[sev]}</span>{e(t)}</div><div class="det">{e(d)}</div></div></div>')
     o.append('</div></section>')
     # 1 jobs
-    o.append('<section><h2><span class="num">1.</span> Relevant job posts <span class="sub">ranked: scientist · comp bio · data science · Python · sequencing/genomics first</span></h2><div class="card">')
+    o.append(f'<section><h2><span class="num">1.</span> Relevant job posts <span class="sub">{e(JOBS_RANKED_NOTE)}</span></h2><div class="card">')
     o.append('<h3 style="margin-top:0">Application status</h3><ul class="jobs">')
     for t, m, d in JOBS_STATUS:
         o.append(f'<li><span class="lead">{e(t)}</span> <span class="meta">— {e(m)}</span><br>{e(d)}</li>')
@@ -309,7 +311,7 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
         compc = f'<span class="c-pos">{e(comp)}</span>' if comp != "not stated" else f'<span class="muted">{e(comp)}</span>'
         locc = f'<span class="c-accent">{e(loc)}</span>' if lcls else e(loc)
         o.append('<tr>' + tdl("Role", role) + tdl("Company", e(c)) + tdl("Comp", compc, "mono") + tdl("Location", locc) + tdl("Source · received", e(src), "meta") + tdl("Link", f'<a href="{e(link)}">open</a>') + '</tr>')
-    o.append('</tbody></table></div><div class="legend"><span><b class="c-pos">Green</b> = comp stated / strong fit</span><span><b class="c-accent">Teal</b> = Bay Area, CA or remote · adjacent AI/ML fit</span><span><b class="c-warn">Amber</b> = deadline stated (none today)</span><span class="muted">Grey = not stated</span></div>')
+    o.append('</tbody></table></div><div class="legend"><span><b class="c-pos">Green</b> = comp stated / strong fit</span><span><b class="c-accent">Teal</b> = ' + e(JOBS_TEAL_LABEL) + '</span><span><b class="c-warn">Amber</b> = deadline stated (none today)</span><span class="muted">Grey = not stated</span></div>')
     o.append('<h3>Also seen (lower fit)</h3><ul class="jobs">')
     for r, c, loc, link in JOBS_OTHER:
         lcls, _ = loc_tier(loc)
@@ -441,7 +443,7 @@ def email_html():
     rows = "".join(stripe_row(sevcol[sev], f'<span style="font-size:10.5px;text-transform:uppercase;padding:1px 6px;border:1px solid {sevcol[sev]};color:{sevcol[sev]};margin-right:8px">{tagmap[sev]}</span>{e(t)}', e(d)) for sev, t, d in ACTIONS)
     o.append('<div style="margin-top:18px">' + h2("Needs you today", "ranked; nothing expires before tomorrow's run") + rows + '</div>')
     # 1 jobs — 3 columns
-    inner = h2(f'{sp("1.", L["accent"])} Relevant job posts', "ranked: scientist · comp bio · data science · Python · sequencing/genomics first")
+    inner = h2(f'{sp("1.", L["accent"])} Relevant job posts', JOBS_RANKED_NOTE)
     inner += h3("Application status") + ul([f'{lead(t)} {small("— " + e(m))}<br>{e(d)}' for t, m, d in JOBS_STATUS])
     inner += h3("Ranked leads")
     rws = []
@@ -452,7 +454,7 @@ def email_html():
         locc = sp(e(loc), L["accent"]) if lcls else e(loc)
         rws.append([td(f'<b>{e(r)}</b>{badge}<br>{small(e(c))}'), td(f'<span style="font-family:{F_M}">{compc}</span><br>{locc}'), td(f'<a href="{e(link)}" style="color:{L["accent"]};font-weight:600">open</a><br>{small(e(src))}')])
     inner += tbl(["Role · company", "Comp · location", "Link · source"], rws)
-    inner += f'<div style="font-size:12.5px;color:{L["ink3"]};margin-top:8px">{sp("Green",L["pos"])} = comp stated / strong fit · {sp("Teal",L["accent"])} = Bay Area, CA or remote · adjacent AI/ML fit · {sp("Amber",L["warn"])} = deadline stated (none today) · Grey = not stated</div>'
+    inner += f'<div style="font-size:12.5px;color:{L["ink3"]};margin-top:8px">{sp("Green",L["pos"])} = comp stated / strong fit · {sp("Teal",L["accent"])} = {JOBS_TEAL_LABEL} · {sp("Amber",L["warn"])} = deadline stated (none today) · Grey = not stated</div>'
     inner += h3("Also seen (lower fit)") + ul([f'{e(r)} — {e(c)} · ' + (sp(e(loc),L["accent"]) if loc_tier(loc)[0] else muted(e(loc))) + f' · <a href="{e(link)}" style="color:{L["accent"]}">link</a>' for r, c, loc, link in JOBS_OTHER])
     inner += f'<p style="font-size:13px;color:{L["ink3"]}">{e(ALIGNERR)}</p><p style="font-size:13px;color:{L["ink3"]}">{e(JOBS_SKIPPED)}</p>'
     o.append(card(inner))
