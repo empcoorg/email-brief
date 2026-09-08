@@ -4,6 +4,14 @@ A template for a **personalized daily email briefing**, run entirely by a [Claud
 
 No servers, no API keys, no code to deploy. The whole system is one carefully-written prompt (plus an optional layout reference script). Each run is a fresh Claude session with your email connector attached.
 
+## Quick start — ask Claude to set it up for you
+
+Connect your email connector(s) in Claude (Settings → Connectors), then paste this to Claude:
+
+> Read the template at https://raw.githubusercontent.com/empcoorg/email-brief/main/ROUTINE_PROMPT.template.md and set up the email brief for me. Ask me for each {{PLACEHOLDER}} value one section at a time — use my connected email connector(s), ask which mailboxes to read and where to deliver the brief, and drop any OPTIONAL section that doesn't apply to me. Then create the scheduled Routine with the filled-in prompt (my choice of cadence, time and timezone, fresh session per run, my email connector(s) attached) and fire one test run so I can check the delivered email.
+
+That's the whole setup. The rest of this README explains what you get and how to do the same steps by hand.
+
 ## What a brief contains
 
 - **A "needs you today" action bar** — severity-striped items ranked by urgency.
