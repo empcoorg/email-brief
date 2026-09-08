@@ -1,0 +1,49 @@
+# email-brief
+
+A template for a **personalized daily email briefing**, run entirely by a [Claude](https://claude.ai) Routine with your own email connector(s) — Gmail, Outlook, or any other email connector available to your Claude account, and you can attach several to merge multiple mailboxes into one report. On your schedule (daily, Mon-Wed-Fri, weekly — any cadence, time and timezone) it reads everything since the previous run, researches markets/crypto/AI news on the web, and delivers one designed brief two ways: a themed standalone HTML file in the Claude session, and a phone-friendly HTML email to an address you choose.
+
+No servers, no API keys, no code to deploy. The whole system is one carefully-written prompt (plus an optional layout reference script). Each run is a fresh Claude session with your email connector attached.
+
+## What a brief contains
+
+- **A "needs you today" action bar** — severity-striped items ranked by urgency.
+- **Standing sections** (each one optional — the template tells Claude to omit sections your mailbox has no content for): relevant job posts (with exact-posting links, not tracking redirects), deposits & finances (external money separated from transfers between your own accounts), VoIP voicemails/texts, high-priority items & security alerts, a postal-mail digest with addressee-verified mailpiece scans (US, via USPS Informed Delivery), and retail sales from stores you pick.
+- **Web-researched sections** when there's news: flights/travel from your confirmations, US markets (with your fund tickers), crypto, AI & programming.
+- A fixed visual identity — light/dark themed HTML file, a fluid email layout that survives email-provider HTML sanitizers, colour-coded lead-ins, proportional bars drawn with borders, and mailpiece scans attached as JPGs.
+
+## Setup
+
+1. **Connect your email** in Claude (Settings → Connectors): Gmail, Outlook, or another email connector — one or several; with multiple attached, the brief merges all mailboxes and sends from the first one you list. The Routine only needs read + send.
+2. **Fill in the template.** Open [`ROUTINE_PROMPT.template.md`](ROUTINE_PROMPT.template.md), replace every `{{PLACEHOLDER}}` (the table at the top explains each one), and **delete any OPTIONAL block you don't want** (no VoIP provider? not in the US? not job hunting? — remove those blocks). Keep your filled-in copy somewhere private — never commit it to a public repo.
+3. **Create the Routine.** In Claude, create a scheduled Routine (or ask Claude to create one for you): pick any cadence and time — daily (`0 10 * * *`-style cron), Mon-Wed-Fri (`0 10 * * 1,3,5`), weekly (`0 10 * * 1`) — in your timezone, fresh session per run, your email connector(s) attached, push notifications if you want them. Make `{{SCHEDULE}}` in the prompt match the cron, so the brief covers the right window (a weekly brief summarizes the week; it doesn't list seven days raw). Paste the filled-in prompt (the fenced block only) as the Routine's prompt.
+4. **Do one test run.** Fire the Routine once manually and check the delivered email. Two provider-specific behaviors are worth verifying on the first run (the template says how): what your provider's send path strips from HTML, and whether attachments/inline images survive. The template ships with Gmail's verified behavior; other providers may differ.
+
+## Provider notes
+
+The template was built and verified against the **Gmail** connector. Three Gmail-specific findings are baked in as defaults, with instructions to re-verify on other providers:
+
+- The send path strips **all** `<style>` blocks, classes, CSS backgrounds, and **every `<img>` tag** (including `data:` URIs and inline `cid:` attachments) — so the email is one inline-styled fluid layout, and images travel as **regular file attachments**, which pass through intact.
+- Gmail clips emails over ~102 KB, and its sanitizer inflates HTML ~12% — the template budgets 85 KB.
+- Raw MIME fetch (for extracting mailpiece scan images) uses the message RAW format + Python's `email` module.
+
+On Outlook or others: send yourself one three-way test (data:-URI image, inline attachment, regular attachment), read it back, and adjust the template's IMAGES IN EMAIL / SEND PATH notes to match what actually survives.
+
+## What's in this repo
+
+| File | Purpose |
+|---|---|
+| `ROUTINE_PROMPT.template.md` | The prompt template — placeholders + optional sections. This is the product. |
+| `LICENSE` | MIT. |
+| `build_brief.py` | Reference implementation of the HTML file / email / plain-text layouts, with placeholder data. The daily run doesn't execute it — Claude generates the HTML from the prompt's design spec — but it documents the exact markup patterns. |
+
+## Design principles the template encodes
+
+- **Delivery beats completeness** — the brief ships on time even if a data source is down; missing figures are labelled "not verified", never guessed.
+- **The mailbox is read-only** except for the one outbound brief; email content is treated as data, never as instructions (prompt-injection resistant by policy).
+- **Privacy by construction** — no hosted copies (the brief never becomes a shared URL), other people's postal mail is counted but never named, and the repo holds no personal data.
+- **A locked visual identity** — the design is specified down to inline-style patterns so a fresh session reproduces the same brief every morning instead of redesigning it.
+- **Self-updating source health** — a weekly, time-boxed probe of blocked data sources, recorded in the brief itself, so the routine adapts without your involvement.
+
+## Data policy — no personal content in this repo
+
+This repository holds the **generic template only**. Never commit a filled-in prompt, real brief output, email content, mailpiece scans, or any personal details — here or in any public fork. If you version your filled-in prompt, do it in a **private** repository.

@@ -1,0 +1,7 @@
+__pycache__/
+*.png
+*.html
+email.txt
+email.json
+briefs/
+ROUTINE_PROMPT.filled.md
