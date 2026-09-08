@@ -4,8 +4,8 @@
 Run from the repo root after any design-affecting change (see README):
     pip install playwright   # Chromium must be available to Playwright
     python3 docs/render_screenshots.py
-Writes docs/mock-brief-top.png, docs/mock-brief-sections.png and
-docs/mock-brief-markets.png (all captured in dark mode).
+Writes docs/mock-brief-top.png, docs/mock-brief-jobs.png,
+docs/mock-brief-sections.png and docs/mock-brief-markets.png (all dark mode).
 """
 import asyncio, os, re, subprocess, sys, tempfile
 
@@ -29,8 +29,17 @@ async def main():
             bar = await pg.query_selector("main > div, .actions, body")
             h = await pg.evaluate("() => { const s = document.querySelectorAll('section'); return s.length > 1 ? s[1].getBoundingClientRect().top + window.scrollY : 1200; }")
             await pg.screenshot(path=os.path.join(DOCS, "mock-brief-top.png"), clip={"x": 0, "y": 0, "width": 1180, "height": min(int(h), 2200)})
-            # Middle: finances section (money table, bars, tiles)
+            # Section 1: relevant job posts (ranked table with badges + legend)
             secs = await pg.query_selector_all("section")
+            jobs = None
+            for s in secs:
+                txt = (await s.inner_text())[:120].lower()
+                if "job posts" in txt:
+                    jobs = s
+                    break
+            if jobs:
+                await jobs.screenshot(path=os.path.join(DOCS, "mock-brief-jobs.png"))
+            # Section 2: finances (money table, bars, tiles)
             target = None
             for s in secs:
                 txt = (await s.inner_text())[:120].lower()
@@ -54,6 +63,6 @@ async def main():
             if rect:
                 await pg.screenshot(path=os.path.join(DOCS, "mock-brief-markets.png"), clip=rect, full_page=True)
             await b.close()
-    print("wrote docs/mock-brief-top.png, mock-brief-sections.png, mock-brief-markets.png (dark mode)")
+    print("wrote mock-brief-top/jobs/sections/markets PNGs (dark mode)")
 
 asyncio.run(main())

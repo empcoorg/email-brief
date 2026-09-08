@@ -25,6 +25,10 @@ All content below is **mock data** for a fictional "Alex Sample" — nothing rea
 
 ![Mock brief — masthead and action bar](docs/mock-brief-top.png)
 
+Section 1, Relevant job posts — application-status lead-ins, the ranked-leads table with fit badges and the colour-code legend:
+
+![Mock brief — relevant job posts section](docs/mock-brief-jobs.png)
+
 The Deposits & finances section — summary tiles, the money-movements table with direction words and proportional bars, and external money separated from internal transfers:
 
 ![Mock brief — deposits and finances section](docs/mock-brief-sections.png)
