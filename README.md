@@ -21,7 +21,7 @@ That's the whole setup. The rest of this README explains what you get and how to
 
 ## What it looks like
 
-All content below is **mock data** for a fictional "Alex Sample" — nothing real. Masthead and the "needs you today" action bar:
+All content below is **mock data** for a fictional "Alex Sample" — nothing real. Screenshots show the standalone HTML file in dark mode (it follows your system theme — see [Light & dark mode](#light--dark-mode)). Masthead and the "needs you today" action bar:
 
 ![Mock brief — masthead and action bar](docs/mock-brief-top.png)
 
@@ -29,7 +29,17 @@ The Deposits & finances section — summary tiles, the money-movements table wit
 
 ![Mock brief — deposits and finances section](docs/mock-brief-sections.png)
 
-> **Maintenance rule:** these screenshots are generated from `build_brief.py`'s mock data by [`docs/render_screenshots.py`](docs/render_screenshots.py). Whenever a PR that changes the design or layout is merged, regenerate them (`python3 docs/render_screenshots.py`) and commit the updated PNGs, so the README always shows the current UI.
+The web-researched market grid — US indexes with diverging bars, your fund tickers, and the crypto table:
+
+![Mock brief — US market and cryptocurrency sections](docs/mock-brief-markets.png)
+
+### Light & dark mode
+
+- **The standalone HTML file is theme-aware automatically**: it follows your OS/browser setting via `prefers-color-scheme`, with the full palette defined for both. No configuration needed.
+- **To force a theme**, open the file and add `data-theme="dark"` or `data-theme="light"` to the `<html>` element — that overrides the system setting in either direction.
+- **The email is always the light layout.** Email providers strip `<style>` blocks (and with them any dark-mode media queries), so the emailed copy cannot adapt; it ships as the single inline-styled light design that reads correctly in both light- and dark-mode mail clients.
+
+> **Maintenance rule:** these screenshots are generated from `build_brief.py`'s mock data by [`docs/render_screenshots.py`](docs/render_screenshots.py). Whenever a PR that changes the design or layout is merged, regenerate them (`python3 docs/render_screenshots.py`; captures in dark mode) and commit the updated PNGs, so the README always shows the current UI.
 
 ## Setup
 
