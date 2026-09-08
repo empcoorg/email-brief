@@ -348,7 +348,7 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
     for n, c, pts, pct, wk in MKT_ROWS:
         cls = "dir-pos" if pct >= 0 else "dir-neg"; word = "Up" if pct >= 0 else "Down"
         o.append('<tr>' + tdl("Index", e(n), "mono") + tdl("Fri close", e(c), "num mono") + tdl("Move · week", f'<span class="{cls}">{e(pts)}<br>{pct:+.2f}% {word}</span><br><span class="meta">{e(wk)}</span>', "num mono") + tdl("Bar", bar_div(pct, MKT_SCALE)) + '</tr>')
-    o.append(f'</tbody></table></div><div class="cap">Diverging bars from a centre baseline; half-width = ±{MKT_SCALE:.1f}% (Friday\'s largest index move was −0.51%).</div>')
+    o.append(f'</tbody></table></div><div class="cap">Diverging bars from a centre baseline; half-width = ±{MKT_SCALE:.1f}% daily move.</div>')
     o.append('<h3>Vanguard funds</h3><div class="tbl-wrap"><table><thead><tr><th>Fund</th><th style="text-align:right">NAV</th><th style="text-align:right">Change</th><th>As of</th></tr></thead><tbody>')
     for tk, nm, nav, chg, asof, ytd, note in FUNDS:
         cls = "dir-pos" if "+" in chg.split("·")[0] else "dir-neg"
@@ -361,7 +361,7 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
         cls = "dir-pos" if d7 >= 0 else "dir-neg"; word = "Up" if d7 >= 0 else "Down"
         c24 = "c-neg" if d24.startswith("−") or d24.startswith("-") else "c-pos"
         o.append('<tr>' + tdl("Asset", f'<span class="lead">{e(n)}</span>', "mono") + tdl("Price", e(p), "num mono") + tdl("24 h", f'<span class="{c24}">{e(d24)}</span>', "num mono") + tdl("7 d", f'<span class="{cls}">{d7:+.2f}%<br>{word}</span>', "num mono") + tdl("7 d bar", bar_div(d7, CRYPTO_SCALE)) + '</tr>')
-    o.append(f'</tbody></table></div><div class="cap">Diverging bars; half-width = ±{CRYPTO_SCALE:.0f}% 7-day change (DOGE +8.70% / BNB +8.68% set the scale). CoinMarketCap, ~7:00 AM PDT. {e(CRYPTO_NOTE)}</div><ul>')
+    o.append(f'</tbody></table></div><div class="cap">Diverging bars; half-width = ±{CRYPTO_SCALE:.0f}% 7-day change. {e(CRYPTO_NOTE)}</div><ul>')
     for b in CRYPTO_BULLETS: o.append(li_lead(b))
     o.append('</ul></div>')
     o.append('<div class="card"><h2>AI &amp; programming</h2><ul>')
@@ -492,7 +492,7 @@ def email_html():
     for n, c, pts, pct, wk in MKT_ROWS:
         col = L["pos"] if pct >= 0 else L["neg"]; word = "Up" if pct >= 0 else "Down"
         rws.append([td(f'{lead(n)}<br>{small(e(wk))}', mono=True), td(f'{e(c)}<br>{sp(f"{e(pts)} · {pct:+.2f}% {word}", col)}', mono=True), td(bar_div(pct, MKT_SCALE))])
-    inner += tbl(["Index · week", "Fri close · move", "Bar"], rws) + cap(f"Diverging bars from a centre baseline; half-width = ±{MKT_SCALE:.1f}% (Friday's largest index move was −0.51%).")
+    inner += tbl(["Index · week", "Fri close · move", "Bar"], rws) + cap(f"Diverging bars from a centre baseline; half-width = ±{MKT_SCALE:.1f}% daily move.")
     inner += h3("Vanguard funds")
     rws = []
     for tk, nm, nav, chg, asof, ytd, note in FUNDS:
@@ -508,7 +508,7 @@ def email_html():
         col = L["pos"] if d7 >= 0 else L["neg"]; word = "Up" if d7 >= 0 else "Down"
         neg24 = d24.startswith("−") or d24.startswith("-")
         rws.append([td(f'{lead(n)}<br>{e(p)}', mono=True), td(f'24h {sp(e(d24), L["neg"] if neg24 else L["pos"])}<br>7d {sp(f"{d7:+.2f}% {word}", col)}', mono=True), td(bar_div(d7, CRYPTO_SCALE))])
-    inner += tbl(["Asset · price", "24 h · 7 d", "7 d bar"], rws) + cap(f"Diverging bars; half-width = ±{CRYPTO_SCALE:.0f}% 7-day change (DOGE +8.70% / BNB +8.68% set the scale). CoinMarketCap, ~7:00 AM PDT. {CRYPTO_NOTE}")
+    inner += tbl(["Asset · price", "24 h · 7 d", "7 d bar"], rws) + cap(f"Diverging bars; half-width = ±{CRYPTO_SCALE:.0f}% 7-day change. {CRYPTO_NOTE}")
     inner += '<ul style="margin:8px 0 0;padding-left:20px">' + "".join(em_li(b) for b in CRYPTO_BULLETS) + "</ul>"
     o.append(card(inner))
     # ai
@@ -562,7 +562,7 @@ def plain_text():
     A("  Vanguard funds:")
     for tk, nm, nav, chg, asof, ytd, note in FUNDS: A(f"    {tk} ({nm}): NAV {nav} · {chg} · as of {asof} · YTD {ytd}. {note}")
     for b in MKT_BULLETS: A(f"  - {b}")
-    A(""); A("CRYPTOCURRENCY (CoinMarketCap ~7:00 AM PDT)")
+    A(""); A("CRYPTOCURRENCY")
     for n, p, d24, d7 in CRYPTO_ROWS: A(f"  {n}: {p} · 24h {d24} · 7d {d7:+.2f}% {'Up' if d7>=0 else 'Down'}")
     A("  " + CRYPTO_NOTE)
     for b in CRYPTO_BULLETS: A(f"  - {b}")
