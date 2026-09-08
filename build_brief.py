@@ -14,146 +14,160 @@ D = dict(bg="#0E1417", surface="#151D21", surface2="#1C262B", ink="#E6EDF0", ink
 def e(s): return H.escape(str(s), quote=False)
 
 # ------------------------------------------------------------------ DATA
-# PLACEHOLDER DATA ONLY. This repository holds the generic template.
-# NEVER commit real brief content, email data, or personal details here —
-# the daily run fills these structures in memory and writes outputs to
-# /mnt/user-data/outputs only. Every value below is deliberately fake.
+# MOCK DATA ONLY — a fictional persona ("Alex Sample", example.com, 555 numbers,
+# invented companies and figures) used for the README screenshots and as the
+# layout reference. NEVER commit real brief content, email data, or personal
+# details here — the daily run fills these structures in memory and writes
+# outputs to /mnt/user-data/outputs only.
 MAST = dict(
     title="Morning Brief",
-    dateline="Wednesday, January 1, 2025 · Sample Day",
-    revised="Revised 0:00 PM PT — placeholder revision note.",
-    tz="America/Los_Angeles · PT (UTC−8)",
-    window="Tue Dec 31, 9:00 AM → Wed Jan 1, 10:00 AM PT",
-    slot="Wed Jan 1, 10:00 AM PT",
-    run="Wed Jan 1, 10:05 AM PT",
-    note="Placeholder run note: window extended forward to the actual run time.",
+    dateline="Tuesday, March 3, 2026",
+    revised="",
+    tz="America/New_York · EST (UTC−5)",
+    window="Mon Mar 2, 9:00 AM → Tue Mar 3, 10:02 AM EST",
+    slot="Tue Mar 3, 10:00 AM EST",
+    run="Tue Mar 3, 10:02 AM EST",
+    note="Only brief until the next scheduled run — covers the full ~25 h since yesterday's 10:00 AM brief. All content on this page is mock data for a fictional \u201cAlex Sample\u201d.",
 )
 
 USPS = dict(
-    headline="No matching mail. Placeholder headline for the USPS section.",
+    headline="1 mailpiece for Alex Sample today; 2 pieces for other recipients — excluded (counted, never named).",
     items=[
-        "Placeholder item: mailpiece scans are extracted from each digest and read by vision.",
-        "Last digest (Tue Dec 31, 7:00 AM PT): 1 mailpiece, 0 packages — addressed to another recipient → excluded.",
+        "Mar 3 digest (7:20 AM EST): First Meridian Bank — window envelope, First-Class. Addressee as printed: ALEX Q SAMPLE. Scan attached to this email as usps-2026-03-03-1.jpg and embedded in the HTML file.",
+        "2 piece(s) addressed to other recipients — excluded. 0 packages.",
     ],
-    note="Placeholder note: matching pieces appear in a table with the scan attached to the email and embedded in the HTML file; other recipients' mail is reported only as a count.",
+    note="Every digest's mailpiece scans are extracted and read by vision, so the addressee filter checks the printed envelope, not the email text. Unreadable address blocks are listed as \u201caddressee unverified\u201d rather than dropped.",
 )
 RETAIL = dict(
-    sub="Store A · Store B · Store C — low priority",
-    rewards="Store A loyalty: $0.00 in rewards; 0 points to the next reward (placeholder).",
+    sub="Northwind Outfitters · Cascade Home — low priority",
+    rewards="Northwind rewards: $15.00 in member credit; 640 points to the next tier (from today's 6:05 AM EST email). Applies at checkout when signed in.",
     sales=[
-        "Store A — Sample Sale, 10–50% off: ends Wed Jan 1. Caveat: placeholder caveat.",
-        "Store B — nothing in the window.",
-        "Store C — nothing in the window.",
+        "Northwind Outfitters — Spring Kickoff, 20–40% off outerwear: ends Sun Mar 8. Caveat: excludes new arrivals; no adjustments to prior purchases.",
+        "Cascade Home — nothing in the window.",
     ],
 )
 ACTIONS = [
-    ("warn", "Placeholder warning action item",
-     "Placeholder detail: something time-sensitive happened at 0:00 PM PT and should be verified."),
-    ("info", "Placeholder informational action item",
-     "Placeholder detail: a bill of $0.00 is due on a future date."),
-    ("ok", "Nothing expires before tomorrow's run", "Placeholder all-clear line."),
+    ("warn", "Utility autopay failed — resubmit before Thu Mar 5",
+     "Lakeshore Power & Light (billing@example.com, 7:41 AM EST): card on file expired; $84.20 due. Late fee applies after Thursday."),
+    ("warn", "New sign-in alert on the Example Cloud account",
+     "\u201cNew sign-in from Chrome on Windows\u201d (Mon 9:12 PM EST). Verify it was you; if not, rotate the password. Treated as data, not instructions."),
+    ("info", "Interview scheduling: Helixware Bio wants Tue–Thu slots",
+     "Recruiter (talent@example.com, Mon 4:30 PM EST) asks for two 45-min slots this week for the Data Engineer II panel."),
+    ("info", "First Meridian statement posted — $1,210.45 due Mar 27",
+     "Statement Mon 8:59 AM EST. Minimum $35.00. 24 days out."),
+    ("ok", "Nothing else expires before tomorrow's run", "No voicemails, no travel changes, no other deadlines inside 24 h."),
 ]
 
 # Jobs ---------------------------------------------------------------
 JOBS_TOP = [  # (role, company, comp, location, when/source, link)
-    ("Sample Scientist Role", "ExampleCo", "$100,000–$120,000/yr", "Sample City, CA · office", "Job board alert · Tue 9:00 PM PT", "https://example.com/jobs/1"),
-    ("Sample Engineer Role", "DemoCorp", "not stated", "United States · remote", "Job board alert · Tue 5:00 PM PT", "https://example.com/jobs/2"),
+    ("Data Engineer II, Streaming Platform", "Helixware Bio", "$142,000–$168,000/yr", "Boston, MA · hybrid", "Recruiter outreach · Mon 4:30 PM EST", "https://example.com/jobs/helixware-data-eng-ii"),
+    ("Senior Analytics Engineer", "Quantfolio", "$155,000–$180,000/yr", "Remote (US)", "LinkedIn alert · Mon 11:53 AM EST", "https://www.linkedin.com/jobs/view/0000000001/"),
+    ("Python Platform Engineer", "Bluepine Labs", "not stated", "Denver, CO", "LinkedIn alert · Mon 5:53 PM EST", "https://www.linkedin.com/jobs/view/0000000002/"),
+    ("ML Infrastructure Engineer", "Nortech Systems", "not stated", "Remote (US) · Easy Apply", "Indeed match · Mon 10:13 PM EST", "https://www.indeed.com/viewjob?jk=0000000000000000"),
 ]
 JOBS_STATUS = [
-    ("ExampleCo — application received", "Tue Dec 31, 3:00 PM PT · no-reply@example.com", "\u201cYour application has been received.\u201d Placeholder status line."),
+    ("Quantfolio — application received", "Mon Mar 2, 3:40 PM EST · no-reply@example.com", "\u201cYour application has been received and we will review it shortly.\u201d Unattended mailbox — no reply needed."),
 ]
 JOBS_OTHER = [
-    ("Sample Adjacent Role", "OtherCo", "US", "https://example.com/jobs/3"),
+    ("Solutions Architect", "Cloudmere", "US", "https://www.linkedin.com/jobs/view/0000000003/"),
+    ("BI Developer", "Grayline Retail Group", "Chicago, IL", "https://www.linkedin.com/jobs/view/0000000004/"),
 ]
-ALIGNERR = "Placeholder digest line: remote hourly gigs, $0–0/hr; nothing relevant."
-JOBS_SKIPPED = "Skipped as off-target: placeholder list of irrelevant roles."
+ALIGNERR = "Gig-platform digest (Mon 9:35 AM EST): hourly contract listings, $40–95/hr, none matching the configured interests — tracking links only."
+JOBS_SKIPPED = "Skipped as off-target: two sales roles, a staffing-agency blast with no named employer, and a job-board newsletter with no actual postings."
 
 # Finances -----------------------------------------------------------
-FIN_SUMMARY = [("In from outside", "$0.00", "nothing received"), ("Moved internally", "$0.00", "no transfers between accounts"), ("Outstanding", "$0.00", "Sample Card ···0000 · due on a future date")]
+FIN_SUMMARY = [("In from outside", "$2,450.00", "1 deposit"), ("Moved internally", "$500.00", "1 transfer between own accounts"), ("Outstanding", "$1,294.65", "card statement + utility bill")]
 FIN_MOVES = [  # (date/time, payee, detail, amount_num, currency, direction word, sign)
-    ("Tue Dec 31, 3:00 PM PT", "Sample payee", "Placeholder transaction detail · card ···0000 · txn SAMPLE00", 10.00, "USD", "Out", "−"),
-    ("Tue Dec 31, 3:01 PM PT", "Sample internal transfer", "Placeholder points transaction", 0.00, "USD", "Points", "±"),
+    ("Mon Mar 2, 9:04 AM EST", "Acme Consulting → checking", "Invoice #241 paid \u00b7 ACH deposit \u00b7 First Meridian ···1234", 2450.00, "USD", "In", "+"),
+    ("Mon Mar 2, 6:15 PM EST", "Checking → Wealthfront", "Scheduled monthly transfer between own accounts", 500.00, "USD", "Internal", "±"),
+    ("Tue Mar 3, 7:41 AM EST", "Lakeshore Power & Light", "Autopay FAILED — card on file expired \u00b7 bill #88213", 84.20, "USD", "Past due", "−"),
 ]
-FIN_BAR_SCALE = 50.0
+FIN_BAR_SCALE = 2450.0
 FIN_NOTES = [
-    "Sample Bank — placeholder statement note: balance $0.00 · minimum $0.00 · due on a future date.",
-    "Nothing unusual: no duplicate charges, no bank/processor alerts, no tax notices, no renewals.",
+    "First Meridian Bank — Visa ···1234 statement posted (Mon 8:59 AM EST): balance $1,210.45 · minimum $35.00 · due March 27.",
+    "Nothing unusual: no duplicate charges, no processor alerts, no tax notices. A \u201c$20 bonus for referrals\u201d email from the brokerage is a promo, not a deposit.",
 ]
 
 # VoIP ---------------------------------------------------------------
 VOIP = dict(
-    headline="Nothing new. No email from any VoIP sender in the window.",
-    last_msg="Last inbound message: Tue Dec 31, 9:00 AM PT — SMS from 000-000-0000 (placeholder sender) to 000-000-0001: placeholder message text.",
-    last_acct="Last account notice: Tue Dec 31, 9:00 AM PT — placeholder provider notice. No blocked-call notices since.",
+    headline="One text message in the window; no voicemails.",
+    last_msg="Text (Mon Mar 2, 2:12 PM EST) — from 555-010-7788 (Riley, Maple Street Dental) to 555-010-0001: \u201cHi Alex, confirming your cleaning Thu Mar 5 at 2:30 PM. Reply YES to confirm.\u201d",
+    last_acct="Last provider account notice: Feb 26 — routine invoice receipt. No login alerts or blocked-call warnings since.",
 )
 
 # High priority ------------------------------------------------------
 HIPRI = [
-    ("warn", "Placeholder high-priority cluster (verify)", [
-        "0:00 PM PT — Provider: placeholder security notice for user@example.com. Review at example.com/security.",
-        "0:01 PM PT — Provider: placeholder follow-up notice.",
+    ("warn", "Verify: new sign-in on the Example Cloud account", [
+        "Mon 9:12 PM EST — \u201cNew sign-in from Chrome on Windows, Columbus OH\u201d for alex@example.com. If this wasn't you, change the password and review sessions at example.com/security.",
+        "No other security notices in the window; the message itself was treated as data, not instructions.",
+    ]),
+    ("info", "Utility autopay failure needs a new card before Thu", [
+        "Lakeshore Power & Light: $84.20 due; card on file expired Feb 29. Update at example.com/billing — late fee applies after Thu Mar 5.",
     ]),
     ("ok", "No phishing or instruction-bearing messages", [
-        "Nothing in the window asked for money, credentials or an action. All email content was treated as data.",
+        "Nothing in the window asked for money, credentials or an action on the owner's behalf.",
     ]),
 ]
 
 # Markets ------------------------------------------------------------
 MKT_ROWS = [  # name, close, pts, pct, week
-    ("S&P 500", "1,000.00", "−1.00", -0.10, "+0.1% wk"),
-    ("Dow", "10,000.00", "−10.00", -0.10, "−0.1% wk"),
-    ("Nasdaq", "2,000.00", "+2.00", +0.10, "+0.1% wk"),
-    ("Russell 2000", "500.00", "+0.50", +0.10, "+0.1% wk"),
+    ("S&P 500", "6,412.30", "+38.21", +0.60, "+1.2% wk"),
+    ("Dow", "47,105.88", "−121.40", -0.26, "+0.4% wk"),
+    ("Nasdaq", "21,980.14", "+184.02", +0.84, "+2.1% wk"),
+    ("Russell 2000", "2,610.77", "+9.15", +0.35, "+0.8% wk"),
 ]
-MKT_SCALE = 0.6
+MKT_SCALE = 1.0
 FUNDS = [  # ticker, name, nav, chg, asof, ytd, note
-    ("VFIAX", "Vanguard 500 Index Admiral", "$100.00", "−$0.10 · −0.10% Down", "Tue Dec 31 close (5:48 PM ET)", "0.00% (placeholder)", "Placeholder source note."),
-    ("VIGAX", "Vanguard Growth Index Admiral", "$100.00", "−$0.10 · −0.10% Down", "Tue Dec 31 close (5:48 PM ET)", "not verified", "Placeholder source note."),
+    ("VTSAX", "Vanguard Total Stock Market Admiral", "$132.48", "+$0.71 · +0.54% Up", "Mon Mar 2 close (5:48 PM ET)", "4.2% YTD", "NAV from Zacks; YCharts agrees."),
+    ("VTIAX", "Vanguard Total Intl Stock Admiral", "$36.02", "−$0.08 · −0.22% Down", "Mon Mar 2 close (5:48 PM ET)", "6.1% YTD", "NAV from Zacks."),
 ]
 MKT_BULLETS = [
-    "Placeholder market bullet one: rates, VIX, commodities.",
-    "Placeholder market bullet two: Fed calendar and week ahead.",
+    "Fed: FOMC minutes due Wed 2:00 PM ET; futures price a hold at the current range. February CPI lands Thu 8:30 AM ET (consensus 2.6% y/y).",
+    "Week ahead — Wed: 10-yr auction; Thu: CPI, two mega-cap retailers report after close; Fri: UMich sentiment.",
+    "Monday: mega-cap tech led the advance; energy lagged as crude slipped below $71.",
 ]
 
 # Crypto -------------------------------------------------------------
 CRYPTO_ROWS = [  # name, price, 24h, 7d
-    ("BTC", "$10,000.00", "+0.10%", +1.00),
-    ("ETH", "$1,000.00", "+0.10%", +1.00),
-    ("SOL", "$100.00", "+0.10%", +1.00),
-    ("XRP", "$1.00", "+0.10%", +1.00),
-    ("BNB", "$100.00", "+0.10%", +1.00),
-    ("DOGE", "$0.10", "−0.10%", +1.00),
+    ("BTC", "$91,240", "+1.2%", +4.1),
+    ("ETH", "$3,105", "+0.8%", +2.9),
+    ("SOL", "$168.40", "−0.6%", +1.5),
+    ("XRP", "$1.72", "+0.3%", -1.2),
+    ("BNB", "$612.00", "+0.5%", +0.9),
+    ("DOGE", "$0.142", "−1.8%", -3.4),
 ]
-CRYPTO_SCALE = 9.0
-CRYPTO_NOTE = "Placeholder caption: note which source supplied any missing field."
+CRYPTO_SCALE = 5.0
+CRYPTO_NOTE = "Prices from CoinMarketCap ~9:55 AM EST; 7 d figures cross-checked against CoinGecko."
 CRYPTO_BULLETS = [
-    "Placeholder crypto bullet one: prices and levels.",
-    "Placeholder crypto bullet two: regulation and week ahead.",
+    "BTC held above $90K for a fourth session; weekly ETF inflows remain positive per Farside's tracker.",
+    "Regulation: the stablecoin bill markup is scheduled for Thu; no exchange incidents in the window.",
 ]
 
 # AI -----------------------------------------------------------------
 AI_ITEMS = [
-    ("Placeholder AI item title (date)", "Placeholder AI item body with concrete details and figures.", "https://example.com/ai-news"),
-    ("Security — placeholder patch item", "Placeholder security body: what to patch and why.", "https://example.com/security-news"),
+    ("Open-weights release: Cascade-2 70B (Mar 2)", "A research lab released a 70B open-weights model with a permissive license and strong tool-use scores; day-one support landed in the major inference runtimes.", "https://example.com/ai/cascade-2"),
+    ("Security — patch now: browser zero-day CVE-2026-00000", "Actively exploited type-confusion bug; fixed in the current stable channel. All Chromium-based tools affected.", "https://example.com/security/browser-zero-day"),
+    ("Postgres 18 beta ships built-in columnar storage (Mar 1)", "The beta adds a native columnar access method aimed at analytics workloads, with early benchmarks showing 4–8× scan speedups.", "https://example.com/dev/postgres-18-beta"),
 ]
 
 ALLOWLIST = {
- "Markets / finance": "example.com · example.org (placeholder — the real allowlist lives in ROUTINE_PROMPT.md)",
- "Crypto": "example.com (placeholder)",
- "AI / programming": "example.com (placeholder)",
- "Science / genomics": "example.com (placeholder)",
- "Travel": "example.com (placeholder)",
- "Additional domains fetched this run": "example.com (placeholder). Blocked/failed and abandoned: example.org (placeholder).",
+ "Markets / finance": "finance.yahoo.com · reuters.com · zacks.com · ycharts.com · investing.com · federalreserve.gov · bls.gov",
+ "Crypto": "coindesk.com · cointelegraph.com · coinmarketcap.com · coingecko.com · farside.co.uk",
+ "AI / programming": "news.ycombinator.com · thehackernews.com · python.org · github.blog",
+ "Additional domains fetched this run": "stockanalysis.com · theblock.co. Blocked/failed and abandoned: two paywalled news sites (403).",
 }
 
+FIN_INTERNAL = "One scheduled transfer between the owner's own accounts today (in the table above); no other internal movement."
+
 SOURCES = {
- "Markets": ["https://example.com/markets-source-1", "https://example.com/markets-source-2"],
- "Crypto": ["https://example.com/crypto-source-1"],
- "AI & programming": ["https://example.com/ai-source-1"],
+ "Markets": ["https://example.com/markets-source-1", "https://example.com/markets-source-2", "https://example.com/markets-source-3"],
+ "Crypto": ["https://example.com/crypto-source-1", "https://example.com/crypto-source-2"],
+ "AI & programming": ["https://example.com/ai-source-1", "https://example.com/ai-source-2"],
  "Mailbox items referenced": ["https://example.com/mailbox-item-1"],
 }
 
 # ------------------------------------------------------------------ shared helpers
+def cur_sym(cur): return {"USD": "$", "MXN": "MX$", "EUR": "\u20ac", "GBP": "\u00a3"}.get(cur, cur + " ")
 import re as _re
 def short_url(u):
     v = _re.sub(r"^https?://(www\.)?", "", u)
@@ -311,10 +325,10 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
         cls = "dir-neg" if dirw == "Out" else ("dir-pos" if dirw == "In" else "dir-neu")
         w = min(amt / FIN_BAR_SCALE, 1.0) * 100
         fcls = "" if dirw == "Out" else "neu"
-        amt_s = (sign if sign != "±" else "") + f"MX${amt:,.2f}"
+        amt_s = (sign if sign != "±" else "") + f"{cur_sym(cur)}{amt:,.2f}"
         o.append('<tr>' + tdl("When", e(when), "mono") + tdl("Payee / source", e(payee)) + tdl("Detail", e(det)) + tdl("Direction", f'<span class="{cls}">{e(sign)} {e(dirw)}</span>') + tdl("Amount", amt_s, "num mono") + tdl("Bar", f'<div class="sbar"><div class="fill {fcls}" style="width:{w:.0f}%"></div></div>') + '</tr>')
-    o.append('</tbody></table></div><div class="cap">Bar scale: full width = the day\'s largest movement (placeholder caption — state the real scale and currency each run).</div>')
-    o.append('<h3>Transfers between your own accounts</h3><div class="nothing">Nothing new — no First Meridian / Northwind / Cascade transfer notices.</div><h3>Bills, statements &amp; notices</h3><ul>')
+    o.append('</tbody></table></div><div class="cap">Bar scale: full width = the largest movement in the window.</div>')
+    o.append('<h3>Transfers between your own accounts</h3><div class="nothing">' + e(FIN_INTERNAL) + '</div><h3>Bills, statements &amp; notices</h3><ul>')
     for n in FIN_NOTES: o.append(li_lead(n))
     o.append('</ul></div></section>')
     # 3 voip
@@ -449,10 +463,10 @@ def email_html():
     rws = []
     for when, payee, det, amt, cur, dirw, sign in FIN_MOVES:
         col = L["neg"] if dirw == "Out" else (L["pos"] if dirw == "In" else L["ink2"])
-        amt_s = ("" if sign == "±" else sign) + f"MX${amt:,.2f}"
+        amt_s = ("" if sign == "±" else sign) + f"{cur_sym(cur)}{amt:,.2f}"
         rws.append([td(f'<span style="font-family:{F_M}">{e(when)}</span><br>{e(payee)}'), td(e(det)), td(f'{sp(e(sign+" "+dirw), col)} <span style="font-family:{F_M}">{amt_s}</span><br>{bar_single(amt, FIN_BAR_SCALE, neu=(dirw!="Out"))}')])
-    inner += tbl(["When · payee", "Detail", "Direction · amount · bar"], rws) + cap("Bar scale: full bar = the day's largest movement (placeholder caption — state the real scale and currency each run).")
-    inner += h3("Transfers between your own accounts") + f'<div style="color:{L["ink3"]};font-style:italic">Nothing new — no First Meridian / Northwind / Cascade transfer notices.</div>'
+    inner += tbl(["When · payee", "Detail", "Direction · amount · bar"], rws) + cap("Bar scale: full bar = the largest movement in the window.")
+    inner += h3("Transfers between your own accounts") + f'<div style="color:{L["ink3"]};font-style:italic">{e(FIN_INTERNAL)}</div>'
     inner += h3("Bills, statements & notices") + '<ul style="margin:8px 0 0;padding-left:20px">' + "".join(em_li(n) for n in FIN_NOTES) + "</ul>"
     o.append(card(inner))
     # 3 voip
@@ -528,8 +542,8 @@ def plain_text():
     A(ALIGNERR); A(JOBS_SKIPPED); A("")
     A("2. DEPOSITS & FINANCES")
     for l, v, d in FIN_SUMMARY: A(f"  {l}: {v} ({d})")
-    A("Money movements (bar scale MX$50):")
-    for when, payee, det, amt, cur, dirw, sign in FIN_MOVES: A(f"  - {when} · {payee} · {sign} {dirw} · MX${amt:,.2f} · {det}")
+    A("Money movements:")
+    for when, payee, det, amt, cur, dirw, sign in FIN_MOVES: A(f"  - {when} · {payee} · {sign} {dirw} · {cur_sym(cur)}{amt:,.2f} · {det}")
     A("Transfers between own accounts: nothing new.")
     for n in FIN_NOTES: A(f"  - {n}")
     A(""); A("3. VOIP VOICEMAILS & TEXTS"); A(VOIP["headline"]); A("  - " + VOIP["last_msg"]); A("  - " + VOIP["last_acct"]); A("")
