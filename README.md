@@ -19,6 +19,18 @@ That's the whole setup. The rest of this README explains what you get and how to
 - **Web-researched sections** when there's news: flights/travel from your confirmations, US markets (with your fund tickers), crypto, AI & programming.
 - A fixed visual identity — light/dark themed HTML file, a fluid email layout that survives email-provider HTML sanitizers, colour-coded lead-ins, proportional bars drawn with borders, and mailpiece scans attached as JPGs.
 
+## What it looks like
+
+All content below is **mock data** for a fictional "Alex Sample" — nothing real. Masthead and the "needs you today" action bar:
+
+![Mock brief — masthead and action bar](docs/mock-brief-top.png)
+
+The Deposits & finances section — summary tiles, the money-movements table with direction words and proportional bars, and external money separated from internal transfers:
+
+![Mock brief — deposits and finances section](docs/mock-brief-sections.png)
+
+> **Maintenance rule:** these screenshots are generated from `build_brief.py`'s mock data by [`docs/render_screenshots.py`](docs/render_screenshots.py). Whenever a PR that changes the design or layout is merged, regenerate them (`python3 docs/render_screenshots.py`) and commit the updated PNGs, so the README always shows the current UI.
+
 ## Setup
 
 1. **Connect your email** in Claude (Settings → Connectors): Gmail, Outlook, or another email connector — one or several; with multiple attached, the brief merges all mailboxes and sends from the first one you list. The Routine only needs read + send.
@@ -41,6 +53,7 @@ On Outlook or others: send yourself one three-way test (data:-URI image, inline 
 | File | Purpose |
 |---|---|
 | `ROUTINE_PROMPT.template.md` | The prompt template — placeholders + optional sections. This is the product. |
+| `docs/render_screenshots.py` | Regenerates the README screenshots from the mock data (run after design changes). |
 | `LICENSE` | MIT. |
 | `build_brief.py` | Reference implementation of the HTML file / email / plain-text layouts, with placeholder data. The daily run doesn't execute it — Claude generates the HTML from the prompt's design spec — but it documents the exact markup patterns. |
 
