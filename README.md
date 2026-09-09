@@ -4,21 +4,6 @@ A template for a **personalized daily email briefing**, run entirely by a [Claud
 
 No servers, no API keys, no code to deploy. The whole system is one carefully-written prompt (plus an optional layout reference script). Each run is a fresh Claude session with your email connector attached.
 
-## Quick start — ask Claude to set it up for you
-
-Connect your email connector(s) in Claude (Settings → Connectors), then paste this to Claude:
-
-> Read the template at https://raw.githubusercontent.com/empcoorg/email-brief/main/ROUTINE_PROMPT.template.md and set up the email brief for me. Ask me for each {{PLACEHOLDER}} value one section at a time — use my connected email connector(s), ask which mailboxes to read and where to deliver the brief, and drop any OPTIONAL section that doesn't apply to me. Then create the scheduled Routine with the filled-in prompt (my choice of cadence, time and timezone, fresh session per run, my email connector(s) attached) and fire one test run so I can check the delivered email.
-
-That's the whole setup. The rest of this README explains what you get and how to do the same steps by hand.
-
-## What a brief contains
-
-- **A "needs you today" action bar** — severity-striped items ranked by urgency.
-- **Standing sections** (each one optional — the template tells Claude to omit sections your mailbox has no content for): relevant job posts (with exact-posting links, not tracking redirects), deposits & finances (external money separated from transfers between your own accounts), VoIP voicemails/texts, high-priority items & security alerts, a postal-mail digest with addressee-verified mailpiece scans (US, via USPS Informed Delivery), and retail sales from stores you pick.
-- **Web-researched sections** when there's news: flights/travel from your confirmations, US markets (with your fund tickers), crypto, AI & programming.
-- A fixed visual identity — light/dark themed HTML file, a fluid email layout that survives email-provider HTML sanitizers, colour-coded lead-ins, proportional bars drawn with borders, and mailpiece scans attached as JPGs.
-
 ## What it looks like
 
 All content below is **mock data** for a fictional "Alex Sample" — nothing real. Screenshots show the standalone HTML file in dark mode (it follows your system theme — see [Light & dark mode](#light--dark-mode)). Masthead and the "needs you today" action bar:
@@ -33,6 +18,10 @@ The Deposits & finances section — summary tiles, the money-movements table wit
 
 ![Mock brief — deposits and finances section](docs/mock-brief-sections.png)
 
+The USPS digest — only the intended recipient's mail is detailed, with the full mailpiece scan rendered (downsampled but readable); other named recipients and generic addressees ("Current Resident", "Homeowner") appear only as counts:
+
+![Mock brief — USPS Informed Delivery section with full mailpiece scan](docs/mock-brief-usps.png)
+
 The web-researched market grid — US indexes with diverging bars, your fund tickers, and the crypto table:
 
 ![Mock brief — US market and cryptocurrency sections](docs/mock-brief-markets.png)
@@ -44,6 +33,23 @@ The web-researched market grid — US indexes with diverging bars, your fund tic
 - **The email is always the light layout.** Email providers strip `<style>` blocks (and with them any dark-mode media queries), so the emailed copy cannot adapt; it ships as the single inline-styled light design that reads correctly in both light- and dark-mode mail clients.
 
 > **Maintenance rule:** these screenshots are generated from `build_brief.py`'s mock data by [`docs/render_screenshots.py`](docs/render_screenshots.py). Whenever a PR that changes the design or layout is merged, regenerate them (`python3 docs/render_screenshots.py`; captures in dark mode) and commit the updated PNGs, so the README always shows the current UI.
+>
+> **Aesthetics are pinned.** The visual design (tokens, fonts, spacing, structures) is fixed in the template's DESIGN spec and in `build_brief.py`'s marked blocks. PRs must not alter any visual element unless the change is explicitly a requested design change — and the regenerated screenshots double as a visual-regression check: an unexpected visual diff in them means the PR touched aesthetics it shouldn't have.
+
+## Quick start — ask Claude to set it up for you
+
+Connect your email connector(s) in Claude (Settings → Connectors), then paste this to Claude:
+
+> Read the template at https://raw.githubusercontent.com/empcoorg/email-brief/main/ROUTINE_PROMPT.template.md and set up the email brief for me. Ask me for each {{PLACEHOLDER}} value one section at a time — use my connected email connector(s), ask which mailboxes to read and where to deliver the brief, and drop any OPTIONAL section that doesn't apply to me. Then create the scheduled Routine with the filled-in prompt (my choice of cadence, time and timezone, fresh session per run, my email connector(s) attached) and fire one test run so I can check the delivered email.
+
+That's the whole setup. The rest of this README explains what you get and how to do the same steps by hand.
+
+## What a brief contains
+
+- **A "needs you today" action bar** — severity-striped items ranked by urgency.
+- **Standing sections** (each one optional — the template tells Claude to omit sections your mailbox has no content for): relevant job posts (with exact-posting links, not tracking redirects), deposits & finances (external money separated from transfers between your own accounts), VoIP voicemails/texts, high-priority items & security alerts, a postal-mail digest (US, via USPS Informed Delivery) that details only the intended recipient's mail with full mailpiece scans and counts everyone else's (other named recipients and generic “Resident”/“Homeowner” addressees separately), package tracking (FedEx, UPS, USPS, DHL, merchant emails — tracking numbers and estimated arrival), and retail sales from stores you pick.
+- **Web-researched sections** when there's news: flights/travel from your confirmations, US markets (with your fund tickers), crypto, AI & programming.
+- A fixed visual identity — light/dark themed HTML file, a fluid email layout that survives email-provider HTML sanitizers, colour-coded lead-ins, proportional bars drawn with borders, and mailpiece scans attached as JPGs.
 
 ## Setup
 

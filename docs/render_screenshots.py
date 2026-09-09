@@ -4,8 +4,7 @@
 Run from the repo root after any design-affecting change (see README):
     pip install playwright   # Chromium must be available to Playwright
     python3 docs/render_screenshots.py
-Writes docs/mock-brief-top.png, docs/mock-brief-jobs.png,
-docs/mock-brief-sections.png and docs/mock-brief-markets.png (all dark mode).
+Writes docs/mock-brief-{top,jobs,sections,usps,markets}.png (all dark mode).
 """
 import asyncio, os, re, subprocess, sys, tempfile
 
@@ -49,6 +48,15 @@ async def main():
             if target is None and secs:
                 target = secs[1] if len(secs) > 1 else secs[0]
             await target.screenshot(path=os.path.join(DOCS, "mock-brief-sections.png"))
+            # Section 5: USPS digest (recipient-only table, full mailpiece scan, counts)
+            usps = None
+            for s in secs:
+                txt = (await s.inner_text())[:120].lower()
+                if "informed delivery" in txt:
+                    usps = s
+                    break
+            if usps:
+                await usps.screenshot(path=os.path.join(DOCS, "mock-brief-usps.png"))
             # Research grid: US market + crypto cards (union bounding box)
             rect = await pg.evaluate("""() => {
                 const cards = [...document.querySelectorAll('.card')];
@@ -63,6 +71,6 @@ async def main():
             if rect:
                 await pg.screenshot(path=os.path.join(DOCS, "mock-brief-markets.png"), clip=rect, full_page=True)
             await b.close()
-    print("wrote mock-brief-top/jobs/sections/markets PNGs (dark mode)")
+    print("wrote mock-brief-top/jobs/sections/usps/markets PNGs (dark mode)")
 
 asyncio.run(main())
