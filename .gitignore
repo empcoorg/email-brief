@@ -7,3 +7,4 @@ email.json
 briefs/
 ROUTINE_PROMPT.filled.md
 tests/private_denylist.txt
+out/

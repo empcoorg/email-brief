@@ -111,17 +111,65 @@ class TestGeneratorOutputs(unittest.TestCase):
         self.assertIn("NEW PUBLICATIONS", tx)
         self.assertIn("Journal of Phycology", page)
 
-    def test_money_bars_colored_and_quantified(self):
+    def test_money_bars_diverge_from_zero_with_even_axis_breaks(self):
+        """Money movements are a DIVERGING chart: 0 at centre, money out to the
+        left in red, money in to the right in green, internal transfers neutral.
+        Axis breaks are even round numbers, never raw data values."""
         page, em = self.r["page"], self.r["email"]
         fin = page.split("Deposits &amp; finances")[1].split("</section>")[0]
-        for fill in ('class="fill in"', 'class="fill out"', 'class="fill neu"'):
-            self.assertIn(fill, fin, f"money bar missing direction-coloured {fill}")
-        self.assertIn('class="sbar"', fin)
-        self.assertIn("linear scale, 0", fin, "money axis caption must state scale and range")
-        self.assertIn("$2,450", fin, "money axis must label the max in $")
-        # email carries the tick values as text and the colour-coding note
-        self.assertIn("0 · $1,225 · $2,450", em)
-        self.assertIn("in = green", em.lower())
+        self.assertIn('class="dbar money"', fin, "money bars must ride the diverging track")
+        self.assertNotIn('class="sbar"', fin, "single-direction money track is retired")
+        for fill in ('class="fill pos right"', 'class="fill neg left"', 'class="fill neu right"'):
+            self.assertIn(fill, fin, f"money bar missing {fill}")
+        # even breaks: $2,450 of movement must yield round $1,000 steps to $3k,
+        # never a data-derived $1,225 midpoint
+        self.assertIn("even $1,000 steps", fin)
+        self.assertIn(">−$3k<", fin); self.assertIn(">$3k<", fin); self.assertIn(">0<", fin)
+        for raw in ("$1,225", "$2,450"):
+            self.assertNotIn(f">{raw}<", fin, f"axis label {raw} is a raw data value, not an even break")
+        # email carries the same axis as text, on its own line under the column name
+        self.assertIn("−$3k · 0 · $3k", em)
+        self.assertIn("green right of 0", em)
+
+    def test_email_bars_are_fluid_not_fixed_stubs(self):
+        """Email bar tracks size in %, so they fill the column at any width
+        rather than sitting at a fixed ~80px stub."""
+        em = self.r["email"]
+        self.assertNotIn("width:40px", em); self.assertNotIn("width:80px", em)
+        self.assertGreaterEqual(em.count('<td width="50%" valign="middle"'), 12,
+                                "email bars must use percentage half-tracks")
+        # fills are drawn with borders — backgrounds never survive the sanitizer
+        self.assertIn("border-top:5px solid", em)
+
+    def test_retail_sales_is_the_last_section(self):
+        """Lowest priority — retail sits below the research sections."""
+        page, tx = self.r["page"], self.r["text"]
+        self.assertLess(page.index("US market"), page.index("Retail sales"))
+        self.assertLess(page.index("New publications"), page.index("Retail sales"))
+        self.assertLess(tx.index("US MARKET"), tx.index("7. RETAIL SALES"))
+
+    def test_fit_badges_are_bordered_chips_labelled_strong_fit_and_related(self):
+        """Fit badges are chips with a thin border in their own colour — never
+        bare coloured text — and the near-miss label is RELATED, not ADJACENT."""
+        page, em, tx = self.r["page"], self.r["email"], self.r["text"]
+        for out, name in ((page, "file"), (em, "email"), (tx, "text")):
+            self.assertNotIn("Adjacent", out, f"{name} still uses the old ADJACENT label")
+            self.assertIn("Related", out, f"{name} missing the RELATED badge label")
+        # file: themed chip via currentColor
+        badge = re.search(r"\.badge\{([^}]*)\}", page).group(1)
+        self.assertIn("border:1px solid currentColor", badge,
+                      "file badge must be a bordered chip")
+        self.assertIn("border-radius:4px", badge)
+        # email: the colour written literally (currentColor is unreliable there)
+        chips = re.findall(r'<span style="[^"]*border:1px solid (#[0-9A-Fa-f]{6})[^"]*">'
+                           r'(Strong fit|Related)</span>', em)
+        self.assertTrue(chips, "email fit badges must be bordered chips with a literal colour")
+        for colour, label in chips:
+            expect = self.LIGHT_POS if label == "Strong fit" else self.LIGHT_ACCENT
+            self.assertEqual(colour, expect, f"{label} chip border must be its own token")
+
+    LIGHT_POS = "#1B7F4B"
+    LIGHT_ACCENT = "#0B7285"
 
     def test_package_tracking_columns(self):
         sec = self.r["page"].split("Package tracking")[1].split("</section>")[0]
@@ -220,6 +268,15 @@ class TestTemplate(unittest.TestCase):
             "LOG scale",                                  # data-spread-driven axis
             "ATTACHMENT SIZE CEILING",
             "24,600",
+            "EVERY FIT BADGE IS A BORDERED CHIP",   # jobs badge chip, not bare text
+            '"RELATED" badge',                      # near-miss label (was ADJACENT)
+            "EVERY BAR IS DIVERGING FROM A CENTRED ZERO",
+            "AXIS BREAKS ARE EVEN ROUND NUMBERS, NEVER RAW DATA VALUES",
+            "MINIMAL TICKS, NEVER CRAMPED",
+            "TWO LINES, NEVER A RUN-ON",            # bar column header
+            "FLUID, NOT FIXED-PIXEL STUBS",         # email bar tracks
+            "PIN THE COLUMN PROPORTIONS",           # stops mid-word breaks
+            "LOWEST PRIORITY",                      # retail sales sits last
             "renumber the remaining sections consecutively",
         ):
             self.assertIn(phrase, self.fence, f"template lost invariant: {phrase!r}")
