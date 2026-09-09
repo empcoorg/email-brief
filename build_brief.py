@@ -1,11 +1,17 @@
 #!/usr/bin/env python3
+# AESTHETIC CONTRACT — the visual design in this file (colour tokens, fonts,
+# sizes, spacing, markup structures, bar mechanics) is PINNED. Never alter it
+# as a side effect of a content, feature, or bug-fix change; visual changes
+# happen ONLY when explicitly requested, and must regenerate the README
+# screenshots (docs/render_screenshots.py) in the same commit.
 # Generates: morning-brief-2026-09-07.html (tokenised, theme-aware), email.html (inline light), email.txt
-import html as H, json, os
+import base64, html as H, json, os
 
 OUT_DIR = "/mnt/user-data/outputs"
 SCRATCH = os.path.dirname(os.path.abspath(__file__))
 os.makedirs(OUT_DIR, exist_ok=True)
 
+# PINNED AESTHETICS — see the contract in the file header.
 L = dict(bg="#F4F6F7", surface="#FFFFFF", surface2="#EAEFF1", ink="#161D21", ink2="#4A585F", ink3="#67757E",
          line="#DCE3E6", lineS="#C3CED3", accent="#0B7285", pos="#1B7F4B", neg="#B4342A", warn="#A9690A")
 D = dict(bg="#0E1417", surface="#151D21", surface2="#1C262B", ink="#E6EDF0", ink2="#A6B6BE", ink3="#74858E",
@@ -31,13 +37,43 @@ MAST = dict(
 )
 
 USPS = dict(
-    headline="1 mailpiece for Alex Sample today; 2 pieces for other recipients — excluded (counted, never named).",
-    items=[
-        "Mar 3 digest (7:20 AM EST): First Meridian Bank — window envelope, First-Class. Addressee as printed: ALEX Q SAMPLE. Scan attached to this email as usps-2026-03-03-1.jpg and embedded in the HTML file.",
-        "2 piece(s) addressed to other recipients — excluded. 0 packages.",
+    headline="1 mailpiece for the intended recipient (Alex Sample) today — detailed below with its full scan. Everyone else's mail is counted, never named.",
+    pieces=[  # intended-recipient pieces ONLY: (date, sender, addressee as printed, type/notes)
+        ("Tue Mar 3", "First Meridian Bank", "ALEX Q SAMPLE", "First-Class, window envelope · scan attached to the email as usps-2026-03-03-1.jpg"),
     ],
-    note="Every digest's mailpiece scans are extracted and read by vision, so the addressee filter checks the printed envelope, not the email text. Unreadable address blocks are listed as \u201caddressee unverified\u201d rather than dropped.",
+    counts="Not for the recipient: 2 piece(s) addressed to other named recipients — excluded (counted, never named) · 1 piece with generic addressee (\u201cCurrent Resident\u201d) — counted separately · 0 unreadable address blocks · 0 packages.",
+    note="Only mail addressed to the intended recipient is ever detailed; its complete mailpiece scan is rendered below (full image, downsampled but readable) and attached to the email. Other named recipients and generic addressees (\u201cResident\u201d, \u201cHomeowner\u201d, \u201cCurrent Occupant\u201d) appear only as counts. An unreadable address block is listed by sender as \u201caddressee unverified\u201d rather than dropped.",
 )
+# Mock mailpiece scan (fictional, generated inline so the reference stays self-contained).
+_SCAN_SVG = (
+    '<svg xmlns="http://www.w3.org/2000/svg" width="760" height="360" viewBox="0 0 760 360">'
+    '<rect width="760" height="360" fill="#e9e7e2"/><rect x="8" y="8" width="744" height="344" fill="#f6f4ef" stroke="#b8b4ac"/>'
+    '<text x="20" y="32" font-family="monospace" font-size="13" fill="#6b675f">35720 *****AUTO**ALL FOR AADC 000</text>'
+    '<text x="28" y="66" font-family="Georgia,serif" font-size="15" fill="#4a463f">FIRST MERIDIAN BANK</text>'
+    '<text x="28" y="84" font-family="Georgia,serif" font-size="13" fill="#4a463f">PO BOX 100</text>'
+    '<text x="28" y="100" font-family="Georgia,serif" font-size="13" fill="#4a463f">SPRINGFIELD ST 00000</text>'
+    '<rect x="600" y="28" width="130" height="72" fill="none" stroke="#8b877e" stroke-dasharray="4 3"/>'
+    '<text x="665" y="60" font-family="monospace" font-size="11" fill="#6b675f" text-anchor="middle">US POSTAGE</text>'
+    '<text x="665" y="76" font-family="monospace" font-size="11" fill="#6b675f" text-anchor="middle">FIRST-CLASS</text>'
+    '<text x="240" y="200" font-family="monospace" font-size="20" fill="#2f2c27">ALEX Q SAMPLE</text>'
+    '<text x="240" y="226" font-family="monospace" font-size="17" fill="#2f2c27">123 MAIN ST APT 4</text>'
+    '<text x="240" y="250" font-family="monospace" font-size="17" fill="#2f2c27">SPRINGFIELD ST 00000-0000</text>'
+    + "".join(f'<rect x="{240 + i * 7}" y="272" width="{2 if i % 3 else 4}" height="26" fill="#2f2c27"/>' for i in range(58))
+    + '<text x="20" y="342" font-family="monospace" font-size="11" fill="#8b877e">MOCK SCAN (fictional) — real briefs embed the actual USPS mailpiece image here.</text></svg>'
+)
+USPS_SCANS = [  # (data URI, caption) per intended-recipient piece
+    ("data:image/svg+xml;base64," + base64.b64encode(_SCAN_SVG.encode()).decode(),
+     "Full mailpiece scan — ALEX Q SAMPLE, First Meridian Bank envelope (mock image; downsampled but readable; attached to the email as usps-2026-03-03-1.jpg)"),
+]
+
+# Package tracking ---------------------------------------------------
+PKG = [  # (carrier, tracking, item/merchant, status, est. arrival)
+    ("UPS", "1Z999AA10123456784", "Northwind Outfitters — rain shell (order #48812)", "In transit — departed regional hub Mon 11:40 PM EST", "Thu Mar 5"),
+    ("USPS", "9400 1000 0000 0000 0000 00", "Bluepine Labs — dev board", "Out for delivery Tue 8:10 AM EST", "Today, Tue Mar 3"),
+    ("FedEx", "tracking link only — no number in the email; query via the order page (order #A-2231)", "Cascade Home — desk lamp", "Label created Mon 5:22 PM EST", "not stated"),
+]
+PKG_NOTE = "From carrier and merchant emails (FedEx, UPS, USPS, DHL, Amazon and store confirmations) across all connected mailboxes; one row per shipment, latest status. When an email carries only a tracking link, the link/order reference to query is given instead of a number."
+
 RETAIL = dict(
     sub="Northwind Outfitters · Cascade Home — low priority",
     rewards="Northwind rewards: $15.00 in member credit; 640 points to the next tier (from today's 6:05 AM EST email). Applies at checkout when signed in.",
@@ -169,6 +205,7 @@ SOURCES = {
 }
 
 # ------------------------------------------------------------------ shared helpers
+SCAN_CSS = ".scanfig{margin:14px 0 4px}.scanfig img{max-width:min(720px,100%);border:1px solid var(--line);border-radius:6px;display:block}.scanfig figcaption{font-size:12.5px;color:var(--ink-3);margin-top:6px}"
 def cur_sym(cur): return {"USD": "$", "MXN": "MX$", "EUR": "\u20ac", "GBP": "\u00a3"}.get(cur, cur + " ")
 import re as _re
 def short_url(u):
@@ -285,7 +322,7 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
     o.append('<meta name="color-scheme" content="light dark">')
     o.append('<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>')
     o.append('<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Source+Sans+3:wght@400;600&display=swap" rel="stylesheet">')
-    o.append(f"<style>{css}</style>")
+    o.append(f"<style>{css}{SCAN_CSS}</style>")
     o.append('<div class="wrap">')
     o.append(f"""<header class="mast"><div><h1>{e(MAST['title'])}</h1><div class="date">{e(MAST['dateline'])}</div><div class="note">{e(MAST['note'])}</div><div class="rev">{e(MAST['revised'])}</div></div>
 <div class="stamps">
@@ -341,9 +378,21 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
         o.append(f'<div class="hp {sev}"><div class="t">{e(t)}</div><ul>' + "".join(li_lead(i) for i in items) + "</ul></div>")
     o.append('</div></section>')
     # 5 USPS
-    o.append(f'<section><h2><span class="num">5.</span> USPS Informed Delivery <span class="sub">mail addressed to the owner only; other addressees ignored</span></h2><div class="card"><div class="nothing">{e(USPS["headline"])}</div><ul>' + "".join(li_lead(i) for i in USPS["items"]) + f'</ul><p class="meta">{e(USPS["note"])}</p></div></section>')
-    # 6 retail (low priority)
-    o.append(f'<section><h2><span class="num">6.</span> Retail sales <span class="sub">{e(RETAIL["sub"])}</span></h2><div class="card"><ul>' + li_lead(RETAIL["rewards"]) + "".join(li_lead(x) for x in RETAIL["sales"]) + '</ul></div></section>')
+    o.append(f'<section><h2><span class="num">5.</span> USPS Informed Delivery <span class="sub">mail addressed to the intended recipient only; everyone else counted, never named</span></h2><div class="card"><div class="nothing">{e(USPS["headline"])}</div>')
+    o.append('<div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Sender</th><th>Addressee (as printed)</th><th>Type / notes</th></tr></thead><tbody>')
+    for d_, s_, a_, ty in USPS["pieces"]:
+        o.append('<tr>' + tdl("Date", e(d_), "mono") + tdl("Sender", e(s_)) + tdl("Addressee (as printed)", e(a_), "mono") + tdl("Type / notes", e(ty), "meta") + '</tr>')
+    o.append('</tbody></table></div>')
+    for uri, cap_ in USPS_SCANS:
+        o.append(f'<figure class="scanfig"><img src="{uri}" alt="Full mailpiece scan (mock)"><figcaption>{e(cap_)}</figcaption></figure>')
+    o.append(f'<ul>{li_lead(USPS["counts"])}</ul><p class="meta">{e(USPS["note"])}</p></div></section>')
+    # 6 package tracking
+    o.append('<section><h2><span class="num">6.</span> Package tracking <span class="sub">FedEx · UPS · USPS · DHL · merchant shipping emails</span></h2><div class="card"><div class="tbl-wrap"><table><thead><tr><th>Carrier</th><th>Tracking</th><th>Item / merchant</th><th>Status</th><th>Est. arrival</th></tr></thead><tbody>')
+    for car, trk, item, st, eta in PKG:
+        o.append('<tr>' + tdl("Carrier", e(car)) + tdl("Tracking", e(trk), "mono") + tdl("Item / merchant", e(item)) + tdl("Status", e(st), "meta") + tdl("Est. arrival", e(eta), "mono") + '</tr>')
+    o.append(f'</tbody></table></div><p class="meta">{e(PKG_NOTE)}</p></div></section>')
+    # 7 retail (low priority)
+    o.append(f'<section><h2><span class="num">7.</span> Retail sales <span class="sub">{e(RETAIL["sub"])}</span></h2><div class="card"><ul>' + li_lead(RETAIL["rewards"]) + "".join(li_lead(x) for x in RETAIL["sales"]) + '</ul></div></section>')
     # research grid
     o.append('<section><div class="grid3">')
     o.append('<div class="card"><h2>US market</h2><div class="tbl-wrap"><table><thead><tr><th>Index</th><th style="text-align:right">Fri close</th><th style="text-align:right">Move</th><th>Bar</th></tr></thead><tbody>')
@@ -481,11 +530,19 @@ def email_html():
         inner += f'<div style="border:1px solid {L["line"]};border-left:4px solid {sevcol[sev]};padding:8px 12px;margin:8px 0"><div style="font:600 15px {F_H};color:{sevcol[sev]}">{e(t_)}</div><ul style="margin:8px 0 0;padding-left:20px">' + "".join(em_li(i) for i in items) + '</ul></div>'
     o.append(card(inner))
     # 5 USPS
-    inner = h2(f'{sp("5.", L["accent"])} USPS Informed Delivery', "mail addressed to the owner only; other addressees counted, never named")
-    inner += f'<div style="color:{L["ink3"]};font-style:italic">{e(USPS["headline"])}</div><ul style="margin:8px 0 0;padding-left:20px">' + "".join(em_li(i) for i in USPS["items"]) + f'</ul><p style="font-size:13px;color:{L["ink3"]}">{e(USPS["note"])}</p>'
+    inner = h2(f'{sp("5.", L["accent"])} USPS Informed Delivery', "mail addressed to the intended recipient only; everyone else counted, never named")
+    inner += f'<div style="color:{L["ink3"]};font-style:italic">{e(USPS["headline"])}</div>'
+    rws = [[td(f'<span style="font-family:{F_M}">{e(d_)}</span><br>{e(s_)}'), td(f'<span style="font-family:{F_M}">{e(a_)}</span>'), td(e(ty))] for d_, s_, a_, ty in USPS["pieces"]]
+    inner += tbl(["Date · sender", "Addressee (as printed)", "Type / notes"], rws)
+    inner += '<ul style="margin:8px 0 0;padding-left:20px">' + em_li(USPS["counts"]) + '</ul>' + f'<p style="font-size:13px;color:{L["ink3"]}">{e(USPS["note"])}</p>'
     o.append(card(inner))
-    # 6 retail
-    inner = h2(f'{sp("6.", L["accent"])} Retail sales', RETAIL["sub"])
+    # 6 package tracking
+    inner = h2(f'{sp("6.", L["accent"])} Package tracking', "FedEx · UPS · USPS · DHL · merchant shipping emails")
+    rws = [[td(f'<b>{e(car)}</b><br>{small("ETA: " + e(eta))}'), td(f'<span style="font-family:{F_M};word-break:break-all">{e(trk)}</span>'), td(f'{e(item)}<br>{small(e(st))}')] for car, trk, item, st, eta in PKG]
+    inner += tbl(["Carrier · ETA", "Tracking", "Item · status"], rws) + f'<p style="font-size:13px;color:{L["ink3"]}">{e(PKG_NOTE)}</p>'
+    o.append(card(inner))
+    # 7 retail
+    inner = h2(f'{sp("7.", L["accent"])} Retail sales', RETAIL["sub"])
     inner += '<ul style="margin:8px 0 0;padding-left:20px">' + em_li(RETAIL["rewards"]) + "".join(em_li(x) for x in RETAIL["sales"]) + "</ul>"
     o.append(card(inner))
     # markets
@@ -553,10 +610,13 @@ def plain_text():
     for sev, t, items in HIPRI:
         A(f"[{sev.upper()}] {t}")
         for i in items: A(f"  - {i}")
-    A(""); A("5. USPS INFORMED DELIVERY (owner's mail only)"); A(USPS["headline"])
-    for i in USPS["items"]: A(f"  - {i}")
-    A("  Note: " + USPS["note"])
-    A(""); A("6. RETAIL SALES (low priority — configured retailers)")
+    A(""); A("5. USPS INFORMED DELIVERY (intended recipient's mail only)"); A(USPS["headline"])
+    for d_, s_, a_, ty in USPS["pieces"]: A(f"  - {d_} · {s_} · addressed to {a_} · {ty}")
+    A("  " + USPS["counts"]); A("  Note: " + USPS["note"])
+    A(""); A("6. PACKAGE TRACKING")
+    for car, trk, item, st, eta in PKG: A(f"  - {car} · {trk} · {item} · {st} · ETA {eta}")
+    A("  " + PKG_NOTE)
+    A(""); A("7. RETAIL SALES (low priority — configured retailers)")
     A("  - " + RETAIL["rewards"])
     for x in RETAIL["sales"]: A("  - " + x)
     A(""); A("US MARKET (Fri Sep 4 close; Mon Sep 7 closed for Labor Day)")
