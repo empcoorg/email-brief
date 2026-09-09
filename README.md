@@ -5,7 +5,7 @@ A template for an **automated, personalized email briefing**, run entirely by a 
 No servers, no API keys, no code to deploy. The whole system is one carefully-written prompt (plus an optional layout reference script). Each run is a fresh Claude session with your email connector attached.
 
 **Contents**
-- **Setup** — [Quick start](#quick-start--ask-claude-to-set-it-up-for-you) · [Manual Setup](#manual-setup) · [Developer notes](#provider-notes)
+- **Setup** — [Quick start](#quick-start--ask-claude-to-set-it-up-for-you) · [Manual Setup](#manual-setup) · [Developer notes](#developer-notes)
 - **What you get** — [What it looks like](#what-it-looks-like) · [What a brief contains](#what-a-brief-contains) · [What's in this repo](#whats-in-this-repo)
 - **Design** — [Themes](#themes) · [Design principles](#design-principles-the-template-encodes)
 - **Privacy** — [Data policy](#data-policy--no-personal-content-in-this-repo)
@@ -62,7 +62,7 @@ That's the whole setup. The rest of this README explains what you get and how to
 3. **Create the Routine.** In Claude, create a scheduled Routine (or ask Claude to create one for you): pick any cadence and time — daily (`0 10 * * *`-style cron), Mon-Wed-Fri (`0 10 * * 1,3,5`), weekly (`0 10 * * 1`) — in your timezone, fresh session per run, your email connector(s) attached, push notifications if you want them. Make `{{SCHEDULE}}` in the prompt match the cron, so the brief covers the right window (a weekly brief summarizes the week; it doesn't list seven days raw). Paste the filled-in prompt (the fenced block only) as the Routine's prompt.
 4. **Do one test run.** Fire the Routine once manually and check the delivered email. Two provider-specific behaviors are worth verifying on the first run (the template says how): what your provider's send path strips from HTML, and whether attachments/inline images survive. The template ships with Gmail's verified behavior; other providers may differ.
 
-## Provider notes
+## Developer notes
 
 The template was built and verified against the **Gmail** connector. Three Gmail-specific findings are baked in as defaults, with instructions to re-verify on other providers:
 
