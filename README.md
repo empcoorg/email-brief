@@ -8,7 +8,7 @@ No servers, no API keys, no code to deploy. The whole system is one carefully-wr
 - [What it looks like](#what-it-looks-like)
 - [Quick start — ask Claude to set it up for you](#quick-start--ask-claude-to-set-it-up-for-you)
 - [What a brief contains](#what-a-brief-contains)
-- [Setup](#setup)
+- [Manual Setup](#manual-setup)
 - [Provider notes](#provider-notes)
 - [What's in this repo](#whats-in-this-repo)
 - [Light & dark mode](#light--dark-mode)
@@ -60,7 +60,7 @@ That's the whole setup. The rest of this README explains what you get and how to
 - **Web-researched sections** when there's news: flights/travel from your confirmations, US markets (with your fund tickers), crypto, AI & programming.
 - A fixed visual identity — light/dark themed HTML file, a fluid email layout that survives email-provider HTML sanitizers, colour-coded lead-ins, proportional bars drawn with borders, and mailpiece scans attached as JPGs.
 
-## Setup
+## Manual Setup
 
 1. **Connect your email** in Claude (Settings → Connectors): Gmail, Outlook, or another email connector — one or several; with multiple attached, the brief merges all mailboxes and sends from the first one you list. The Routine only needs read + send.
 2. **Fill in the template.** Open [`ROUTINE_PROMPT.template.md`](ROUTINE_PROMPT.template.md), replace every `{{PLACEHOLDER}}` (the table at the top explains each one), and **delete any OPTIONAL block you don't want** (no VoIP provider? not in the US? not job hunting? — remove those blocks). Keep your filled-in copy somewhere private — never commit it to a public repo.
