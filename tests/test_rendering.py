@@ -37,7 +37,11 @@ def _launch(p):
 
 
 @unittest.skipUnless(_HAVE_PW, "playwright not installed (pip install playwright)")
-class TestRendering(unittest.TestCase):
+class _BrowserCase(unittest.TestCase):
+    """Shared browser fixture. Holds no tests of its own — subclass it rather
+    than subclassing a populated test case, or every test in that case reruns
+    under the subclass."""
+
     @classmethod
     def setUpClass(cls):
         r = render_once()
@@ -67,6 +71,10 @@ class TestRendering(unittest.TestCase):
     def _assert_no_horizontal_overflow(self, pg, width, what):
         sw = pg.evaluate("document.documentElement.scrollWidth")
         self.assertLessEqual(sw, width + 1, f"{what}: horizontal overflow ({sw}px > {width}px viewport)")
+
+
+class TestRendering(_BrowserCase):
+    """Layout, theming and overflow for the standalone file and the email."""
 
     # ---- the standalone HTML file ----
 
@@ -150,12 +158,7 @@ class TestRendering(unittest.TestCase):
                         f"email data tables must have at most 3 columns, saw {max(counts or [0])}")
 
 
-if __name__ == "__main__":
-    unittest.main(verbosity=2)
-
-
-@unittest.skipUnless(_HAVE_PW, "playwright not installed (pip install playwright)")
-class TestBarGeometry(TestRendering):
+class TestBarGeometry(_BrowserCase):
     """Quantitative-chart guarantees for the diverging bars: fills anchored to
     the centre baseline, a visible bordered track, and the header axis ruler
     pixel-aligned with the bar column. Guards against helper shadowing or CSS
@@ -168,6 +171,7 @@ class TestBarGeometry(TestRendering):
             const fr = f.getBoundingClientRect();
             return {w: r.width, center: r.left + r.width / 2,
                     fl: fr.left, fr_: fr.right, pos: f.className.includes('pos'),
+                    neu: f.className.includes('neu'),
                     right: f.className.includes('right'),
                     border: getComputedStyle(b).borderTopWidth,
                     ticks: b.querySelectorAll('i').length};
@@ -177,6 +181,8 @@ class TestBarGeometry(TestRendering):
             anchor = b["fl"] if b["right"] else b["fr_"]
             self.assertLessEqual(abs(anchor - b["center"]), 1.6,
                                  f"fill not anchored to the centre baseline: {b}")
+            if b["neu"]:
+                continue  # internal transfer: magnitude only, colour implies no direction
             self.assertEqual(b["pos"], b["right"], "sign/side mismatch in bar fill")
             self.assertEqual(b["border"], "1px", "bar track must have a visible 1px border")
             self.assertEqual(b["ticks"], 6, "bar track must carry micro-notch ticks")
@@ -224,7 +230,7 @@ class TestBarGeometry(TestRendering):
             const toRGB = h => { const n = parseInt(h.slice(1), 16);
                 return `rgb(${n >> 16}, ${(n >> 8) & 255}, ${n & 255})`; };
             const out = {fills: [], axis: null};
-            for (const b of document.querySelectorAll('.sbar')) {
+            for (const b of document.querySelectorAll('.dbar.money')) {
                 const f = b.querySelector('.fill');
                 out.fills.push({cls: f.className, color: getComputedStyle(f).backgroundColor,
                                 border: getComputedStyle(b).borderTopWidth,
@@ -233,9 +239,9 @@ class TestBarGeometry(TestRendering):
             const cs = getComputedStyle(document.documentElement);
             out.pos = cs.getPropertyValue('--positive').trim();
             out.neg = cs.getPropertyValue('--negative').trim();
-            const table = [...document.querySelectorAll('table')].find(t => t.querySelector('tbody .sbar'));
+            const table = [...document.querySelectorAll('table')].find(t => t.querySelector('tbody .dbar.money'));
             const axis = table && table.querySelector('thead .daxis');
-            const bar = table && table.querySelector('tbody .sbar');
+            const bar = table && table.querySelector('tbody .dbar.money');
             if (axis && bar) {
                 const a = axis.getBoundingClientRect(), c = bar.getBoundingClientRect();
                 out.axis = {dl: Math.abs(a.left - c.left), dw: Math.abs(a.width - c.width),
@@ -249,14 +255,22 @@ class TestBarGeometry(TestRendering):
             return f"rgb({n >> 16}, {(n >> 8) & 255}, {n & 255})"
         for f in r["fills"]:
             self.assertEqual(f["border"], "1px", "money track must have a visible border")
-            self.assertEqual(f["ticks"], 7, "money track must carry micro-notch ticks")
-            if "in" in f["cls"].split():
+            self.assertEqual(f["ticks"], 6, "money track must carry micro-notch ticks")
+            cls = f["cls"].split()
+            if "pos" in cls:
                 self.assertEqual(f["color"], rgb(r["pos"]), "money-in fill must be the positive token")
-            if "out" in f["cls"].split():
+                self.assertIn("right", cls, "money in must sit right of the centre line")
+            if "neg" in cls:
                 self.assertEqual(f["color"], rgb(r["neg"]), "money-out fill must be the negative token")
+                self.assertIn("left", cls, "money out must sit left of the centre line")
         self.assertIsNotNone(r["axis"], "money table must pair a header axis with its bars")
         self.assertLessEqual(r["axis"]["dl"], 1.6); self.assertLessEqual(r["axis"]["dw"], 1.6)
-        self.assertIn("0", r["axis"]["labels"])
+        self.assertEqual(r["axis"]["labels"], ["−$3k", "0", "$3k"],
+                         "money axis must label even breaks either side of a centred 0")
         self.assertTrue(any(l.startswith("$") for l in r["axis"]["labels"]),
                         "money axis labels must carry $ units")
         pg.close()
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

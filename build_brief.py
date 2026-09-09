@@ -7,9 +7,13 @@
 # Generates: morning-brief-2026-09-07.html (tokenised, theme-aware), email.html (inline light), email.txt
 import base64, html as H, json, os
 
-OUT_DIR = "/mnt/user-data/outputs"
+OUT_DIR = os.environ.get("BRIEF_OUT_DIR", "/mnt/user-data/outputs")
 SCRATCH = os.path.dirname(os.path.abspath(__file__))
-os.makedirs(OUT_DIR, exist_ok=True)
+try:
+    os.makedirs(OUT_DIR, exist_ok=True)
+except OSError:  # not the Claude sandbox (e.g. a dev laptop) — write beside the script
+    OUT_DIR = os.path.join(SCRATCH, "out")
+    os.makedirs(OUT_DIR, exist_ok=True)
 
 # PINNED AESTHETICS — see the contract in the file header.
 L = dict(bg="#F4F6F7", surface="#FFFFFF", surface2="#EAEFF1", ink="#161D21", ink2="#4A585F", ink3="#67757E",
@@ -110,7 +114,7 @@ JOBS_OTHER = [
     ("BI Developer", "Grayline Retail Group", "Chicago, IL", "https://www.linkedin.com/jobs/view/0000000004/"),
 ]
 JOBS_RANKED_NOTE = "ranked: data engineering \u00b7 Python \u00b7 streaming platforms first"
-JOBS_TEAL_LABEL = "remote or preferred location \u00b7 adjacent AI/ML fit"
+JOBS_TEAL_LABEL = "remote or preferred location \u00b7 related AI/ML fit"
 ALIGNERR = "Gig-platform digest (Mon 9:35 AM EST): hourly contract listings, $40–95/hr, none matching the configured interests — tracking links only."
 JOBS_SKIPPED = "Skipped as off-target: two sales roles, a staffing-agency blast with no named employer, and a job-board newsletter with no actual postings."
 
@@ -121,15 +125,32 @@ FIN_MOVES = [  # (date/time, payee, detail, amount_num, currency, direction word
     ("Mon Mar 2, 6:15 PM EST", "Checking → Wealthfront", "Scheduled monthly transfer between own accounts", 500.00, "USD", "Internal", "±"),
     ("Tue Mar 3, 7:41 AM EST", "Lakeshore Power & Light", "Autopay FAILED — card on file expired \u00b7 bill #88213", 84.20, "USD", "Past due", "−"),
 ]
-def _fin_axis_mode():
+def nice_step_top(vmax, target=3):
+    """Round a data maximum out to an EVEN axis: a 1/2/2.5/5 x 10^n step, and a
+    top that is a whole number of those steps. Axis breaks are never raw data
+    values — $2,450 of actual movement yields $1k steps to $3k, not $1,225."""
+    import math
+    if vmax <= 0:
+        return 1.0, 1.0
+    raw = vmax / target
+    exp = math.floor(math.log10(raw))
+    base = 10.0 ** exp
+    step = next(m * base for m in (1, 2, 2.5, 5, 10) if m * base >= raw - 1e-9)
+    return step, math.ceil(vmax / step - 1e-9) * step
+
+
+def _fin_axis():
+    """Money movements ride a DIVERGING axis: 0 at the centre, money out and
+    past-due to the LEFT in red, money in to the RIGHT in green. Symmetric, so
+    a dollar out is the same length as a dollar in."""
     import math
     amts = [m[3] for m in FIN_MOVES]
     mx, mn = max(amts), min(a for a in amts if a > 0)
-    if mx / mn > 100:  # spread over ~2 orders of magnitude -> log decades
-        return ("log", 10 ** math.floor(math.log10(mn)), 10 ** math.ceil(math.log10(mx)))
-    return ("linear", mx, None)
-FIN_AXIS = _fin_axis_mode()
-FIN_BAR_SCALE = FIN_AXIS[1] if FIN_AXIS[0] == "linear" else FIN_AXIS[2]
+    if mx / mn > 100:  # extreme spread -> log decades either side of zero
+        return ("log", 10.0 ** math.floor(math.log10(mn)), 10.0 ** math.ceil(math.log10(mx)))
+    return ("linear",) + nice_step_top(mx)
+FIN_AXIS = _fin_axis()          # (mode, step-or-decade-min, top)
+FIN_BAR_SCALE = FIN_AXIS[2]
 FIN_NOTES = [
     "First Meridian Bank — Visa ···1234 statement posted (Mon 8:59 AM EST): balance $1,210.45 · minimum $35.00 · due March 27.",
     "Nothing unusual: no duplicate charges, no processor alerts, no tax notices. A \u201c$20 bonus for referrals\u201d email from the brokerage is a promo, not a deposit.",
@@ -239,9 +260,9 @@ def lead_split(text):
 def job_fit(role):
     r = role.lower()
     strong = ("scientist", "computational", "genom", "rna", "crispr", "sequenc", "bioinformat", "biolog", "data scien", "postdoc")
-    adjacent = ("ai", "ml", "machine", "engineer", "informatics", "knowledge")
+    related = ("ai", "ml", "machine", "engineer", "informatics", "knowledge")
     if any(k in r for k in strong): return "Strong fit", "pos"
-    if any(k in r for k in adjacent): return "Adjacent", "accent"
+    if any(k in r for k in related): return "Related", "accent"
     return "", ""
 def loc_tier(loc):
     l = loc.lower()
@@ -268,33 +289,59 @@ def em_axis(scale):
                            for v in (-scale, -scale / 2, 0, scale / 2, scale))
 def _money_fmt(v):
     return "$" + (f"{v:,.0f}" if v >= 10 else f"{v:,.2f}")
+def money_tick(v):
+    """Compact, even axis label: 0 \u00b7 $1k \u00b7 \u2212$3k. Never a raw data value."""
+    a = abs(v)
+    if a == 0:
+        return "0"
+    s = f"{a / 1000:g}k" if a >= 1000 else f"{a:g}"
+    return ("\u2212$" if v < 0 else "$") + s
+def _money_steps():
+    """Steps per side of the centre line."""
+    import math
+    mode, a, b = FIN_AXIS
+    return int(round(b / a)) if mode == "linear" else int(round(math.log10(b / a)))
+def _money_frac(amt):
+    import math
+    mode, a, b = FIN_AXIS
+    if mode == "linear":
+        return min(amt / b, 1.0)
+    return max(0.0, min(1.0, (math.log10(max(amt, a)) - math.log10(a)) / (math.log10(b) - math.log10(a))))
+def money_side(dirw):
+    """Left/red for money leaving, right/green for money arriving, neutral grey
+    for a transfer between the owner's own accounts (magnitude only \u2014 an
+    internal move has no direction, so colour must not imply one)."""
+    if dirw in ("Out", "Past due"):
+        return "left", "neg"
+    if dirw == "Internal":
+        return "right", "neu"
+    return "right", "pos"
 def money_bar(amt, dirw):
-    import math
-    mode, a, b = FIN_AXIS
-    if mode == "linear":
-        w = min(amt / a, 1.0) * 100
-    else:
-        w = max(0.0, min(1.0, (math.log10(max(amt, a)) - math.log10(a)) / (math.log10(b) - math.log10(a)))) * 100
-    fcls = "in" if dirw == "In" else ("neu" if dirw == "Internal" else "out")
-    ticks = "".join(f'<i style="left:{q * 12.5:g}%"></i>' for q in range(1, 8))
-    return f'<div class="sbar" aria-hidden="true">{ticks}<div class="fill {fcls}" style="width:{max(w, 2):.1f}%"></div></div>'
+    w = _money_frac(amt) * 50           # half-track either side of centre
+    side, fcls = money_side(dirw)
+    n = _money_steps()
+    ticks = "".join(f'<i style="left:{50 + sgn * s * 50 / n:g}%"></i>'
+                    for sgn in (-1, 1) for s in range(1, n + 1))
+    return f'<div class="dbar money" aria-hidden="true">{ticks}<div class="fill {fcls} {side}" style="width:{max(w, 1.5):.1f}%"></div></div>'
 def money_axis():
-    import math
+    """Minimal ticks: a notch at every even step, labels only at \u2212top, 0, +top."""
     mode, a, b = FIN_AXIS
-    t = [f'<i class="{"mj" if q % 2 == 0 else ""}" style="left:{q * 12.5:g}%"></i>' for q in range(9)]
-    if mode == "linear":
-        labs = [("0", 0, "l"), (_money_fmt(a / 2), 50, ""), (_money_fmt(a), 100, "r")]
-    else:
-        decs = int(math.log10(b) - math.log10(a))
-        labs = [(_money_fmt(a * 10 ** i), i * 100 / decs, "l" if i == 0 else ("r" if i == decs else "")) for i in range(decs + 1)]
-    for lab, p, c in labs:
-        t.append(f'<span class="{c}" style="left:{p:g}%">{lab}</span>')
-    return '<div class="daxis" aria-hidden="true">' + "".join(t) + "</div>"
+    n = _money_steps()
+    t = [f'<i class="{"mj" if k in (-n, 0, n) else ""}" style="left:{50 + k * 50 / n:g}%"></i>'
+         for k in range(-n, n + 1)]
+    for v, p, c in ((-b, 0, "l"), (0, 50, ""), (b, 100, "r")):
+        t.append(f'<span class="{c}" style="left:{p}%">{money_tick(v)}</span>')
+    return '<div class="daxis money" aria-hidden="true">' + "".join(t) + "</div>"
+def money_axis_ticks_text():
+    """The same axis as text, for the email (no ruler survives the sanitizer)."""
+    _m, _a, b = FIN_AXIS
+    return f"{money_tick(-b)} \u00b7 0 \u00b7 {money_tick(b)}"
 def money_axis_note():
     mode, a, b = FIN_AXIS
     if mode == "linear":
-        return f"linear scale, 0 \u2192 {_money_fmt(a)} (largest movement in the window), ticks every eighth"
-    return f"LOG scale, decade ticks {_money_fmt(a)} \u2192 {_money_fmt(b)}"
+        return (f"diverging, 0 at centre \u2192 {money_tick(b)} each side; "
+                f"even {_money_fmt(a)} steps")
+    return f"diverging LOG scale, decade steps {_money_fmt(a)} \u2192 {_money_fmt(b)} each side"
 def bar_div(pct, scale):
     w = min(abs(pct) / scale, 1.0) * 50
     side = "right" if pct >= 0 else "left"
@@ -354,17 +401,14 @@ td.num{{text-align:right;white-space:nowrap}}
 .dbar i{{position:absolute;top:0;height:3px;width:1px;background:var(--line)}}
 .dbar::before{{content:"";position:absolute;left:50%;top:0;bottom:0;width:1px;background:var(--line-strong);z-index:1}}
 .dbar .fill{{position:absolute;top:3px;bottom:3px;min-width:3px;border-radius:2px}}
-.dbar .fill.right{{left:50%}} .dbar .fill.left{{right:50%}} .fill.pos{{background:var(--positive)}} .fill.neg{{background:var(--negative)}}
+.dbar .fill.right{{left:50%}} .dbar .fill.left{{right:50%}} .fill.pos{{background:var(--positive)}} .fill.neg{{background:var(--negative)}} .fill.neu{{background:var(--ink-3)}}
 .daxis{{position:relative;height:16px;width:150px;margin-top:3px}}
+.dbar.money,.daxis.money{{width:100%;min-width:150px;max-width:280px}}
 .daxis i{{position:absolute;top:0;height:3px;width:1px;background:var(--line)}}
 .daxis i.mj{{height:5px;background:var(--line-strong)}}
 .daxis span{{position:absolute;top:5px;font:500 8.5px 'JetBrains Mono',monospace;letter-spacing:0;text-transform:none;color:var(--ink-3);transform:translateX(-50%)}}
 .daxis span.l{{transform:none}} .daxis span.r{{transform:translateX(-100%)}}
 .daxis-foot{{display:none}}
-.sbar{{position:relative;height:14px;width:150px;background:var(--surface-2);border:1px solid var(--line);border-radius:3px;box-sizing:border-box}}
-.sbar i{{position:absolute;top:0;height:3px;width:1px;background:var(--line)}}
-.sbar .fill{{position:absolute;left:0;top:3px;bottom:3px;min-width:3px;border-radius:2px}}
-.sbar .fill.in{{background:var(--positive)}} .sbar .fill.out{{background:var(--negative)}} .sbar .fill.neu{{background:var(--ink-3)}}
 .cap{{font-size:12.5px;color:var(--ink-3);padding:8px 2px}}
 .tiles{{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}}
 .tile{{background:var(--surface-2);border-radius:10px;padding:12px 14px}} .tile .v{{font-size:22px;font-weight:700;margin:2px 0}} .tile .d{{font-size:12.5px;color:var(--ink-3)}}
@@ -388,7 +432,7 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
  tr{{background:var(--surface);border:1px solid var(--line);border-radius:10px;margin:0 0 10px;padding:6px 0}}
  td{{border:0;padding:5px 12px;font-size:15px;text-align:left!important;white-space:normal!important}}
  td[data-l]::before{{content:attr(data-l);display:block;font-family:Archivo,sans-serif;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);margin-bottom:1px}}
- td.num{{text-align:left}} .dbar,.sbar,.daxis{{width:100%}} .sbar{{width:100%}} .grid3 .dbar{{width:100%}} .grid3 .daxis{{width:100%}} .daxis-foot{{display:block;margin:2px 0 8px}} .grid3 .tbl-wrap table{{font-size:15px}}
+ td.num{{text-align:left}} .dbar,.daxis{{width:100%}} .grid3 .dbar{{width:100%}} .grid3 .daxis{{width:100%}} .daxis-foot{{display:block;margin:2px 0 8px}} .grid3 .tbl-wrap table{{font-size:15px}}
  li{{margin:11px 0}} .meta{{font-size:14px}} .legend span{{display:block;margin:2px 0}}
 }}
 """
@@ -434,12 +478,12 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
     o.append('<section><h2><span class="num">2.</span> Deposits &amp; finances</h2><div class="card"><div class="tiles">')
     for l, v, d in FIN_SUMMARY:
         o.append(f'<div class="tile"><div class="lbl">{e(l)}</div><div class="v mono">{e(v)}</div><div class="d">{e(d)}</div></div>')
-    o.append('</div><h3 style="margin-top:0">Money movements (outside → you / you → outside)</h3><div class="tbl-wrap"><table><thead><tr><th>When</th><th>Payee / source</th><th>Detail</th><th>Direction</th><th style="text-align:right">Amount</th><th>Amount, $ {axis_html}</th></tr></thead><tbody>'.format(axis_html=money_axis()))
+    o.append('</div><h3 style="margin-top:0">Money movements (outside → you / you → outside)</h3><div class="tbl-wrap"><table><thead><tr><th>When</th><th>Payee / source</th><th>Detail</th><th>Direction</th><th style="text-align:right">Amount</th><th>Out ← 0 → In, $ {axis_html}</th></tr></thead><tbody>'.format(axis_html=money_axis()))
     for when, payee, det, amt, cur, dirw, sign in FIN_MOVES:
         cls = "dir-neg" if dirw in ("Out", "Past due") else ("dir-pos" if dirw == "In" else "dir-neu")
         amt_s = (sign if sign != "±" else "") + f"{cur_sym(cur)}{amt:,.2f}"
-        o.append('<tr>' + tdl("When", e(when), "mono") + tdl("Payee / source", e(payee)) + tdl("Detail", e(det)) + tdl("Direction", f'<span class="{cls}">{e(sign)} {e(dirw)}</span>') + tdl("Amount", f'<span class="{cls}">{amt_s}</span>', "num mono") + tdl("Amount, $", money_bar(amt, dirw)) + '</tr>')
-    o.append(f'</tbody></table></div><div class="daxis-foot">{money_axis()}<div class="meta">Amount, $ — {money_axis_note()}</div></div><div class="cap">Bar axis: {money_axis_note()}. Money in = green, out / past due = red, internal transfer = grey — the sign and direction word state it too.</div>')
+        o.append('<tr>' + tdl("When", e(when), "mono") + tdl("Payee / source", e(payee)) + tdl("Detail", e(det)) + tdl("Direction", f'<span class="{cls}">{e(sign)} {e(dirw)}</span>') + tdl("Amount", f'<span class="{cls}">{amt_s}</span>', "num mono") + tdl("Out ← 0 → In, $", money_bar(amt, dirw)) + '</tr>')
+    o.append(f'</tbody></table></div><div class="daxis-foot">{money_axis()}<div class="meta">Out ← 0 → In, $ — {money_axis_note()}</div></div><div class="cap">Bar axis: {money_axis_note()}. Money in = green on the right, out / past due = red on the left, internal transfer = neutral grey (magnitude only — an internal move has no direction). The sign and direction word state it too.</div>')
     o.append('<h3>Transfers between your own accounts</h3><div class="nothing">' + e(FIN_INTERNAL) + '</div><h3>Bills, statements &amp; notices</h3><ul>')
     for n in FIN_NOTES: o.append(li_lead(n))
     o.append('</ul></div></section>')
@@ -464,8 +508,6 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
     for car, trk, item, rcpt, st, eta in PKG:
         o.append('<tr>' + tdl("Carrier", e(car)) + tdl("Tracking", e(trk), "mono") + tdl("Sender · item", e(item)) + tdl("Recipient", e(rcpt)) + tdl("Status", e(st), "meta") + tdl("Est. arrival", e(eta), "mono") + '</tr>')
     o.append(f'</tbody></table></div><p class="meta">{e(PKG_NOTE)}</p></div></section>')
-    # 7 retail (low priority)
-    o.append(f'<section><h2><span class="num">7.</span> Retail sales <span class="sub">{e(RETAIL["sub"])}</span></h2><div class="card"><ul>' + li_lead(RETAIL["rewards"]) + "".join(li_lead(x) for x in RETAIL["sales"]) + '</ul></div></section>')
     # research grid
     o.append('<section><div class="grid3">')
     o.append(f'<div class="card"><h2>US market</h2><div class="tbl-wrap"><table><thead><tr><th>Index</th><th style="text-align:right">Fri close</th><th style="text-align:right">Move (1 day)</th><th>1-day %{axis_div(MKT_SCALE)}</th></tr></thead><tbody>')
@@ -497,6 +539,8 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
         o.append(f'<li><span class="lead">{e(j)}</span> — <b>{e(t)}</b> ({e(au)}, {e(d)}). {e(tk)} <a href="{e(link)}">paper</a></li>')
     o.append(f'</ul><div class="cap">Journals scanned: {e(JOURNALS)}; items newly published since the previous run.</div></div>')
     o.append('</div></section>')
+    # 7 retail (low priority)
+    o.append(f'<section><h2><span class="num">7.</span> Retail sales <span class="sub">{e(RETAIL["sub"])}</span></h2><div class="card"><ul>' + li_lead(RETAIL["rewards"]) + "".join(li_lead(x) for x in RETAIL["sales"]) + '</ul></div></section>')
     o.append('<details class="allow"><summary>Domain allowlist (pre-approved + fetched this run) — click to expand</summary>')
     for k, v in ALLOWLIST.items(): o.append(f'<p><b>{e(k)}:</b> {e(v)}</p>')
     o.append('</details>')
@@ -522,13 +566,23 @@ def h2(t, sub=""):
     return f'<div style="font-family:{F_H};font-size:19px;font-weight:700;color:{L["ink"]};margin:0 0 10px">{t}{s_}</div>'
 def h3(t): return f'<div style="font:600 14px {F_H};color:{L["ink2"]};margin:14px 0 6px">{e(t)}</div>'
 def card(inner): return f'<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid {L["line"]};border-radius:12px;margin-top:18px"><tr><td style="padding:14px 14px;font-family:{F_B};font-size:{BODY_FS};color:{L["ink"]};line-height:1.55">{inner}</td></tr></table>'
-def th(t): return f'<th align="left" style="font:600 10.5px {F_H};text-transform:uppercase;color:{L["ink3"]};padding:8px 8px;border-bottom:2px solid {L["lineS"]}">{e(t)}</th>'
+class Raw(str):
+    """A header string that is already HTML and must not be escaped."""
+def th(t, w=None): return f'<th align="left"{f" width={chr(34)}{w}{chr(34)}" if w else ""} style="font:600 10.5px {F_H};text-transform:uppercase;color:{L["ink3"]};padding:8px 8px;border-bottom:2px solid {L["lineS"]}">{t if isinstance(t, Raw) else e(t)}</th>'
+def th_axis(name, ticks):
+    """Two lines: the column name, then its axis. Never a cramped run-on."""
+    return Raw(f'{e(name)}<br><span style="font:400 10px {F_M};text-transform:none;'
+               f'letter-spacing:0;color:{L["ink3"]}">{e(ticks)}</span>')
 def td(t, mono=False):
     st = f'padding:8px 8px;border-bottom:1px solid {L["line"]};font-size:14px;line-height:1.45;word-break:break-word;'
     if mono: st += f"font-family:{F_M};"
     return f'<td valign="top" style="{st}">{t}</td>'
-def tbl(headers, rows):
-    return f'<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid {L["line"]}"><tr>' + "".join(th(h) for h in headers) + "</tr>" + "".join("<tr>" + "".join(r) + "</tr>" for r in rows) + "</table>"
+def tbl(headers, rows, widths=None):
+    """`widths` pins the column proportions with width= attributes (which survive
+    the sanitizer). Without them a cell holding a 100%-wide bar table starves the
+    text columns down to one character per line."""
+    ws = widths or [None] * len(headers)
+    return f'<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid {L["line"]}"><tr>' + "".join(th(h, w) for h, w in zip(headers, ws)) + "</tr>" + "".join("<tr>" + "".join(r) + "</tr>" for r in rows) + "</table>"
 def sp(t, color, bold=True): return f'<span style="color:{color};{"font-weight:600;" if bold else ""}">{t}</span>'
 def lead(t): return sp(e(t), L["accent"])
 def muted(t): return f'<span style="color:{L["ink3"]}">{t}</span>'
@@ -539,15 +593,34 @@ def em_li(text):
     return f'<li style="margin:9px 0">{e(text)}</li>'
 def ul(items): return '<ul style="margin:8px 0 0;padding-left:20px">' + "".join(f'<li style="margin:9px 0">{i}</li>' for i in items) + "</ul>"
 def _seg(w, col): return f'<span style="display:inline-block;width:0;height:0;border-left:{w}px solid {col};border-top:5px solid {col};border-bottom:5px solid {col}"></span>'
-def em_bar_div(pct, scale, total=80):
-    half = total // 2; w = max(3, int(min(abs(pct)/scale, 1.0) * half)); col = L["pos"] if pct >= 0 else L["neg"]
-    if pct >= 0:
-        return f'<div style="font-size:0;line-height:0"><span style="display:inline-block;width:{half}px;height:10px;border-right:1px solid {L["lineS"]}"></span>{_seg(w, col)}</div>'
-    return f'<div style="font-size:0;line-height:0"><span style="display:inline-block;width:{half-w}px;height:10px"></span>{_seg(w, col)}<span style="display:inline-block;width:{half}px;height:10px;border-left:1px solid {L["lineS"]}"></span></div>'
-def em_bar_single(val, scale, dirw="Out", total=80):
-    w = max(3, int(min(val/scale, 1.0) * total))
-    col = L["pos"] if dirw == "In" else (L["ink3"] if dirw == "Internal" else L["neg"])
-    return f'<div style="font-size:0;line-height:0">{_seg(w, col)}<span style="display:inline-block;width:{total-w}px;height:10px;border-bottom:1px solid {L["lineS"]}"></span></div>'
+# FLUID DIVERGING BAR for the email. Percentage table cells, so the track fills
+# whatever width the column has at any screen size instead of sitting at a fixed
+# 80px stub; the fill is drawn with border-top/border-bottom because the send
+# path strips every `background`. Centre line = 0, left = negative, right =
+# positive. Both `width=` attributes and inline width survive the sanitizer.
+def _em_cell(pct, style):
+    return f'<td width="{pct:.1f}%" style="font-size:0;line-height:0;{style}"></td>'
+def _em_half(cells, centre=False):
+    edge = f'border-right:1px solid {L["lineS"]};' if centre else ""
+    return (f'<td width="50%" valign="middle" style="padding:0;{edge}">'
+            f'<table width="100%" cellpadding="0" cellspacing="0" style="table-layout:fixed;border-collapse:collapse">'
+            f'<tr>{cells}</tr></table></td>')
+def _em_track(left_cells, right_cells):
+    return ('<table width="100%" cellpadding="0" cellspacing="0" style="table-layout:fixed;border-collapse:collapse;margin-top:4px">'
+            f'<tr>{_em_half(left_cells, centre=True)}{_em_half(right_cells)}</tr></table>')
+def _em_bar(frac, col, right):
+    """frac 0..1 of one half-track; `right` puts the fill on the positive side."""
+    p = max(frac * 100, 3.0)
+    fill = _em_cell(p, f"border-top:5px solid {col};border-bottom:5px solid {col}")
+    pad = _em_cell(100 - p, f'border-bottom:1px solid {L["line"]}')
+    empty = _em_cell(100, f'border-bottom:1px solid {L["line"]}')
+    return _em_track(empty, fill + pad) if right else _em_track(pad + fill, empty)
+def em_bar_div(pct, scale):
+    return _em_bar(min(abs(pct) / scale, 1.0), L["pos"] if pct >= 0 else L["neg"], pct >= 0)
+def em_bar_money(amt, dirw):
+    side, cls = money_side(dirw)
+    col = {"pos": L["pos"], "neg": L["neg"], "neu": L["ink3"]}[cls]
+    return _em_bar(_money_frac(amt), col, side == "right")
 def cap(t): return f'<div style="font-size:12px;color:{L["ink3"]};padding:6px 2px">{e(t)}</div>'
 def stripe_row(color, title_html, det_html):
     return f'<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid {L["line"]};border-left:6px solid {color};margin-top:6px"><tr><td style="padding:10px 12px"><div style="font:600 15px {F_H};color:{L["ink"]}">{title_html}</div><div style="font-size:14px;color:{L["ink2"]};margin-top:2px">{det_html}</div></td></tr></table>'
@@ -593,11 +666,8 @@ def email_html():
     for when, payee, det, amt, cur, dirw, sign in FIN_MOVES:
         col = L["pos"] if dirw == "In" else (L["ink2"] if dirw == "Internal" else L["neg"])
         amt_s = ("" if sign == "±" else sign) + f"{cur_sym(cur)}{amt:,.2f}"
-        rws.append([td(f'<span style="font-family:{F_M}">{e(when)}</span><br>{e(payee)}'), td(e(det)), td(f'{sp(e(sign+" "+dirw), col)} {sp(amt_s, col)}<br>{em_bar_single(amt, FIN_BAR_SCALE, dirw=dirw)}')])
-    _m, _a, _b = FIN_AXIS
-    _ticks = (f"0 · {_money_fmt(_a / 2)} · {_money_fmt(_a)}" if _m == "linear"
-              else " · ".join(_money_fmt(_a * 10 ** i) for i in range(int(__import__("math").log10(_b / _a)) + 1)))
-    inner += tbl(["When · payee", "Detail", f"Direction · amount · bar ({_ticks})"], rws) + cap(f"Bar axis: {money_axis_note()}. Money in = green, out / past due = red, internal = grey — sign and word state it too.")
+        rws.append([td(f'<span style="font-family:{F_M}">{e(when)}</span><br>{e(payee)}'), td(e(det)), td(f'{sp(e(sign+" "+dirw), col)} {sp(amt_s, col)}<br>{em_bar_money(amt, dirw)}')])
+    inner += tbl(["When · payee", "Detail", th_axis("Direction · amount", money_axis_ticks_text())], rws, ["30%", "32%", "38%"]) + cap(f"Bar axis: {money_axis_note()}. In = green right of 0, out / past due = red left of 0, internal = grey (magnitude only) — sign and word state it too.")
     inner += h3("Transfers between your own accounts") + f'<div style="color:{L["ink3"]};font-style:italic">{e(FIN_INTERNAL)}</div>'
     inner += h3("Bills, statements & notices") + '<ul style="margin:8px 0 0;padding-left:20px">' + "".join(em_li(n) for n in FIN_NOTES) + "</ul>"
     o.append(card(inner))
@@ -622,17 +692,13 @@ def email_html():
     rws = [[td(f'<b>{e(car)}</b><br>{small("ETA: " + e(eta))}'), td(f'<span style="font-family:{F_M};word-break:break-all">{e(trk)}</span>'), td(f'{e(item)}<br>{small("To: " + e(rcpt) + " · " + e(st))}')] for car, trk, item, rcpt, st, eta in PKG]
     inner += tbl(["Carrier · ETA", "Tracking", "Item · status"], rws) + f'<p style="font-size:13px;color:{L["ink3"]}">{e(PKG_NOTE)}</p>'
     o.append(card(inner))
-    # 7 retail
-    inner = h2(f'{sp("7.", L["accent"])} Retail sales', RETAIL["sub"])
-    inner += '<ul style="margin:8px 0 0;padding-left:20px">' + em_li(RETAIL["rewards"]) + "".join(em_li(x) for x in RETAIL["sales"]) + "</ul>"
-    o.append(card(inner))
     # markets
     inner = h2("US market")
     rws = []
     for n, c, pts, pct, wk in MKT_ROWS:
         col = L["pos"] if pct >= 0 else L["neg"]; word = "Up" if pct >= 0 else "Down"
         rws.append([td(f'{lead(n)}<br>{small(e(wk))}', mono=True), td(f'{e(c)}<br>{sp(f"{e(pts)} · {pct:+.2f}% {word}", col)}', mono=True), td(em_bar_div(pct, MKT_SCALE))])
-    inner += tbl(["Index · week", "Fri close · 1-day move", f"1-day % bar ({em_axis(MKT_SCALE)})"], rws) + cap(f"1-day close→close move, in index points and %; bar scale marks {em_axis(MKT_SCALE)} %, ticks = quarter half-width. Week = trailing 5 sessions.")
+    inner += tbl(["Index · week", "Fri close · 1-day move", th_axis("1-day % bar", em_axis(MKT_SCALE) + " %")], rws, ["32%", "30%", "38%"]) + cap(f"1-day close→close move, in index points and %; bar scale marks {em_axis(MKT_SCALE)} %, ticks = quarter half-width. Week = trailing 5 sessions.")
     inner += h3("Vanguard funds")
     rws = []
     for tk, nm, nav, chg, asof, ytd, note in FUNDS:
@@ -648,13 +714,17 @@ def email_html():
         col = L["pos"] if d7 >= 0 else L["neg"]; word = "Up" if d7 >= 0 else "Down"
         neg24 = d24.startswith("−") or d24.startswith("-")
         rws.append([td(f'{lead(n)}<br>{e(p)}', mono=True), td(f'24h {sp(e(d24) + " · " + e(a24), L["neg"] if neg24 else L["pos"])}<br>7d {sp(f"{d7:+.2f}% {word} · " + e(a7), col)}', mono=True), td(em_bar_div(d7, CRYPTO_SCALE))])
-    inner += tbl(["Asset · price", "24 h · 7 d (% · $)", f"7-day % bar ({em_axis(CRYPTO_SCALE)})"], rws) + cap(f"24 h and 7 d changes each given as % and $; bar scale marks {em_axis(CRYPTO_SCALE)} %, ticks = quarter half-width. {CRYPTO_NOTE}")
+    inner += tbl(["Asset · price", "24 h · 7 d (% · $)", th_axis("7-day % bar", em_axis(CRYPTO_SCALE) + " %")], rws, ["30%", "32%", "38%"]) + cap(f"24 h and 7 d changes each given as % and $; bar scale marks {em_axis(CRYPTO_SCALE)} %, ticks = quarter half-width. {CRYPTO_NOTE}")
     inner += '<ul style="margin:8px 0 0;padding-left:20px">' + "".join(em_li(b) for b in CRYPTO_BULLETS) + "</ul>"
     o.append(card(inner))
     # ai
     inner = h2("AI &amp; programming") + ul([f'{lead(t_)} — {e(d)} <a href="{e(l)}" style="color:{L["accent"]}">source</a>' for t_, d, l in AI_ITEMS])
     o.append(card(inner))
     inner = h2("New publications") + ul([f'{lead(j)} — <b>{e(t_)}</b> ({e(au)}, {e(d)}). {e(tk)} <a href="{e(l)}" style="color:{L["accent"]}">paper</a>' for j, t_, au, d, tk, l in JOURNAL_ITEMS]) + cap(f"Journals scanned: {JOURNALS}; items newly published since the previous run.")
+    o.append(card(inner))
+    # 7 retail — lowest priority, so it sits last, after the research sections
+    inner = h2(f'{sp("7.", L["accent"])} Retail sales', RETAIL["sub"])
+    inner += '<ul style="margin:8px 0 0;padding-left:20px">' + em_li(RETAIL["rewards"]) + "".join(em_li(x) for x in RETAIL["sales"]) + "</ul>"
     o.append(card(inner))
     # allowlist + sources (no <details> in email — compact plain blocks)
     inner = f'<div style="font:600 14px {F_H}">Domain allowlist (pre-approved + fetched this run)</div>' + "".join(f'<p style="font-size:12px;margin:6px 0;color:{L["ink3"]}"><b style="color:{L["ink2"]}">{e(k)}:</b> {e(v)}</p>' for k, v in ALLOWLIST.items())
@@ -700,9 +770,6 @@ def plain_text():
     A(""); A("6. PACKAGE TRACKING")
     for car, trk, item, rcpt, st, eta in PKG: A(f"  - {car} · {trk} · {item} · to {rcpt} · {st} · ETA {eta}")
     A("  " + PKG_NOTE)
-    A(""); A("7. RETAIL SALES (low priority — configured retailers)")
-    A("  - " + RETAIL["rewards"])
-    for x in RETAIL["sales"]: A("  - " + x)
     A(""); A("US MARKET (Fri Sep 4 close; Mon Sep 7 closed for Labor Day)")
     for n, c, pts, pct, wk in MKT_ROWS: A(f"  {n}: {c} ({pts} pts, {pct:+.2f}% {'Up' if pct>=0 else 'Down'}; {wk})")
     A("  Vanguard funds:")
@@ -717,6 +784,9 @@ def plain_text():
     for t, d, l in AI_ITEMS: A(f"  - {t} — {d}\n    {l}")
     A(""); A("NEW PUBLICATIONS (" + JOURNALS + ")")
     for j, t, au, d, tk, l in JOURNAL_ITEMS: A(f"  - {j}: {t} ({au}, {d}) — {tk}\n    {l}")
+    A(""); A("7. RETAIL SALES (lowest priority — configured retailers)")
+    A("  - " + RETAIL["rewards"])
+    for x in RETAIL["sales"]: A("  - " + x)
     A(""); A("DOMAIN ALLOWLIST")
     for k, v in ALLOWLIST.items(): A(f"  {k}: {v}")
     A(""); A("SOURCES")
@@ -732,4 +802,4 @@ if __name__ == "__main__":
     open(os.path.join(SCRATCH, "email.html"), "w").write(eh)
     open(os.path.join(SCRATCH, "email.txt"), "w").write(pt)
     json.dump({"subject": "Morning Brief — Mon Sep 7, 2026 (10:00 AM run, revised 5 — fluid layout test)", "html": eh, "text": pt}, open(os.path.join(SCRATCH, "email.json"), "w"))
-    print(len(fh), len(eh), len(pt))
+    print(f"file {len(fh)} B -> {OUT_DIR}; email {len(eh)} B, text {len(pt)} B -> {SCRATCH}")

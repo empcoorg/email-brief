@@ -79,9 +79,10 @@ On Outlook or others: send yourself one three-way test (data:-URI image, inline 
 |---|---|
 | `ROUTINE_PROMPT.template.md` | The prompt template — placeholders + optional sections. This is the product. |
 | `docs/render_screenshots.py` | Regenerates the README screenshots from the mock data (run after design changes). |
-| `tests/` | Test suite — run `python3 -m unittest discover -s tests` (stdlib only). Covers generator output, the aesthetic pin, template invariants, privacy, and README links; `tests/test_rendering.py` additionally drives Chromium (needs `pip install playwright`) to check desktop/mobile rendering, overflow, theme behavior and the email's fluid layout. |
+| `tests/` | Test suite — run `python3 -m unittest discover -s tests`. `tests/test_email_brief.py` is stdlib-only and covers generator output, the aesthetic pin, template invariants, privacy, and README links; `tests/test_rendering.py` drives Chromium (needs `pip install playwright`) to check desktop/mobile rendering, overflow, theme behavior, bar geometry and the email's fluid layout, and skips itself when Playwright is absent. |
+| `.github/workflows/tests.yml` | CI — installs Playwright + Chromium and runs the full suite (unit + browser) on every push to `main` and every PR. |
 | `LICENSE` | MIT. |
-| `build_brief.py` | Reference implementation of the HTML file / email / plain-text layouts, with placeholder data. The daily run doesn't execute it — Claude generates the HTML from the prompt's design spec — but it documents the exact markup patterns. |
+| `build_brief.py` | Reference implementation of the HTML file / email / plain-text layouts, with placeholder data. The daily run doesn't execute it — Claude generates the HTML from the prompt's design spec — but it documents the exact markup patterns. Writes to `/mnt/user-data/outputs` in the Claude sandbox; elsewhere (or with `BRIEF_OUT_DIR` set) it falls back to `./out`, so you can run it on a laptop. |
 
 ## Themes
 
