@@ -67,10 +67,11 @@ USPS_SCANS = [  # (data URI, caption) per intended-recipient piece
 ]
 
 # Package tracking ---------------------------------------------------
-PKG = [  # (carrier, tracking, item/merchant, status, est. arrival)
-    ("UPS", "1Z999AA10123456784", "Northwind Outfitters — rain shell (order #48812)", "In transit — departed regional hub Mon 11:40 PM EST", "Thu Mar 5"),
-    ("USPS", "9400 1000 0000 0000 0000 00", "Bluepine Labs — dev board", "Out for delivery Tue 8:10 AM EST", "Today, Tue Mar 3"),
-    ("FedEx", "tracking link only — no number in the email; query via the order page (order #A-2231)", "Cascade Home — desk lamp", "Label created Mon 5:22 PM EST", "not stated"),
+PKG = [  # (carrier, tracking, sender/item, recipient, status, est. arrival)
+    ("FedEx", "7744 8999 1234", "Northwind Outfitters — rain shell (order #48812)", "Alex Q. Sample", "In transit — departed regional hub Mon 11:40 PM EST", "Thu Mar 5"),
+    ("DHL", "JD01 4600 0031 2345 6789", "Brightcell Electronics — headphones (order #77-A3)", "Alex Q. Sample", "Customs cleared — at local delivery facility Tue 6:05 AM EST", "Wed Mar 4"),
+    ("USPS", "9400 1000 0000 0000 0000 00", "Bluepine Labs — dev board", "Alex Q. Sample", "Out for delivery Tue 8:10 AM EST", "Today, Tue Mar 3"),
+    ("UPS", "tracking link only — no number in the email; query via the order page (order #A-2231)", "Cascade Home — desk lamp", "P. Sample (household)", "Label created Mon 5:22 PM EST", "not stated"),
 ]
 PKG_NOTE = "From carrier and merchant emails (FedEx, UPS, USPS, DHL, Amazon and store confirmations) across all connected mailboxes; one row per shipment, latest status. When an email carries only a tracking link, the link/order reference to query is given instead of a number."
 
@@ -387,9 +388,9 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
         o.append(f'<figure class="scanfig"><img src="{uri}" alt="Full mailpiece scan (mock)"><figcaption>{e(cap_)}</figcaption></figure>')
     o.append(f'<ul>{li_lead(USPS["counts"])}</ul><p class="meta">{e(USPS["note"])}</p></div></section>')
     # 6 package tracking
-    o.append('<section><h2><span class="num">6.</span> Package tracking <span class="sub">FedEx · UPS · USPS · DHL · merchant shipping emails</span></h2><div class="card"><div class="tbl-wrap"><table><thead><tr><th>Carrier</th><th>Tracking</th><th>Item / merchant</th><th>Status</th><th>Est. arrival</th></tr></thead><tbody>')
-    for car, trk, item, st, eta in PKG:
-        o.append('<tr>' + tdl("Carrier", e(car)) + tdl("Tracking", e(trk), "mono") + tdl("Item / merchant", e(item)) + tdl("Status", e(st), "meta") + tdl("Est. arrival", e(eta), "mono") + '</tr>')
+    o.append('<section><h2><span class="num">6.</span> Package tracking <span class="sub">FedEx · UPS · USPS · DHL · merchant shipping emails</span></h2><div class="card"><div class="tbl-wrap"><table><thead><tr><th>Carrier</th><th>Tracking</th><th>Sender · item</th><th>Recipient</th><th>Status</th><th>Est. arrival</th></tr></thead><tbody>')
+    for car, trk, item, rcpt, st, eta in PKG:
+        o.append('<tr>' + tdl("Carrier", e(car)) + tdl("Tracking", e(trk), "mono") + tdl("Sender · item", e(item)) + tdl("Recipient", e(rcpt)) + tdl("Status", e(st), "meta") + tdl("Est. arrival", e(eta), "mono") + '</tr>')
     o.append(f'</tbody></table></div><p class="meta">{e(PKG_NOTE)}</p></div></section>')
     # 7 retail (low priority)
     o.append(f'<section><h2><span class="num">7.</span> Retail sales <span class="sub">{e(RETAIL["sub"])}</span></h2><div class="card"><ul>' + li_lead(RETAIL["rewards"]) + "".join(li_lead(x) for x in RETAIL["sales"]) + '</ul></div></section>')
@@ -538,7 +539,7 @@ def email_html():
     o.append(card(inner))
     # 6 package tracking
     inner = h2(f'{sp("6.", L["accent"])} Package tracking', "FedEx · UPS · USPS · DHL · merchant shipping emails")
-    rws = [[td(f'<b>{e(car)}</b><br>{small("ETA: " + e(eta))}'), td(f'<span style="font-family:{F_M};word-break:break-all">{e(trk)}</span>'), td(f'{e(item)}<br>{small(e(st))}')] for car, trk, item, st, eta in PKG]
+    rws = [[td(f'<b>{e(car)}</b><br>{small("ETA: " + e(eta))}'), td(f'<span style="font-family:{F_M};word-break:break-all">{e(trk)}</span>'), td(f'{e(item)}<br>{small("To: " + e(rcpt) + " · " + e(st))}')] for car, trk, item, rcpt, st, eta in PKG]
     inner += tbl(["Carrier · ETA", "Tracking", "Item · status"], rws) + f'<p style="font-size:13px;color:{L["ink3"]}">{e(PKG_NOTE)}</p>'
     o.append(card(inner))
     # 7 retail
@@ -614,7 +615,7 @@ def plain_text():
     for d_, s_, a_, ty in USPS["pieces"]: A(f"  - {d_} · {s_} · addressed to {a_} · {ty}")
     A("  " + USPS["counts"]); A("  Note: " + USPS["note"])
     A(""); A("6. PACKAGE TRACKING")
-    for car, trk, item, st, eta in PKG: A(f"  - {car} · {trk} · {item} · {st} · ETA {eta}")
+    for car, trk, item, rcpt, st, eta in PKG: A(f"  - {car} · {trk} · {item} · to {rcpt} · {st} · ETA {eta}")
     A("  " + PKG_NOTE)
     A(""); A("7. RETAIL SALES (low priority — configured retailers)")
     A("  - " + RETAIL["rewards"])

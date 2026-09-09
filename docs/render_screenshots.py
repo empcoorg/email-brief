@@ -4,7 +4,7 @@
 Run from the repo root after any design-affecting change (see README):
     pip install playwright   # Chromium must be available to Playwright
     python3 docs/render_screenshots.py
-Writes docs/mock-brief-{top,jobs,sections,usps,markets}.png (all dark mode).
+Writes docs/mock-brief-{top,jobs,sections,usps,packages,markets}.png (all dark mode).
 """
 import asyncio, os, re, subprocess, sys, tempfile
 
@@ -57,6 +57,15 @@ async def main():
                     break
             if usps:
                 await usps.screenshot(path=os.path.join(DOCS, "mock-brief-usps.png"))
+            # Section 6: package tracking
+            pkg = None
+            for s in secs:
+                txt = (await s.inner_text())[:120].lower()
+                if "package tracking" in txt:
+                    pkg = s
+                    break
+            if pkg:
+                await pkg.screenshot(path=os.path.join(DOCS, "mock-brief-packages.png"))
             # Research grid: US market + crypto cards (union bounding box)
             rect = await pg.evaluate("""() => {
                 const cards = [...document.querySelectorAll('.card')];
@@ -71,6 +80,6 @@ async def main():
             if rect:
                 await pg.screenshot(path=os.path.join(DOCS, "mock-brief-markets.png"), clip=rect, full_page=True)
             await b.close()
-    print("wrote mock-brief-top/jobs/sections/usps/markets PNGs (dark mode)")
+    print("wrote mock-brief-top/jobs/sections/usps/packages/markets PNGs (dark mode)")
 
 asyncio.run(main())

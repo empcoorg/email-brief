@@ -22,6 +22,10 @@ The USPS digest — only the intended recipient's mail is detailed, with the ful
 
 ![Mock brief — USPS Informed Delivery section with full mailpiece scan](docs/mock-brief-usps.png)
 
+Package tracking — carrier, tracking number (or the link/order reference to query when the email has no number), sender, recipient, status and estimated arrival:
+
+![Mock brief — package tracking section](docs/mock-brief-packages.png)
+
 The web-researched market grid — US indexes with diverging bars, your fund tickers, and the crypto table:
 
 ![Mock brief — US market and cryptocurrency sections](docs/mock-brief-markets.png)
