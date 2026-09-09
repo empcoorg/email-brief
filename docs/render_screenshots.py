@@ -66,19 +66,16 @@ async def main():
                     break
             if pkg:
                 await pkg.screenshot(path=os.path.join(DOCS, "mock-brief-packages.png"))
-            # Research grid: US market + crypto cards (union bounding box)
-            rect = await pg.evaluate("""() => {
-                const cards = [...document.querySelectorAll('.card')];
-                const pick = t => cards.find(c => (c.querySelector('h2')||{}).textContent?.trim().toLowerCase().startsWith(t));
-                const m = pick('us market'), c = pick('crypto');
-                if (!m || !c) return null;
-                const a = m.getBoundingClientRect(), b = c.getBoundingClientRect(), y = window.scrollY, x = window.scrollX;
-                const left = Math.min(a.left, b.left) + x, top = Math.min(a.top, b.top) + y;
-                const right = Math.max(a.right, b.right) + x, bottom = Math.max(a.bottom, b.bottom) + y;
-                return {x: Math.max(0, left - 8), y: Math.max(0, top - 8), width: right - left + 16, height: bottom - top + 16};
-            }""")
-            if rect:
-                await pg.screenshot(path=os.path.join(DOCS, "mock-brief-markets.png"), clip=rect, full_page=True)
+            # Research grid section (market/funds/crypto/AI/journals cards) — captured as a
+            # full section element so every screenshot shares the same width and text scale.
+            grid = None
+            for s in secs:
+                txt = (await s.inner_text())[:300].lower()
+                if "us market" in txt:
+                    grid = s
+                    break
+            if grid:
+                await grid.screenshot(path=os.path.join(DOCS, "mock-brief-markets.png"))
             await b.close()
     print("wrote mock-brief-top/jobs/sections/usps/packages/markets PNGs (dark mode)")
 

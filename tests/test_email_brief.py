@@ -88,6 +88,29 @@ class TestGeneratorOutputs(unittest.TestCase):
         # the email never carries images (sanitizer strips them anyway)
         self.assertNotIn("<img", self.r["email"])
 
+    def test_market_axes_timescale_magnitude_and_journals(self):
+        page, em, tx = self.r["page"], self.r["email"], self.r["text"]
+        # fine-grain axis: header ruler + phone-width copy, markets + crypto
+        self.assertGreaterEqual(page.count('class="daxis"'), 4)
+        # the FILE page must use the real diverging track (email-style border
+        # bars shadowing bar_div once shipped floating blobs — never again)
+        self.assertGreaterEqual(page.count('class="dbar"'), 10,
+                                "file page lost its .dbar diverging tracks")
+        self.assertIn(">\u22120.5<", page.replace("\u2212", "\u2212"))
+        for probe in ("1-day", "7-day"):
+            self.assertIn(probe, page, f"file missing timescale label {probe}")
+            self.assertIn(probe, em, f"email missing timescale label {probe}")
+        # email carries the tick values as text (no ruler survives the sanitizer)
+        self.assertIn("+0.5", em); self.assertIn("+2.5", em)
+        # magnitude: crypto % moves paired with $ moves everywhere
+        for out in (page, em, tx):
+            self.assertIn("$1,082", out, "crypto 24h move must carry $ magnitude")
+            self.assertIn("$3,594", out, "crypto 7d move must carry $ magnitude")
+        # journals research card in all three outputs
+        self.assertIn("New publications", page); self.assertIn("New publications", em)
+        self.assertIn("NEW PUBLICATIONS", tx)
+        self.assertIn("Journal of Phycology", page)
+
     def test_package_tracking_columns(self):
         sec = self.r["page"].split("Package tracking")[1].split("</section>")[0]
         for col in ("Carrier", "Tracking", "Sender · item", "Recipient", "Status", "Est. arrival"):
@@ -177,6 +200,10 @@ class TestTemplate(unittest.TestCase):
             "ESTIMATED ARRIVAL DATE",
             "Delivery beats completeness",
             "INFERRED FROM THE MAILBOX, NOT CONFIGURED",  # dynamic account set
+            "FINE-GRAINED LABELLED AXIS",                 # market/crypto bar axes
+            "TIMESCALE",
+            "MAGNITUDE",
+            "NEW PUBLICATIONS",                           # journals section
             "ATTACHMENT SIZE CEILING",
             "24,600",
             "renumber the remaining sections consecutively",
@@ -204,6 +231,20 @@ class TestReadmeAndPrivacy(unittest.TestCase):
     ALLOWED_EMAIL_DOMAINS = re.compile(
         r"@([\w.-]*\.)?(example\.com|usps\.com|voip\.ms|anthropic\.com|"
         r"claude\.ai|github\.com)$", re.I)
+
+    def test_screenshots_share_a_scale(self):
+        import struct
+        widths = {}
+        docs = os.path.join(ROOT, "docs")
+        for f in sorted(os.listdir(docs)):
+            if f.endswith(".png"):
+                with open(os.path.join(docs, f), "rb") as fh:
+                    fh.read(16)
+                    widths[f] = struct.unpack(">I", fh.read(4))[0]
+        self.assertTrue(widths, "no README screenshots found")
+        lo, hi = min(widths.values()), max(widths.values())
+        self.assertLessEqual(hi, lo * 1.10,
+                             f"screenshot widths diverge — text renders at different scales: {widths}")
 
     def test_no_personal_data_in_tracked_files(self):
         """Generic detectors: any real-looking phone number (mock data must use
