@@ -1,0 +1,23 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # Stdlib suite needs nothing; the rendering/geometry suite needs Playwright + Chromium.
+      - name: Install Playwright Chromium
+        run: |
+          pip install playwright
+          playwright install --with-deps chromium
+      - name: Run full test suite (unit + browser e2e)
+        run: python3 -m unittest discover -s tests -v
