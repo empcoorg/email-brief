@@ -167,13 +167,13 @@ MKT_BULLETS = [
 ]
 
 # Crypto -------------------------------------------------------------
-CRYPTO_ROWS = [  # name, price, 24h, 7d
-    ("BTC", "$91,240", "+1.2%", +4.1),
-    ("ETH", "$3,105", "+0.8%", +2.9),
-    ("SOL", "$168.40", "−0.6%", +1.5),
-    ("XRP", "$1.72", "+0.3%", -1.2),
-    ("BNB", "$612.00", "+0.5%", +0.9),
-    ("DOGE", "$0.142", "−1.8%", -3.4),
+CRYPTO_ROWS = [  # name, price, 24h pct, 24h $, 7d pct, 7d $
+    ("BTC", "$91,240", "+1.2%", "+$1,082", +4.1, "+$3,594"),
+    ("ETH", "$3,105", "+0.8%", "+$25", +2.9, "+$88"),
+    ("SOL", "$168.40", "−0.6%", "−$1.02", +1.5, "+$2.49"),
+    ("XRP", "$1.72", "+0.3%", "+$0.005", -1.2, "−$0.021"),
+    ("BNB", "$612.00", "+0.5%", "+$3.05", +0.9, "+$5.46"),
+    ("DOGE", "$0.142", "−1.8%", "−$0.0026", -3.4, "−$0.0050"),
 ]
 CRYPTO_SCALE = 5.0
 CRYPTO_NOTE = "Prices from CoinMarketCap ~9:55 AM EST; 7 d figures cross-checked against CoinGecko."
@@ -189,10 +189,19 @@ AI_ITEMS = [
     ("Postgres 18 beta ships built-in columnar storage (Mar 1)", "The beta adds a native columnar access method aimed at analytics workloads, with early benchmarks showing 4–8× scan speedups.", "https://example.com/dev/postgres-18-beta"),
 ]
 
+# Journals -----------------------------------------------------------
+JOURNALS = "Science, Nature, Journal of Phycology"
+JOURNAL_ITEMS = [  # journal, title, authors, date, takeaway, link
+    ("Science", "Engineered diatom consortia fix nitrogen at field scale", "Okafor et al.", "Mar 2", "First open-ocean trial of engineered diatom communities, with measurable nitrogen fixation sustained over six weeks.", "https://example.com/doi/science-diatoms"),
+    ("Nature", "A foundation model predicts protein-complex assembly paths", "Li & Vargas", "Mar 1", "Sequence-only model recovers known assembly intermediates and proposes testable paths for 12 unsolved complexes.", "https://example.com/doi/nature-assembly"),
+    ("Journal of Phycology", "Thermal priming confers heat tolerance in Saccharina gametophytes", "Ruiz et al.", "Feb 27", "Brief sublethal heat exposure at the gametophyte stage carries over to sporophyte heat tolerance — relevant to kelp farming under marine heatwaves.", "https://example.com/doi/jphyc-priming"),
+]
+
 ALLOWLIST = {
  "Markets / finance": "finance.yahoo.com · reuters.com · zacks.com · ycharts.com · investing.com · federalreserve.gov · bls.gov",
  "Crypto": "coindesk.com · cointelegraph.com · coinmarketcap.com · coingecko.com · farside.co.uk",
  "AI / programming": "news.ycombinator.com · thehackernews.com · python.org · github.blog",
+ "Journals": "science.org · nature.com · onlinelibrary.wiley.com",
  "Additional domains fetched this run": "stockanalysis.com · theblock.co. Blocked/failed and abandoned: two paywalled news sites (403).",
 }
 
@@ -202,6 +211,7 @@ SOURCES = {
  "Markets": ["https://example.com/markets-source-1", "https://example.com/markets-source-2", "https://example.com/markets-source-3"],
  "Crypto": ["https://example.com/crypto-source-1", "https://example.com/crypto-source-2"],
  "AI & programming": ["https://example.com/ai-source-1", "https://example.com/ai-source-2"],
+ "Journals": ["https://example.com/journal-source-1"],
  "Mailbox items referenced": ["https://example.com/mailbox-item-1"],
 }
 
@@ -232,11 +242,28 @@ def loc_tier(loc):
     return "", ""
 
 # ------------------------------------------------------------------ RENDER: FILE (tokens)
+def axis_div(scale, unit="%"):
+    """Fine-grain diverging axis: ticks at every quarter of the half-width,
+    labels at −s, −s/2, 0, +s/2, +s (unit on the outer labels)."""
+    t = []
+    for i in range(9):
+        t.append(f'<i class="{"mj" if i % 2 == 0 else ""}" style="left:{i * 12.5:g}%"></i>')
+    for v, p, c in ((-scale, 0, "l"), (-scale / 2, 25, "mid"), (0.0, 50, ""), (scale / 2, 75, "mid"), (scale, 100, "r")):
+        lab = "0" if v == 0 else f"{v:+g}".replace("-", "−")
+        if c in ("l", "r"): lab += unit
+        t.append(f'<span class="{c}" style="left:{p}%">{lab}</span>')
+    return '<div class="daxis" aria-hidden="true">' + "".join(t) + "</div>"
+def axis_foot(scale, label):
+    return f'<div class="daxis-foot">{axis_div(scale)}<div class="meta">{e(label)}</div></div>'
+def em_axis(scale):
+    return " · ".join("0" if v == 0 else f"{v:+.1f}".replace("-", "−")
+                           for v in (-scale, -scale / 2, 0, scale / 2, scale))
 def bar_div(pct, scale):
     w = min(abs(pct) / scale, 1.0) * 50
     side = "right" if pct >= 0 else "left"
     cls = "pos" if pct >= 0 else "neg"
-    return f'<div class="dbar" aria-hidden="true"><div class="fill {cls} {side}" style="width:{w:.1f}%"></div></div>'
+    ticks = "".join(f'<i style="left:{q * 12.5:g}%"></i>' for q in range(1, 8) if q != 4)
+    return f'<div class="dbar" aria-hidden="true">{ticks}<div class="fill {cls} {side}" style="width:{w:.1f}%"></div></div>'
 
 def li_lead(text):
     a, sep, b = lead_split(text)
@@ -286,10 +313,17 @@ td.num{{text-align:right;white-space:nowrap}}
 .dir-pos,.c-pos{{color:var(--positive);font-weight:600}} .dir-neg,.c-neg{{color:var(--negative);font-weight:600}} .dir-neu{{color:var(--ink-2);font-weight:600}} .c-accent{{color:var(--accent);font-weight:600}} .c-warn{{color:var(--warning);font-weight:600}} .muted{{color:var(--ink-3)}}
 .badge{{display:inline-block;font-family:Archivo,sans-serif;font-size:10px;letter-spacing:.06em;text-transform:uppercase;padding:1px 6px;border-radius:4px;border:1px solid currentColor;margin-left:6px;vertical-align:middle;font-weight:600}}
 .legend{{font-size:12.5px;color:var(--ink-3);margin-top:8px}} .legend span{{margin-right:14px;white-space:nowrap;display:inline-block}}
-.dbar{{position:relative;height:12px;width:150px;background:var(--surface-2);border-radius:3px}}
-.dbar::before{{content:"";position:absolute;left:50%;top:0;bottom:0;width:1px;background:var(--line-strong)}}
-.dbar .fill{{position:absolute;top:2px;bottom:2px;min-width:3px;border-radius:2px}}
+.dbar{{position:relative;height:14px;width:150px;background:var(--surface-2);border:1px solid var(--line);border-radius:3px;box-sizing:border-box}}
+.dbar i{{position:absolute;top:0;height:3px;width:1px;background:var(--line)}}
+.dbar::before{{content:"";position:absolute;left:50%;top:0;bottom:0;width:1px;background:var(--line-strong);z-index:1}}
+.dbar .fill{{position:absolute;top:3px;bottom:3px;min-width:3px;border-radius:2px}}
 .dbar .fill.right{{left:50%}} .dbar .fill.left{{right:50%}} .fill.pos{{background:var(--positive)}} .fill.neg{{background:var(--negative)}}
+.daxis{{position:relative;height:16px;width:150px;margin-top:3px}}
+.daxis i{{position:absolute;top:0;height:3px;width:1px;background:var(--line)}}
+.daxis i.mj{{height:5px;background:var(--line-strong)}}
+.daxis span{{position:absolute;top:5px;font:500 8.5px 'JetBrains Mono',monospace;letter-spacing:0;text-transform:none;color:var(--ink-3);transform:translateX(-50%)}}
+.daxis span.l{{transform:none}} .daxis span.r{{transform:translateX(-100%)}}
+.daxis-foot{{display:none}}
 .sbar{{position:relative;height:12px;width:150px;background:var(--surface-2);border-radius:3px}} .sbar .fill{{position:absolute;left:0;top:2px;bottom:2px;min-width:3px;border-radius:2px;background:var(--negative)}} .sbar .fill.neu{{background:var(--ink-3)}}
 .cap{{font-size:12.5px;color:var(--ink-3);padding:8px 2px}}
 .tiles{{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}}
@@ -298,14 +332,14 @@ ul{{margin:8px 0 0;padding-left:20px}} li{{margin:9px 0;line-height:1.55}}
 .jobs li b{{font-weight:600}} .meta{{color:var(--ink-3);font-size:13px}}
 .grid3{{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}}
 .grid3 .card{{min-width:0}} .grid3 h2{{font-size:17px}}
-.grid3 .tbl-wrap table{{min-width:0;font-size:12px}} .grid3 th,.grid3 td{{padding:6px 6px}} .grid3 td.num{{white-space:normal}} .grid3 .dbar{{width:56px}}
+.grid3 .tbl-wrap table{{min-width:0;font-size:12px}} .grid3 th,.grid3 td{{padding:6px 6px}} .grid3 td.num{{white-space:normal}} .grid3 .dbar{{width:56px}} .grid3 .daxis{{width:56px}} .grid3 .daxis span.mid{{display:none}}
 .hp{{border-left:4px solid var(--ink-3);padding:10px 14px;margin:10px 0;background:var(--surface-2);border-radius:0 8px 8px 0}} .hp.warn{{border-color:var(--warning)}} .hp.ok{{border-color:var(--positive)}} .hp.info{{border-color:var(--accent)}}
 .hp .t{{font-weight:600;font-family:Archivo,sans-serif}} .hp.warn .t{{color:var(--warning)}} .hp.ok .t{{color:var(--positive)}} .hp.info .t{{color:var(--accent)}}
 details{{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 16px;margin-top:18px}} summary{{cursor:pointer;font-family:Archivo,sans-serif;font-weight:600;font-size:14px}}
 .allow p{{font-size:12.5px;margin:6px 0}} .allow b{{color:var(--ink-2)}}
 .src{{columns:2;column-gap:28px;font-size:11.5px;margin-top:8px}} .src p{{break-inside:avoid;margin:0 0 4px;overflow-wrap:anywhere}} .src b{{display:block;margin:8px 0 3px;color:var(--ink-2)}}
 footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid var(--line);padding-top:14px}}
-@media (max-width:940px){{.grid3{{grid-template-columns:1fr}} .mast{{grid-template-columns:1fr}} .tiles{{grid-template-columns:1fr}} .src{{columns:1}} .grid3 .tbl-wrap table{{font-size:14px}} .grid3 th,.grid3 td{{padding:9px 12px}} .grid3 .dbar{{width:150px}}}}
+@media (max-width:940px){{.grid3{{grid-template-columns:1fr}} .mast{{grid-template-columns:1fr}} .tiles{{grid-template-columns:1fr}} .src{{columns:1}} .grid3 .tbl-wrap table{{font-size:14px}} .grid3 th,.grid3 td{{padding:9px 12px}} .grid3 .dbar{{width:150px}} .grid3 .daxis{{width:150px}} .grid3 .daxis span.mid{{display:block}}}}
 @media (max-width:600px){{
  body{{font-size:17px;line-height:1.6}} .wrap{{padding:14px 10px 40px}} .mast{{padding:16px}} .mast h1{{font-size:26px}} .stamps{{grid-template-columns:1fr}} .stamp .val{{font-size:15px}}
  .card{{padding:14px}} .act{{grid-template-columns:5px 1fr;gap:10px}} .act-title{{font-size:16px}} .act .det{{font-size:15px}}
@@ -314,7 +348,7 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
  tr{{background:var(--surface);border:1px solid var(--line);border-radius:10px;margin:0 0 10px;padding:6px 0}}
  td{{border:0;padding:5px 12px;font-size:15px;text-align:left!important;white-space:normal!important}}
  td[data-l]::before{{content:attr(data-l);display:block;font-family:Archivo,sans-serif;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);margin-bottom:1px}}
- td.num{{text-align:left}} .dbar,.sbar{{width:100%}} .grid3 .dbar{{width:100%}} .grid3 .tbl-wrap table{{font-size:15px}}
+ td.num{{text-align:left}} .dbar,.sbar,.daxis{{width:100%}} .grid3 .dbar{{width:100%}} .grid3 .daxis{{width:100%}} .daxis-foot{{display:block;margin:2px 0 8px}} .grid3 .tbl-wrap table{{font-size:15px}}
  li{{margin:11px 0}} .meta{{font-size:14px}} .legend span{{display:block;margin:2px 0}}
 }}
 """
@@ -396,30 +430,34 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
     o.append(f'<section><h2><span class="num">7.</span> Retail sales <span class="sub">{e(RETAIL["sub"])}</span></h2><div class="card"><ul>' + li_lead(RETAIL["rewards"]) + "".join(li_lead(x) for x in RETAIL["sales"]) + '</ul></div></section>')
     # research grid
     o.append('<section><div class="grid3">')
-    o.append('<div class="card"><h2>US market</h2><div class="tbl-wrap"><table><thead><tr><th>Index</th><th style="text-align:right">Fri close</th><th style="text-align:right">Move</th><th>Bar</th></tr></thead><tbody>')
+    o.append(f'<div class="card"><h2>US market</h2><div class="tbl-wrap"><table><thead><tr><th>Index</th><th style="text-align:right">Fri close</th><th style="text-align:right">Move (1 day)</th><th>1-day %{axis_div(MKT_SCALE)}</th></tr></thead><tbody>')
     for n, c, pts, pct, wk in MKT_ROWS:
         cls = "dir-pos" if pct >= 0 else "dir-neg"; word = "Up" if pct >= 0 else "Down"
         o.append('<tr>' + tdl("Index", e(n), "mono") + tdl("Fri close", e(c), "num mono") + tdl("Move · week", f'<span class="{cls}">{e(pts)}<br>{pct:+.2f}% {word}</span><br><span class="meta">{e(wk)}</span>', "num mono") + tdl("Bar", bar_div(pct, MKT_SCALE)) + '</tr>')
-    o.append(f'</tbody></table></div><div class="cap">Diverging bars from a centre baseline; half-width = ±{MKT_SCALE:.1f}% daily move.</div>')
-    o.append('<h3>Vanguard funds</h3><div class="tbl-wrap"><table><thead><tr><th>Fund</th><th style="text-align:right">NAV</th><th style="text-align:right">Change</th><th>As of</th></tr></thead><tbody>')
+    o.append(f'</tbody></table></div>{axis_foot(MKT_SCALE, "1-day move, % of prior close")}<div class="cap">1-day close→close move, in index points and %; axis ticks every {MKT_SCALE / 4:.2f} pct-pt. Week column = trailing 5 sessions.</div>')
+    o.append('<h3>Vanguard funds</h3><div class="tbl-wrap"><table><thead><tr><th>Fund</th><th style="text-align:right">NAV</th><th style="text-align:right">Change (1 day)</th><th>As of</th></tr></thead><tbody>')
     for tk, nm, nav, chg, asof, ytd, note in FUNDS:
         cls = "dir-pos" if "+" in chg.split("·")[0] else "dir-neg"
         o.append('<tr>' + tdl("Fund", f'<span class="lead">{e(tk)}</span>', "mono") + tdl("NAV", e(nav), "num mono") + tdl("Change", f'<span class="{cls}">{e(chg)}</span>', "num mono") + tdl("As of", e(asof), "meta") + '</tr>')
     o.append('</tbody></table></div><div class="cap">' + " ".join(f'<b>{e(tk)}</b> ({e(nm)}): YTD {e(ytd)}. {e(note)}' for tk, nm, nav, chg, asof, ytd, note in FUNDS) + '</div><ul>')
     for b in MKT_BULLETS: o.append(li_lead(b))
     o.append('</ul></div>')
-    o.append('<div class="card"><h2>Cryptocurrency</h2><div class="tbl-wrap"><table><thead><tr><th>Asset</th><th style="text-align:right">Price</th><th style="text-align:right">24 h</th><th style="text-align:right">7 d</th><th>7 d bar</th></tr></thead><tbody>')
-    for n, p, d24, d7 in CRYPTO_ROWS:
+    o.append(f'<div class="card"><h2>Cryptocurrency</h2><div class="tbl-wrap"><table><thead><tr><th>Asset</th><th style="text-align:right">Price</th><th style="text-align:right">24 h</th><th style="text-align:right">7 d</th><th>7-day %{axis_div(CRYPTO_SCALE)}</th></tr></thead><tbody>')
+    for n, p, d24, a24, d7, a7 in CRYPTO_ROWS:
         cls = "dir-pos" if d7 >= 0 else "dir-neg"; word = "Up" if d7 >= 0 else "Down"
         c24 = "c-neg" if d24.startswith("−") or d24.startswith("-") else "c-pos"
-        o.append('<tr>' + tdl("Asset", f'<span class="lead">{e(n)}</span>', "mono") + tdl("Price", e(p), "num mono") + tdl("24 h", f'<span class="{c24}">{e(d24)}</span>', "num mono") + tdl("7 d", f'<span class="{cls}">{d7:+.2f}%<br>{word}</span>', "num mono") + tdl("7 d bar", bar_div(d7, CRYPTO_SCALE)) + '</tr>')
-    o.append(f'</tbody></table></div><div class="cap">Diverging bars; half-width = ±{CRYPTO_SCALE:.0f}% 7-day change. {e(CRYPTO_NOTE)}</div><ul>')
+        o.append('<tr>' + tdl("Asset", f'<span class="lead">{e(n)}</span>', "mono") + tdl("Price", e(p), "num mono") + tdl("24 h", f'<span class="{c24}">{e(d24)}<br><span style="white-space:nowrap">{e(a24)}</span></span>', "num mono") + tdl("7 d", f'<span class="{cls}">{d7:+.2f}% {word}<br><span style="white-space:nowrap">{e(a7)}</span></span>', "num mono") + tdl("7-day %", bar_div(d7, CRYPTO_SCALE)) + '</tr>')
+    o.append(f'</tbody></table></div>{axis_foot(CRYPTO_SCALE, "7-day change, %")}<div class="cap">24 h and 7 d changes each given as % and $; axis ticks every {CRYPTO_SCALE / 4:.2f} pct-pt. {e(CRYPTO_NOTE)}</div><ul>')
     for b in CRYPTO_BULLETS: o.append(li_lead(b))
     o.append('</ul></div>')
     o.append('<div class="card"><h2>AI &amp; programming</h2><ul>')
     for t, d, link in AI_ITEMS:
         o.append(f'<li><span class="lead">{e(t)}</span> — {e(d)} <a href="{e(link)}">source</a></li>')
     o.append('</ul></div>')
+    o.append('<div class="card"><h2>New publications</h2><ul>')
+    for j, t, au, d, tk, link in JOURNAL_ITEMS:
+        o.append(f'<li><span class="lead">{e(j)}</span> — <b>{e(t)}</b> ({e(au)}, {e(d)}). {e(tk)} <a href="{e(link)}">paper</a></li>')
+    o.append(f'</ul><div class="cap">Journals scanned: {e(JOURNALS)}; items newly published since the previous run.</div></div>')
     o.append('</div></section>')
     o.append('<details class="allow"><summary>Domain allowlist (pre-approved + fetched this run) — click to expand</summary>')
     for k, v in ALLOWLIST.items(): o.append(f'<p><b>{e(k)}:</b> {e(v)}</p>')
@@ -463,12 +501,12 @@ def em_li(text):
     return f'<li style="margin:9px 0">{e(text)}</li>'
 def ul(items): return '<ul style="margin:8px 0 0;padding-left:20px">' + "".join(f'<li style="margin:9px 0">{i}</li>' for i in items) + "</ul>"
 def _seg(w, col): return f'<span style="display:inline-block;width:0;height:0;border-left:{w}px solid {col};border-top:5px solid {col};border-bottom:5px solid {col}"></span>'
-def bar_div(pct, scale, total=80):
+def em_bar_div(pct, scale, total=80):
     half = total // 2; w = max(3, int(min(abs(pct)/scale, 1.0) * half)); col = L["pos"] if pct >= 0 else L["neg"]
     if pct >= 0:
         return f'<div style="font-size:0;line-height:0"><span style="display:inline-block;width:{half}px;height:10px;border-right:1px solid {L["lineS"]}"></span>{_seg(w, col)}</div>'
     return f'<div style="font-size:0;line-height:0"><span style="display:inline-block;width:{half-w}px;height:10px"></span>{_seg(w, col)}<span style="display:inline-block;width:{half}px;height:10px;border-left:1px solid {L["lineS"]}"></span></div>'
-def bar_single(val, scale, neu=False, total=80):
+def em_bar_single(val, scale, neu=False, total=80):
     w = max(3, int(min(val/scale, 1.0) * total)); col = L["ink3"] if neu else L["neg"]
     return f'<div style="font-size:0;line-height:0">{_seg(w, col)}<span style="display:inline-block;width:{total-w}px;height:10px;border-bottom:1px solid {L["lineS"]}"></span></div>'
 def cap(t): return f'<div style="font-size:12px;color:{L["ink3"]};padding:6px 2px">{e(t)}</div>'
@@ -516,7 +554,7 @@ def email_html():
     for when, payee, det, amt, cur, dirw, sign in FIN_MOVES:
         col = L["neg"] if dirw == "Out" else (L["pos"] if dirw == "In" else L["ink2"])
         amt_s = ("" if sign == "±" else sign) + f"{cur_sym(cur)}{amt:,.2f}"
-        rws.append([td(f'<span style="font-family:{F_M}">{e(when)}</span><br>{e(payee)}'), td(e(det)), td(f'{sp(e(sign+" "+dirw), col)} <span style="font-family:{F_M}">{amt_s}</span><br>{bar_single(amt, FIN_BAR_SCALE, neu=(dirw!="Out"))}')])
+        rws.append([td(f'<span style="font-family:{F_M}">{e(when)}</span><br>{e(payee)}'), td(e(det)), td(f'{sp(e(sign+" "+dirw), col)} <span style="font-family:{F_M}">{amt_s}</span><br>{em_bar_single(amt, FIN_BAR_SCALE, neu=(dirw!="Out"))}')])
     inner += tbl(["When · payee", "Detail", "Direction · amount · bar"], rws) + cap("Bar scale: full bar = the largest movement in the window.")
     inner += h3("Transfers between your own accounts") + f'<div style="color:{L["ink3"]};font-style:italic">{e(FIN_INTERNAL)}</div>'
     inner += h3("Bills, statements & notices") + '<ul style="margin:8px 0 0;padding-left:20px">' + "".join(em_li(n) for n in FIN_NOTES) + "</ul>"
@@ -551,28 +589,30 @@ def email_html():
     rws = []
     for n, c, pts, pct, wk in MKT_ROWS:
         col = L["pos"] if pct >= 0 else L["neg"]; word = "Up" if pct >= 0 else "Down"
-        rws.append([td(f'{lead(n)}<br>{small(e(wk))}', mono=True), td(f'{e(c)}<br>{sp(f"{e(pts)} · {pct:+.2f}% {word}", col)}', mono=True), td(bar_div(pct, MKT_SCALE))])
-    inner += tbl(["Index · week", "Fri close · move", "Bar"], rws) + cap(f"Diverging bars from a centre baseline; half-width = ±{MKT_SCALE:.1f}% daily move.")
+        rws.append([td(f'{lead(n)}<br>{small(e(wk))}', mono=True), td(f'{e(c)}<br>{sp(f"{e(pts)} · {pct:+.2f}% {word}", col)}', mono=True), td(em_bar_div(pct, MKT_SCALE))])
+    inner += tbl(["Index · week", "Fri close · 1-day move", f"1-day % bar ({em_axis(MKT_SCALE)})"], rws) + cap(f"1-day close→close move, in index points and %; bar scale marks {em_axis(MKT_SCALE)} %, ticks = quarter half-width. Week = trailing 5 sessions.")
     inner += h3("Vanguard funds")
     rws = []
     for tk, nm, nav, chg, asof, ytd, note in FUNDS:
         up = "+" in chg.split("·")[0]; col = L["pos"] if up else L["neg"]
         rws.append([td(f'{lead(tk)}<br>{small(e(nm))}', mono=True), td(f'{e(nav)}<br>{sp(e(chg), col)}', mono=True), td(f'{e(asof)}<br>{small("YTD " + e(ytd))}')])
-    inner += tbl(["Fund", "NAV · change", "As of · YTD"], rws) + cap(" ".join(f"{tk}: {note}" for tk, nm, nav, chg, asof, ytd, note in FUNDS))
+    inner += tbl(["Fund", "NAV · 1-day change", "As of · YTD"], rws) + cap(" ".join(f"{tk}: {note}" for tk, nm, nav, chg, asof, ytd, note in FUNDS))
     inner += '<ul style="margin:8px 0 0;padding-left:20px">' + "".join(em_li(b) for b in MKT_BULLETS) + "</ul>"
     o.append(card(inner))
     # crypto
     inner = h2("Cryptocurrency")
     rws = []
-    for n, p, d24, d7 in CRYPTO_ROWS:
+    for n, p, d24, a24, d7, a7 in CRYPTO_ROWS:
         col = L["pos"] if d7 >= 0 else L["neg"]; word = "Up" if d7 >= 0 else "Down"
         neg24 = d24.startswith("−") or d24.startswith("-")
-        rws.append([td(f'{lead(n)}<br>{e(p)}', mono=True), td(f'24h {sp(e(d24), L["neg"] if neg24 else L["pos"])}<br>7d {sp(f"{d7:+.2f}% {word}", col)}', mono=True), td(bar_div(d7, CRYPTO_SCALE))])
-    inner += tbl(["Asset · price", "24 h · 7 d", "7 d bar"], rws) + cap(f"Diverging bars; half-width = ±{CRYPTO_SCALE:.0f}% 7-day change. {CRYPTO_NOTE}")
+        rws.append([td(f'{lead(n)}<br>{e(p)}', mono=True), td(f'24h {sp(e(d24) + " · " + e(a24), L["neg"] if neg24 else L["pos"])}<br>7d {sp(f"{d7:+.2f}% {word} · " + e(a7), col)}', mono=True), td(em_bar_div(d7, CRYPTO_SCALE))])
+    inner += tbl(["Asset · price", "24 h · 7 d (% · $)", f"7-day % bar ({em_axis(CRYPTO_SCALE)})"], rws) + cap(f"24 h and 7 d changes each given as % and $; bar scale marks {em_axis(CRYPTO_SCALE)} %, ticks = quarter half-width. {CRYPTO_NOTE}")
     inner += '<ul style="margin:8px 0 0;padding-left:20px">' + "".join(em_li(b) for b in CRYPTO_BULLETS) + "</ul>"
     o.append(card(inner))
     # ai
     inner = h2("AI &amp; programming") + ul([f'{lead(t_)} — {e(d)} <a href="{e(l)}" style="color:{L["accent"]}">source</a>' for t_, d, l in AI_ITEMS])
+    o.append(card(inner))
+    inner = h2("New publications") + ul([f'{lead(j)} — <b>{e(t_)}</b> ({e(au)}, {e(d)}). {e(tk)} <a href="{e(l)}" style="color:{L["accent"]}">paper</a>' for j, t_, au, d, tk, l in JOURNAL_ITEMS]) + cap(f"Journals scanned: {JOURNALS}; items newly published since the previous run.")
     o.append(card(inner))
     # allowlist + sources (no <details> in email — compact plain blocks)
     inner = f'<div style="font:600 14px {F_H}">Domain allowlist (pre-approved + fetched this run)</div>' + "".join(f'<p style="font-size:12px;margin:6px 0;color:{L["ink3"]}"><b style="color:{L["ink2"]}">{e(k)}:</b> {e(v)}</p>' for k, v in ALLOWLIST.items())
@@ -626,11 +666,14 @@ def plain_text():
     for tk, nm, nav, chg, asof, ytd, note in FUNDS: A(f"    {tk} ({nm}): NAV {nav} · {chg} · as of {asof} · YTD {ytd}. {note}")
     for b in MKT_BULLETS: A(f"  - {b}")
     A(""); A("CRYPTOCURRENCY")
-    for n, p, d24, d7 in CRYPTO_ROWS: A(f"  {n}: {p} · 24h {d24} · 7d {d7:+.2f}% {'Up' if d7>=0 else 'Down'}")
+    for n, p, d24, a24, d7, a7 in CRYPTO_ROWS: A(f"  {n}: {p} · 24h {d24} ({a24}) · 7d {d7:+.2f}% {'Up' if d7>=0 else 'Down'} ({a7})")
+    A("  (24 h and 7 d changes each as % and $.)")
     A("  " + CRYPTO_NOTE)
     for b in CRYPTO_BULLETS: A(f"  - {b}")
     A(""); A("AI & PROGRAMMING")
     for t, d, l in AI_ITEMS: A(f"  - {t} — {d}\n    {l}")
+    A(""); A("NEW PUBLICATIONS (" + JOURNALS + ")")
+    for j, t, au, d, tk, l in JOURNAL_ITEMS: A(f"  - {j}: {t} ({au}, {d}) — {tk}\n    {l}")
     A(""); A("DOMAIN ALLOWLIST")
     for k, v in ALLOWLIST.items(): A(f"  {k}: {v}")
     A(""); A("SOURCES")

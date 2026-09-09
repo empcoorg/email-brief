@@ -152,3 +152,68 @@ class TestRendering(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+@unittest.skipUnless(_HAVE_PW, "playwright not installed (pip install playwright)")
+class TestBarGeometry(TestRendering):
+    """Quantitative-chart guarantees for the diverging bars: fills anchored to
+    the centre baseline, a visible bordered track, and the header axis ruler
+    pixel-aligned with the bar column. Guards against helper shadowing or CSS
+    drift that turns the charts into floating blobs."""
+
+    def test_diverging_fills_anchored_to_centerline(self):
+        pg = self._page(1280)
+        bars = pg.evaluate("""() => [...document.querySelectorAll('.dbar')].map(b => {
+            const r = b.getBoundingClientRect(), f = b.querySelector('.fill');
+            const fr = f.getBoundingClientRect();
+            return {w: r.width, center: r.left + r.width / 2,
+                    fl: fr.left, fr_: fr.right, pos: f.className.includes('pos'),
+                    right: f.className.includes('right'),
+                    border: getComputedStyle(b).borderTopWidth,
+                    ticks: b.querySelectorAll('i').length};
+        })""")
+        self.assertGreaterEqual(len(bars), 10, "markets + crypto rows must carry .dbar tracks")
+        for b in bars:
+            anchor = b["fl"] if b["right"] else b["fr_"]
+            self.assertLessEqual(abs(anchor - b["center"]), 1.6,
+                                 f"fill not anchored to the centre baseline: {b}")
+            self.assertEqual(b["pos"], b["right"], "sign/side mismatch in bar fill")
+            self.assertEqual(b["border"], "1px", "bar track must have a visible 1px border")
+            self.assertEqual(b["ticks"], 6, "bar track must carry micro-notch ticks")
+        pg.close()
+
+    def test_header_axis_aligned_with_bar_column(self):
+        pg = self._page(1280)
+        pairs = pg.evaluate("""() => {
+            const out = [];
+            for (const table of document.querySelectorAll('table')) {
+                const axis = table.querySelector('thead .daxis');
+                const bar = table.querySelector('tbody .dbar');
+                if (!axis || !bar) continue;
+                const a = axis.getBoundingClientRect(), b = bar.getBoundingClientRect();
+                out.push({al: a.left, bl: b.left, aw: a.width, bw: b.width});
+            }
+            return out;
+        }""")
+        self.assertGreaterEqual(len(pairs), 2, "markets and crypto tables must pair axis with bars")
+        for p in pairs:
+            self.assertLessEqual(abs(p["al"] - p["bl"]), 1.6, f"axis not left-aligned with track: {p}")
+            self.assertLessEqual(abs(p["aw"] - p["bw"]), 1.6, f"axis width differs from track: {p}")
+        pg.close()
+
+    def test_axis_labels_carry_units_and_dont_collide(self):
+        pg = self._page(1280)
+        axes = pg.evaluate("""() => [...document.querySelectorAll('thead .daxis')].map(a => {
+            const spans = [...a.querySelectorAll('span')].filter(s => getComputedStyle(s).display !== 'none');
+            const rects = spans.map(s => s.getBoundingClientRect());
+            let overlap = false;
+            for (let i = 1; i < rects.length; i++)
+                if (rects[i].left < rects[i-1].right - 0.5) overlap = true;
+            return {labels: spans.map(s => s.textContent), overlap};
+        })""")
+        self.assertGreaterEqual(len(axes), 2)
+        for a in axes:
+            self.assertTrue(any(l.endswith("%") for l in a["labels"]),
+                            f"axis labels must carry a % unit: {a['labels']}")
+            self.assertFalse(a["overlap"], f"axis labels collide: {a['labels']}")
+        pg.close()
