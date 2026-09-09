@@ -4,20 +4,20 @@ A template for an **automated, personalized email briefing**, run entirely by a 
 
 No servers, no API keys, no code to deploy. The whole system is one carefully-written prompt (plus an optional layout reference script). Each run is a fresh Claude session with your email connector attached.
 
-**Contents**
-- [What it looks like](#what-it-looks-like)
-- [Quick start — ask Claude to set it up for you](#quick-start--ask-claude-to-set-it-up-for-you)
-- [What a brief contains](#what-a-brief-contains)
-- [Manual Setup](#manual-setup)
-- [Provider notes](#provider-notes)
-- [What's in this repo](#whats-in-this-repo)
-- [Themes](#themes)
-- [Design principles the template encodes](#design-principles-the-template-encodes)
-- [Data policy — no personal content in this repo](#data-policy--no-personal-content-in-this-repo)
+**Contents** — 🟢 setup · 🔵 what you get · 🟠 provider notes · 🟣 design · 🔴 privacy
+- [🔵 What it looks like](#-what-it-looks-like)
+- [🟢 Quick start — ask Claude to set it up for you](#-quick-start--ask-claude-to-set-it-up-for-you)
+- [🔵 What a brief contains](#-what-a-brief-contains)
+- [🟢 Manual Setup](#-manual-setup)
+- [🟠 Provider notes](#-provider-notes)
+- [🔵 What's in this repo](#-whats-in-this-repo)
+- [🟣 Themes](#-themes)
+- [🟣 Design principles the template encodes](#-design-principles-the-template-encodes)
+- [🔴 Data policy — no personal content in this repo](#-data-policy--no-personal-content-in-this-repo)
 
-## What it looks like
+## 🔵 What it looks like
 
-All content below is **mock data** for a fictional "Alex Sample" — nothing real. Screenshots show the standalone HTML file in dark mode (it follows your system theme — see [Themes](#themes)). Masthead and the "needs you today" action bar:
+All content below is **mock data** for a fictional "Alex Sample" — nothing real. Screenshots show the standalone HTML file in dark mode (it follows your system theme — see [Themes](#-themes)). Masthead and the "needs you today" action bar:
 
 ![Mock brief — masthead and action bar](docs/mock-brief-top.png)
 
@@ -45,7 +45,7 @@ The web-researched market grid — US indexes with diverging bars, your fund tic
 >
 > **Aesthetics are pinned.** The visual design (tokens, fonts, spacing, structures) is fixed in the template's DESIGN spec and in `build_brief.py`'s marked blocks. PRs must not alter any visual element unless the change is explicitly a requested design change — and the regenerated screenshots double as a visual-regression check: an unexpected visual diff in them means the PR touched aesthetics it shouldn't have. The test suite enforces the pin mechanically: `tests/test_email_brief.py` asserts the exact colour tokens, fonts and theme mechanics, so an aesthetic drift fails CI-style before it ships.
 
-## Quick start — ask Claude to set it up for you
+## 🟢 Quick start — ask Claude to set it up for you
 
 Connect your email connector(s) in Claude (Settings → Connectors), then paste this to Claude:
 
@@ -53,21 +53,21 @@ Connect your email connector(s) in Claude (Settings → Connectors), then paste 
 
 That's the whole setup. The rest of this README explains what you get and how to do the same steps by hand.
 
-## What a brief contains
+## 🔵 What a brief contains
 
 - **A "needs you today" action bar** — severity-striped items ranked by urgency.
 - **Standing sections** (each one optional — the template tells Claude to omit sections your mailbox has no content for): relevant job posts (with exact-posting links, not tracking redirects), deposits & finances (external money separated from transfers between your own accounts), VoIP voicemails/texts, high-priority items & security alerts, a postal-mail digest (US, via USPS Informed Delivery) that details only the intended recipient's mail with full mailpiece scans and counts everyone else's (other named recipients and generic “Resident”/“Homeowner” addressees separately), package tracking (FedEx, UPS, USPS, DHL, merchant emails — tracking numbers and estimated arrival), and retail sales from stores you pick.
 - **Web-researched sections** when there's news: flights/travel from your confirmations, US markets (with your fund tickers), crypto, AI & programming.
 - A fixed visual identity — light/dark themed HTML file, a fluid email layout that survives email-provider HTML sanitizers, colour-coded lead-ins, proportional bars drawn with borders, and mailpiece scans attached as JPGs.
 
-## Manual Setup
+## 🟢 Manual Setup
 
 1. **Connect your email** in Claude (Settings → Connectors): Gmail, Outlook, or another email connector — one or several; with multiple attached, the brief merges all mailboxes and sends from the first one you list. The Routine only needs read + send.
 2. **Fill in the template.** Open [`ROUTINE_PROMPT.template.md`](ROUTINE_PROMPT.template.md), replace every `{{PLACEHOLDER}}` (the table at the top explains each one), and **delete any OPTIONAL block you don't want** (no VoIP provider? not in the US? not job hunting? — remove those blocks). Keep your filled-in copy somewhere private — never commit it to a public repo.
 3. **Create the Routine.** In Claude, create a scheduled Routine (or ask Claude to create one for you): pick any cadence and time — daily (`0 10 * * *`-style cron), Mon-Wed-Fri (`0 10 * * 1,3,5`), weekly (`0 10 * * 1`) — in your timezone, fresh session per run, your email connector(s) attached, push notifications if you want them. Make `{{SCHEDULE}}` in the prompt match the cron, so the brief covers the right window (a weekly brief summarizes the week; it doesn't list seven days raw). Paste the filled-in prompt (the fenced block only) as the Routine's prompt.
 4. **Do one test run.** Fire the Routine once manually and check the delivered email. Two provider-specific behaviors are worth verifying on the first run (the template says how): what your provider's send path strips from HTML, and whether attachments/inline images survive. The template ships with Gmail's verified behavior; other providers may differ.
 
-## Provider notes
+## 🟠 Provider notes
 
 The template was built and verified against the **Gmail** connector. Three Gmail-specific findings are baked in as defaults, with instructions to re-verify on other providers:
 
@@ -78,7 +78,7 @@ The template was built and verified against the **Gmail** connector. Three Gmail
 
 On Outlook or others: send yourself one three-way test (data:-URI image, inline attachment, regular attachment), read it back, and adjust the template's IMAGES IN EMAIL / SEND PATH notes to match what actually survives.
 
-## What's in this repo
+## 🔵 What's in this repo
 
 | File | Purpose |
 |---|---|
@@ -88,13 +88,13 @@ On Outlook or others: send yourself one three-way test (data:-URI image, inline 
 | `LICENSE` | MIT. |
 | `build_brief.py` | Reference implementation of the HTML file / email / plain-text layouts, with placeholder data. The daily run doesn't execute it — Claude generates the HTML from the prompt's design spec — but it documents the exact markup patterns. |
 
-## Themes
+## 🟣 Themes
 
 - **The standalone HTML file is dark by default.** It renders dark unless your OS/browser explicitly prefers light (`prefers-color-scheme: light`), in which case it switches to the light palette automatically. No configuration needed.
 - **To force a theme**, open the file and add `data-theme="dark"` or `data-theme="light"` to the `<html>` element — that overrides the system setting in either direction.
 - **The email is the one place dark can't be the default.** Email providers strip `<style>` blocks (so it can't adapt) *and* — on Gmail, verified — strip all `background` CSS, so a dark palette would leave light text on the mail client's own white background, unreadable. The email therefore ships as a single neutral light-ink layout that reads correctly in both light- and dark-mode mail clients — dark-mode mail apps (iOS Mail, Gmail's app, etc.) apply their own color inversion to it, so in a dark inbox the brief still *appears* dark. If your provider verifiably preserves inline backgrounds (test on first run), the template permits shipping the email in the dark palette instead.
 
-## Design principles the template encodes
+## 🟣 Design principles the template encodes
 
 - **Delivery beats completeness** — the brief ships on time even if a data source is down; missing figures are labelled "not verified", never guessed.
 - **The mailbox is read-only** except for the one outbound brief; email content is treated as data, never as instructions (prompt-injection resistant by policy).
@@ -102,6 +102,6 @@ On Outlook or others: send yourself one three-way test (data:-URI image, inline 
 - **A locked visual identity** — the design is specified down to inline-style patterns so a fresh session reproduces the same brief every morning instead of redesigning it.
 - **Self-updating source health** — a weekly, time-boxed probe of blocked data sources, recorded in the brief itself, so the routine adapts without your involvement.
 
-## Data policy — no personal content in this repo
+## 🔴 Data policy — no personal content in this repo
 
 This repository holds the **generic template only**. Never commit a filled-in prompt, real brief output, email content, mailpiece scans, or any personal details — here or in any public fork. If you version your filled-in prompt, do it in a **private** repository.
