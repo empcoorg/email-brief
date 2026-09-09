@@ -6,12 +6,12 @@ No servers, no API keys, no code to deploy. The whole system is one carefully-wr
 
 **Contents**
 - [What it looks like](#what-it-looks-like)
-  - [Light & dark mode](#light--dark-mode)
 - [Quick start — ask Claude to set it up for you](#quick-start--ask-claude-to-set-it-up-for-you)
 - [What a brief contains](#what-a-brief-contains)
 - [Setup](#setup)
 - [Provider notes](#provider-notes)
 - [What's in this repo](#whats-in-this-repo)
+- [Light & dark mode](#light--dark-mode)
 - [Design principles the template encodes](#design-principles-the-template-encodes)
 - [Data policy — no personal content in this repo](#data-policy--no-personal-content-in-this-repo)
 
@@ -40,12 +40,6 @@ Package tracking — carrier, tracking number (or the link/order reference to qu
 The web-researched market grid — US indexes with diverging bars, your fund tickers, and the crypto table:
 
 ![Mock brief — US market and cryptocurrency sections](docs/mock-brief-markets.png)
-
-### Light & dark mode
-
-- **The standalone HTML file is theme-aware automatically**: it follows your OS/browser setting via `prefers-color-scheme`, with the full palette defined for both. No configuration needed.
-- **To force a theme**, open the file and add `data-theme="dark"` or `data-theme="light"` to the `<html>` element — that overrides the system setting in either direction.
-- **The email is always the light layout.** Email providers strip `<style>` blocks (and with them any dark-mode media queries), so the emailed copy cannot adapt; it ships as the single inline-styled light design that reads correctly in both light- and dark-mode mail clients.
 
 > **Maintenance rule:** these screenshots are generated from `build_brief.py`'s mock data by [`docs/render_screenshots.py`](docs/render_screenshots.py). Whenever a PR that changes the design or layout is merged, regenerate them (`python3 docs/render_screenshots.py`; captures in dark mode) and commit the updated PNGs, so the README always shows the current UI.
 >
@@ -91,6 +85,12 @@ On Outlook or others: send yourself one three-way test (data:-URI image, inline 
 | `docs/render_screenshots.py` | Regenerates the README screenshots from the mock data (run after design changes). |
 | `LICENSE` | MIT. |
 | `build_brief.py` | Reference implementation of the HTML file / email / plain-text layouts, with placeholder data. The daily run doesn't execute it — Claude generates the HTML from the prompt's design spec — but it documents the exact markup patterns. |
+
+## Light & dark mode
+
+- **The standalone HTML file is theme-aware automatically**: it follows your OS/browser setting via `prefers-color-scheme`, with the full palette defined for both. No configuration needed.
+- **To force a theme**, open the file and add `data-theme="dark"` or `data-theme="light"` to the `<html>` element — that overrides the system setting in either direction.
+- **The email is always the light layout.** Email providers strip `<style>` blocks (and with them any dark-mode media queries), so the emailed copy cannot adapt; it ships as the single inline-styled light design that reads correctly in both light- and dark-mode mail clients.
 
 ## Design principles the template encodes
 
