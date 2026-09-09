@@ -111,6 +111,18 @@ class TestGeneratorOutputs(unittest.TestCase):
         self.assertIn("NEW PUBLICATIONS", tx)
         self.assertIn("Journal of Phycology", page)
 
+    def test_money_bars_colored_and_quantified(self):
+        page, em = self.r["page"], self.r["email"]
+        fin = page.split("Deposits &amp; finances")[1].split("</section>")[0]
+        for fill in ('class="fill in"', 'class="fill out"', 'class="fill neu"'):
+            self.assertIn(fill, fin, f"money bar missing direction-coloured {fill}")
+        self.assertIn('class="sbar"', fin)
+        self.assertIn("linear scale, 0", fin, "money axis caption must state scale and range")
+        self.assertIn("$2,450", fin, "money axis must label the max in $")
+        # email carries the tick values as text and the colour-coding note
+        self.assertIn("0 · $1,225 · $2,450", em)
+        self.assertIn("in = green", em.lower())
+
     def test_package_tracking_columns(self):
         sec = self.r["page"].split("Package tracking")[1].split("</section>")[0]
         for col in ("Carrier", "Tracking", "Sender · item", "Recipient", "Status", "Est. arrival"):
@@ -204,6 +216,8 @@ class TestTemplate(unittest.TestCase):
             "TIMESCALE",
             "MAGNITUDE",
             "NEW PUBLICATIONS",                           # journals section
+            "EVERY PROPORTIONAL BAR IS A QUANTITATIVE CHART",
+            "LOG scale",                                  # data-spread-driven axis
             "ATTACHMENT SIZE CEILING",
             "24,600",
             "renumber the remaining sections consecutively",

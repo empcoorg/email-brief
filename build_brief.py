@@ -121,7 +121,15 @@ FIN_MOVES = [  # (date/time, payee, detail, amount_num, currency, direction word
     ("Mon Mar 2, 6:15 PM EST", "Checking → Wealthfront", "Scheduled monthly transfer between own accounts", 500.00, "USD", "Internal", "±"),
     ("Tue Mar 3, 7:41 AM EST", "Lakeshore Power & Light", "Autopay FAILED — card on file expired \u00b7 bill #88213", 84.20, "USD", "Past due", "−"),
 ]
-FIN_BAR_SCALE = 2450.0
+def _fin_axis_mode():
+    import math
+    amts = [m[3] for m in FIN_MOVES]
+    mx, mn = max(amts), min(a for a in amts if a > 0)
+    if mx / mn > 100:  # spread over ~2 orders of magnitude -> log decades
+        return ("log", 10 ** math.floor(math.log10(mn)), 10 ** math.ceil(math.log10(mx)))
+    return ("linear", mx, None)
+FIN_AXIS = _fin_axis_mode()
+FIN_BAR_SCALE = FIN_AXIS[1] if FIN_AXIS[0] == "linear" else FIN_AXIS[2]
 FIN_NOTES = [
     "First Meridian Bank — Visa ···1234 statement posted (Mon 8:59 AM EST): balance $1,210.45 · minimum $35.00 · due March 27.",
     "Nothing unusual: no duplicate charges, no processor alerts, no tax notices. A \u201c$20 bonus for referrals\u201d email from the brokerage is a promo, not a deposit.",
@@ -258,6 +266,35 @@ def axis_foot(scale, label):
 def em_axis(scale):
     return " · ".join("0" if v == 0 else f"{v:+.1f}".replace("-", "−")
                            for v in (-scale, -scale / 2, 0, scale / 2, scale))
+def _money_fmt(v):
+    return "$" + (f"{v:,.0f}" if v >= 10 else f"{v:,.2f}")
+def money_bar(amt, dirw):
+    import math
+    mode, a, b = FIN_AXIS
+    if mode == "linear":
+        w = min(amt / a, 1.0) * 100
+    else:
+        w = max(0.0, min(1.0, (math.log10(max(amt, a)) - math.log10(a)) / (math.log10(b) - math.log10(a)))) * 100
+    fcls = "in" if dirw == "In" else ("neu" if dirw == "Internal" else "out")
+    ticks = "".join(f'<i style="left:{q * 12.5:g}%"></i>' for q in range(1, 8))
+    return f'<div class="sbar" aria-hidden="true">{ticks}<div class="fill {fcls}" style="width:{max(w, 2):.1f}%"></div></div>'
+def money_axis():
+    import math
+    mode, a, b = FIN_AXIS
+    t = [f'<i class="{"mj" if q % 2 == 0 else ""}" style="left:{q * 12.5:g}%"></i>' for q in range(9)]
+    if mode == "linear":
+        labs = [("0", 0, "l"), (_money_fmt(a / 2), 50, ""), (_money_fmt(a), 100, "r")]
+    else:
+        decs = int(math.log10(b) - math.log10(a))
+        labs = [(_money_fmt(a * 10 ** i), i * 100 / decs, "l" if i == 0 else ("r" if i == decs else "")) for i in range(decs + 1)]
+    for lab, p, c in labs:
+        t.append(f'<span class="{c}" style="left:{p:g}%">{lab}</span>')
+    return '<div class="daxis" aria-hidden="true">' + "".join(t) + "</div>"
+def money_axis_note():
+    mode, a, b = FIN_AXIS
+    if mode == "linear":
+        return f"linear scale, 0 \u2192 {_money_fmt(a)} (largest movement in the window), ticks every eighth"
+    return f"LOG scale, decade ticks {_money_fmt(a)} \u2192 {_money_fmt(b)}"
 def bar_div(pct, scale):
     w = min(abs(pct) / scale, 1.0) * 50
     side = "right" if pct >= 0 else "left"
@@ -324,7 +361,10 @@ td.num{{text-align:right;white-space:nowrap}}
 .daxis span{{position:absolute;top:5px;font:500 8.5px 'JetBrains Mono',monospace;letter-spacing:0;text-transform:none;color:var(--ink-3);transform:translateX(-50%)}}
 .daxis span.l{{transform:none}} .daxis span.r{{transform:translateX(-100%)}}
 .daxis-foot{{display:none}}
-.sbar{{position:relative;height:12px;width:150px;background:var(--surface-2);border-radius:3px}} .sbar .fill{{position:absolute;left:0;top:2px;bottom:2px;min-width:3px;border-radius:2px;background:var(--negative)}} .sbar .fill.neu{{background:var(--ink-3)}}
+.sbar{{position:relative;height:14px;width:150px;background:var(--surface-2);border:1px solid var(--line);border-radius:3px;box-sizing:border-box}}
+.sbar i{{position:absolute;top:0;height:3px;width:1px;background:var(--line)}}
+.sbar .fill{{position:absolute;left:0;top:3px;bottom:3px;min-width:3px;border-radius:2px}}
+.sbar .fill.in{{background:var(--positive)}} .sbar .fill.out{{background:var(--negative)}} .sbar .fill.neu{{background:var(--ink-3)}}
 .cap{{font-size:12.5px;color:var(--ink-3);padding:8px 2px}}
 .tiles{{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}}
 .tile{{background:var(--surface-2);border-radius:10px;padding:12px 14px}} .tile .v{{font-size:22px;font-weight:700;margin:2px 0}} .tile .d{{font-size:12.5px;color:var(--ink-3)}}
@@ -348,7 +388,7 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
  tr{{background:var(--surface);border:1px solid var(--line);border-radius:10px;margin:0 0 10px;padding:6px 0}}
  td{{border:0;padding:5px 12px;font-size:15px;text-align:left!important;white-space:normal!important}}
  td[data-l]::before{{content:attr(data-l);display:block;font-family:Archivo,sans-serif;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);margin-bottom:1px}}
- td.num{{text-align:left}} .dbar,.sbar,.daxis{{width:100%}} .grid3 .dbar{{width:100%}} .grid3 .daxis{{width:100%}} .daxis-foot{{display:block;margin:2px 0 8px}} .grid3 .tbl-wrap table{{font-size:15px}}
+ td.num{{text-align:left}} .dbar,.sbar,.daxis{{width:100%}} .sbar{{width:100%}} .grid3 .dbar{{width:100%}} .grid3 .daxis{{width:100%}} .daxis-foot{{display:block;margin:2px 0 8px}} .grid3 .tbl-wrap table{{font-size:15px}}
  li{{margin:11px 0}} .meta{{font-size:14px}} .legend span{{display:block;margin:2px 0}}
 }}
 """
@@ -394,14 +434,12 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
     o.append('<section><h2><span class="num">2.</span> Deposits &amp; finances</h2><div class="card"><div class="tiles">')
     for l, v, d in FIN_SUMMARY:
         o.append(f'<div class="tile"><div class="lbl">{e(l)}</div><div class="v mono">{e(v)}</div><div class="d">{e(d)}</div></div>')
-    o.append('</div><h3 style="margin-top:0">Money movements (outside → you / you → outside)</h3><div class="tbl-wrap"><table><thead><tr><th>When</th><th>Payee / source</th><th>Detail</th><th>Direction</th><th style="text-align:right">Amount</th><th>Bar</th></tr></thead><tbody>')
+    o.append('</div><h3 style="margin-top:0">Money movements (outside → you / you → outside)</h3><div class="tbl-wrap"><table><thead><tr><th>When</th><th>Payee / source</th><th>Detail</th><th>Direction</th><th style="text-align:right">Amount</th><th>Amount, $ {axis_html}</th></tr></thead><tbody>'.format(axis_html=money_axis()))
     for when, payee, det, amt, cur, dirw, sign in FIN_MOVES:
-        cls = "dir-neg" if dirw == "Out" else ("dir-pos" if dirw == "In" else "dir-neu")
-        w = min(amt / FIN_BAR_SCALE, 1.0) * 100
-        fcls = "" if dirw == "Out" else "neu"
+        cls = "dir-neg" if dirw in ("Out", "Past due") else ("dir-pos" if dirw == "In" else "dir-neu")
         amt_s = (sign if sign != "±" else "") + f"{cur_sym(cur)}{amt:,.2f}"
-        o.append('<tr>' + tdl("When", e(when), "mono") + tdl("Payee / source", e(payee)) + tdl("Detail", e(det)) + tdl("Direction", f'<span class="{cls}">{e(sign)} {e(dirw)}</span>') + tdl("Amount", amt_s, "num mono") + tdl("Bar", f'<div class="sbar"><div class="fill {fcls}" style="width:{w:.0f}%"></div></div>') + '</tr>')
-    o.append('</tbody></table></div><div class="cap">Bar scale: full width = the largest movement in the window.</div>')
+        o.append('<tr>' + tdl("When", e(when), "mono") + tdl("Payee / source", e(payee)) + tdl("Detail", e(det)) + tdl("Direction", f'<span class="{cls}">{e(sign)} {e(dirw)}</span>') + tdl("Amount", f'<span class="{cls}">{amt_s}</span>', "num mono") + tdl("Amount, $", money_bar(amt, dirw)) + '</tr>')
+    o.append(f'</tbody></table></div><div class="daxis-foot">{money_axis()}<div class="meta">Amount, $ — {money_axis_note()}</div></div><div class="cap">Bar axis: {money_axis_note()}. Money in = green, out / past due = red, internal transfer = grey — the sign and direction word state it too.</div>')
     o.append('<h3>Transfers between your own accounts</h3><div class="nothing">' + e(FIN_INTERNAL) + '</div><h3>Bills, statements &amp; notices</h3><ul>')
     for n in FIN_NOTES: o.append(li_lead(n))
     o.append('</ul></div></section>')
@@ -506,8 +544,9 @@ def em_bar_div(pct, scale, total=80):
     if pct >= 0:
         return f'<div style="font-size:0;line-height:0"><span style="display:inline-block;width:{half}px;height:10px;border-right:1px solid {L["lineS"]}"></span>{_seg(w, col)}</div>'
     return f'<div style="font-size:0;line-height:0"><span style="display:inline-block;width:{half-w}px;height:10px"></span>{_seg(w, col)}<span style="display:inline-block;width:{half}px;height:10px;border-left:1px solid {L["lineS"]}"></span></div>'
-def em_bar_single(val, scale, neu=False, total=80):
-    w = max(3, int(min(val/scale, 1.0) * total)); col = L["ink3"] if neu else L["neg"]
+def em_bar_single(val, scale, dirw="Out", total=80):
+    w = max(3, int(min(val/scale, 1.0) * total))
+    col = L["pos"] if dirw == "In" else (L["ink3"] if dirw == "Internal" else L["neg"])
     return f'<div style="font-size:0;line-height:0">{_seg(w, col)}<span style="display:inline-block;width:{total-w}px;height:10px;border-bottom:1px solid {L["lineS"]}"></span></div>'
 def cap(t): return f'<div style="font-size:12px;color:{L["ink3"]};padding:6px 2px">{e(t)}</div>'
 def stripe_row(color, title_html, det_html):
@@ -552,10 +591,13 @@ def email_html():
     inner += h3("Money movements (outside → you / you → outside)")
     rws = []
     for when, payee, det, amt, cur, dirw, sign in FIN_MOVES:
-        col = L["neg"] if dirw == "Out" else (L["pos"] if dirw == "In" else L["ink2"])
+        col = L["pos"] if dirw == "In" else (L["ink2"] if dirw == "Internal" else L["neg"])
         amt_s = ("" if sign == "±" else sign) + f"{cur_sym(cur)}{amt:,.2f}"
-        rws.append([td(f'<span style="font-family:{F_M}">{e(when)}</span><br>{e(payee)}'), td(e(det)), td(f'{sp(e(sign+" "+dirw), col)} <span style="font-family:{F_M}">{amt_s}</span><br>{em_bar_single(amt, FIN_BAR_SCALE, neu=(dirw!="Out"))}')])
-    inner += tbl(["When · payee", "Detail", "Direction · amount · bar"], rws) + cap("Bar scale: full bar = the largest movement in the window.")
+        rws.append([td(f'<span style="font-family:{F_M}">{e(when)}</span><br>{e(payee)}'), td(e(det)), td(f'{sp(e(sign+" "+dirw), col)} {sp(amt_s, col)}<br>{em_bar_single(amt, FIN_BAR_SCALE, dirw=dirw)}')])
+    _m, _a, _b = FIN_AXIS
+    _ticks = (f"0 · {_money_fmt(_a / 2)} · {_money_fmt(_a)}" if _m == "linear"
+              else " · ".join(_money_fmt(_a * 10 ** i) for i in range(int(__import__("math").log10(_b / _a)) + 1)))
+    inner += tbl(["When · payee", "Detail", f"Direction · amount · bar ({_ticks})"], rws) + cap(f"Bar axis: {money_axis_note()}. Money in = green, out / past due = red, internal = grey — sign and word state it too.")
     inner += h3("Transfers between your own accounts") + f'<div style="color:{L["ink3"]};font-style:italic">{e(FIN_INTERNAL)}</div>'
     inner += h3("Bills, statements & notices") + '<ul style="margin:8px 0 0;padding-left:20px">' + "".join(em_li(n) for n in FIN_NOTES) + "</ul>"
     o.append(card(inner))
@@ -643,6 +685,7 @@ def plain_text():
     A("2. DEPOSITS & FINANCES")
     for l, v, d in FIN_SUMMARY: A(f"  {l}: {v} ({d})")
     A("Money movements:")
+    A(f"  (Bar axis in the HTML outputs: {money_axis_note()}; in = green, out/past due = red, internal = grey.)")
     for when, payee, det, amt, cur, dirw, sign in FIN_MOVES: A(f"  - {when} · {payee} · {sign} {dirw} · {cur_sym(cur)}{amt:,.2f} · {det}")
     A("Transfers between own accounts: nothing new.")
     for n in FIN_NOTES: A(f"  - {n}")

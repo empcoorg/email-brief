@@ -213,7 +213,50 @@ class TestBarGeometry(TestRendering):
         })""")
         self.assertGreaterEqual(len(axes), 2)
         for a in axes:
-            self.assertTrue(any(l.endswith("%") for l in a["labels"]),
-                            f"axis labels must carry a % unit: {a['labels']}")
+            self.assertTrue(any(l.endswith("%") or l.startswith("$") for l in a["labels"]),
+                            f"axis labels must carry a unit (% or $): {a['labels']}")
             self.assertFalse(a["overlap"], f"axis labels collide: {a['labels']}")
+        pg.close()
+
+    def test_money_bars_direction_colored_with_axis(self):
+        pg = self._page(1280)
+        r = pg.evaluate("""() => {
+            const toRGB = h => { const n = parseInt(h.slice(1), 16);
+                return `rgb(${n >> 16}, ${(n >> 8) & 255}, ${n & 255})`; };
+            const out = {fills: [], axis: null};
+            for (const b of document.querySelectorAll('.sbar')) {
+                const f = b.querySelector('.fill');
+                out.fills.push({cls: f.className, color: getComputedStyle(f).backgroundColor,
+                                border: getComputedStyle(b).borderTopWidth,
+                                ticks: b.querySelectorAll('i').length});
+            }
+            const cs = getComputedStyle(document.documentElement);
+            out.pos = cs.getPropertyValue('--positive').trim();
+            out.neg = cs.getPropertyValue('--negative').trim();
+            const table = [...document.querySelectorAll('table')].find(t => t.querySelector('tbody .sbar'));
+            const axis = table && table.querySelector('thead .daxis');
+            const bar = table && table.querySelector('tbody .sbar');
+            if (axis && bar) {
+                const a = axis.getBoundingClientRect(), c = bar.getBoundingClientRect();
+                out.axis = {dl: Math.abs(a.left - c.left), dw: Math.abs(a.width - c.width),
+                            labels: [...axis.querySelectorAll('span')].map(s => s.textContent)};
+            }
+            return out;
+        }""")
+        self.assertGreaterEqual(len(r["fills"]), 3)
+        def rgb(h):
+            n = int(h.lstrip("#"), 16)
+            return f"rgb({n >> 16}, {(n >> 8) & 255}, {n & 255})"
+        for f in r["fills"]:
+            self.assertEqual(f["border"], "1px", "money track must have a visible border")
+            self.assertEqual(f["ticks"], 7, "money track must carry micro-notch ticks")
+            if "in" in f["cls"].split():
+                self.assertEqual(f["color"], rgb(r["pos"]), "money-in fill must be the positive token")
+            if "out" in f["cls"].split():
+                self.assertEqual(f["color"], rgb(r["neg"]), "money-out fill must be the negative token")
+        self.assertIsNotNone(r["axis"], "money table must pair a header axis with its bars")
+        self.assertLessEqual(r["axis"]["dl"], 1.6); self.assertLessEqual(r["axis"]["dw"], 1.6)
+        self.assertIn("0", r["axis"]["labels"])
+        self.assertTrue(any(l.startswith("$") for l in r["axis"]["labels"]),
+                        "money axis labels must carry $ units")
         pg.close()
