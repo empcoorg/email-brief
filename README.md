@@ -90,7 +90,7 @@ On Outlook or others: send yourself one three-way test (data:-URI image, inline 
 
 - **The standalone HTML file is dark by default.** It renders dark unless your OS/browser explicitly prefers light (`prefers-color-scheme: light`), in which case it switches to the light palette automatically. No configuration needed.
 - **To force a theme**, open the file and add `data-theme="dark"` or `data-theme="light"` to the `<html>` element — that overrides the system setting in either direction.
-- **The email is the one place dark can't be the default.** Email providers strip `<style>` blocks (so it can't adapt) *and* — on Gmail, verified — strip all `background` CSS, so a dark palette would leave light text on the mail client's own white background, unreadable. The email therefore ships as a single neutral light-ink layout that reads correctly in both light- and dark-mode mail clients. If your provider verifiably preserves inline backgrounds (test on first run), the template permits shipping the email in the dark palette instead.
+- **The email is the one place dark can't be the default.** Email providers strip `<style>` blocks (so it can't adapt) *and* — on Gmail, verified — strip all `background` CSS, so a dark palette would leave light text on the mail client's own white background, unreadable. The email therefore ships as a single neutral light-ink layout that reads correctly in both light- and dark-mode mail clients — dark-mode mail apps (iOS Mail, Gmail's app, etc.) apply their own color inversion to it, so in a dark inbox the brief still *appears* dark. If your provider verifiably preserves inline backgrounds (test on first run), the template permits shipping the email in the dark palette instead.
 
 ## Design principles the template encodes
 
