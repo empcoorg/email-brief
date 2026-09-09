@@ -1,6 +1,6 @@
 # email-brief
 
-A template for a **personalized daily email briefing**, run entirely by a [Claude](https://claude.ai) Routine with your own email connector(s) — Gmail, Outlook, or any other email connector available to your Claude account, and you can attach several to merge multiple mailboxes into one report. On your schedule (daily, Mon-Wed-Fri, weekly — any cadence, time and timezone) it reads everything since the previous run, researches markets/crypto/AI news on the web, and delivers one designed brief two ways: a themed standalone HTML file in the Claude session, and a phone-friendly HTML email to an address you choose.
+A template for an **automated, personalized email briefing**, run entirely by a [Claude](https://claude.ai) Routine with your own email connector(s) — Gmail, Outlook, or any other email connector available to your Claude account. Supports summarizing single or multiple email accounts, sent as a single report to your email address of choice. On your schedule (daily, Mon-Wed-Fri, weekly — any cadence, time and timezone) it reads everything since the previous run, researches markets/crypto/AI news on the web, and delivers one designed brief two ways: a themed standalone HTML file in the Claude session, and a phone-friendly HTML email to an address you choose.
 
 No servers, no API keys, no code to deploy. The whole system is one carefully-written prompt (plus an optional layout reference script). Each run is a fresh Claude session with your email connector attached.
 
@@ -11,13 +11,13 @@ No servers, no API keys, no code to deploy. The whole system is one carefully-wr
 - [Manual Setup](#manual-setup)
 - [Provider notes](#provider-notes)
 - [What's in this repo](#whats-in-this-repo)
-- [Light & dark mode](#light--dark-mode)
+- [Themes](#themes)
 - [Design principles the template encodes](#design-principles-the-template-encodes)
 - [Data policy — no personal content in this repo](#data-policy--no-personal-content-in-this-repo)
 
 ## What it looks like
 
-All content below is **mock data** for a fictional "Alex Sample" — nothing real. Screenshots show the standalone HTML file in dark mode (it follows your system theme — see [Light & dark mode](#light--dark-mode)). Masthead and the "needs you today" action bar:
+All content below is **mock data** for a fictional "Alex Sample" — nothing real. Screenshots show the standalone HTML file in dark mode (it follows your system theme — see [Themes](#themes)). Masthead and the "needs you today" action bar:
 
 ![Mock brief — masthead and action bar](docs/mock-brief-top.png)
 
@@ -43,7 +43,7 @@ The web-researched market grid — US indexes with diverging bars, your fund tic
 
 > **Maintenance rule:** these screenshots are generated from `build_brief.py`'s mock data by [`docs/render_screenshots.py`](docs/render_screenshots.py). Whenever a PR that changes the design or layout is merged, regenerate them (`python3 docs/render_screenshots.py`; captures in dark mode) and commit the updated PNGs, so the README always shows the current UI.
 >
-> **Aesthetics are pinned.** The visual design (tokens, fonts, spacing, structures) is fixed in the template's DESIGN spec and in `build_brief.py`'s marked blocks. PRs must not alter any visual element unless the change is explicitly a requested design change — and the regenerated screenshots double as a visual-regression check: an unexpected visual diff in them means the PR touched aesthetics it shouldn't have.
+> **Aesthetics are pinned.** The visual design (tokens, fonts, spacing, structures) is fixed in the template's DESIGN spec and in `build_brief.py`'s marked blocks. PRs must not alter any visual element unless the change is explicitly a requested design change — and the regenerated screenshots double as a visual-regression check: an unexpected visual diff in them means the PR touched aesthetics it shouldn't have. The test suite enforces the pin mechanically: `tests/test_email_brief.py` asserts the exact colour tokens, fonts and theme mechanics, so an aesthetic drift fails CI-style before it ships.
 
 ## Quick start — ask Claude to set it up for you
 
@@ -74,6 +74,7 @@ The template was built and verified against the **Gmail** connector. Three Gmail
 - The send path strips **all** `<style>` blocks, classes, CSS backgrounds, and **every `<img>` tag** (including `data:` URIs and inline `cid:` attachments) — so the email is one inline-styled fluid layout, and images travel as **regular file attachments**, which pass through intact.
 - Gmail clips emails over ~102 KB, and its sanitizer inflates HTML ~12% — the template budgets 85 KB.
 - Raw MIME fetch (for extracting mailpiece scan images) uses the message RAW format + Python's `email` module.
+- **Attachment size ceiling:** the send path silently truncates any single attachment whose base64 exceeds ~24,600 characters (~18 KB binary) — verified by reading a sent message back in RAW form and diffing bytes. The template downsizes each attached scan to ~15 KB JPEG (still legible) and verifies the first send per run.
 
 On Outlook or others: send yourself one three-way test (data:-URI image, inline attachment, regular attachment), read it back, and adjust the template's IMAGES IN EMAIL / SEND PATH notes to match what actually survives.
 
@@ -83,10 +84,11 @@ On Outlook or others: send yourself one three-way test (data:-URI image, inline 
 |---|---|
 | `ROUTINE_PROMPT.template.md` | The prompt template — placeholders + optional sections. This is the product. |
 | `docs/render_screenshots.py` | Regenerates the README screenshots from the mock data (run after design changes). |
+| `tests/` | Test suite — run `python3 -m unittest discover -s tests` (stdlib only). Covers generator output, the aesthetic pin, template invariants, privacy, and README links; `tests/test_rendering.py` additionally drives Chromium (needs `pip install playwright`) to check desktop/mobile rendering, overflow, theme behavior and the email's fluid layout. |
 | `LICENSE` | MIT. |
 | `build_brief.py` | Reference implementation of the HTML file / email / plain-text layouts, with placeholder data. The daily run doesn't execute it — Claude generates the HTML from the prompt's design spec — but it documents the exact markup patterns. |
 
-## Light & dark mode
+## Themes
 
 - **The standalone HTML file is dark by default.** It renders dark unless your OS/browser explicitly prefers light (`prefers-color-scheme: light`), in which case it switches to the light palette automatically. No configuration needed.
 - **To force a theme**, open the file and add `data-theme="dark"` or `data-theme="light"` to the `<html>` element — that overrides the system setting in either direction.
