@@ -4,7 +4,16 @@ A template for a **personalized daily email briefing**, run entirely by a [Claud
 
 No servers, no API keys, no code to deploy. The whole system is one carefully-written prompt (plus an optional layout reference script). Each run is a fresh Claude session with your email connector attached.
 
-**Contents:** [What it looks like](#what-it-looks-like) · [Light & dark mode](#light--dark-mode) · [Quick start](#quick-start--ask-claude-to-set-it-up-for-you) · [What a brief contains](#what-a-brief-contains) · [Setup](#setup) · [Provider notes](#provider-notes) · [What's in this repo](#whats-in-this-repo) · [Design principles](#design-principles-the-template-encodes) · [Data policy](#data-policy--no-personal-content-in-this-repo)
+**Contents**
+- [What it looks like](#what-it-looks-like)
+  - [Light & dark mode](#light--dark-mode)
+- [Quick start — ask Claude to set it up for you](#quick-start--ask-claude-to-set-it-up-for-you)
+- [What a brief contains](#what-a-brief-contains)
+- [Setup](#setup)
+- [Provider notes](#provider-notes)
+- [What's in this repo](#whats-in-this-repo)
+- [Design principles the template encodes](#design-principles-the-template-encodes)
+- [Data policy — no personal content in this repo](#data-policy--no-personal-content-in-this-repo)
 
 ## What it looks like
 
