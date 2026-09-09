@@ -176,6 +176,7 @@ class TestTemplate(unittest.TestCase):
             "PACKAGE TRACKING",
             "ESTIMATED ARRIVAL DATE",
             "Delivery beats completeness",
+            "INFERRED FROM THE MAILBOX, NOT CONFIGURED",  # dynamic account set
             "ATTACHMENT SIZE CEILING",
             "24,600",
             "renumber the remaining sections consecutively",
