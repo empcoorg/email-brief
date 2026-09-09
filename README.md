@@ -5,7 +5,7 @@ A template for an **automated, personalized email briefing**, run entirely by a 
 No servers, no API keys, no code to deploy. The whole system is one carefully-written prompt (plus an optional layout reference script). Each run is a fresh Claude session with your email connector attached.
 
 **Contents**
-- **Setup** — [Quick start](#quick-start--ask-claude-to-set-it-up-for-you) · [Manual Setup](#manual-setup) · [Provider notes](#provider-notes)
+- **Setup** — [Quick start](#quick-start--ask-claude-to-set-it-up-for-you) · [Manual Setup](#manual-setup) · [Developer notes](#provider-notes)
 - **What you get** — [What it looks like](#what-it-looks-like) · [What a brief contains](#what-a-brief-contains) · [What's in this repo](#whats-in-this-repo)
 - **Design** — [Themes](#themes) · [Design principles](#design-principles-the-template-encodes)
 - **Privacy** — [Data policy](#data-policy--no-personal-content-in-this-repo)
