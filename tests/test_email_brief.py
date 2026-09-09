@@ -277,6 +277,7 @@ class TestTemplate(unittest.TestCase):
             "FLUID, NOT FIXED-PIXEL STUBS",         # email bar tracks
             "PIN THE COLUMN PROPORTIONS",           # stops mid-word breaks
             "LOWEST PRIORITY",                      # retail sales sits last
+            "THIS SPEC ALWAYS OUTRANKS THE PREVIOUS BRIEF",  # design changes must stick
             "renumber the remaining sections consecutively",
         ):
             self.assertIn(phrase, self.fence, f"template lost invariant: {phrase!r}")
