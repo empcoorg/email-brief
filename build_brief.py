@@ -114,7 +114,8 @@ JOBS_OTHER = [
     ("BI Developer", "Grayline Retail Group", "Chicago, IL", "https://www.linkedin.com/jobs/view/0000000004/"),
 ]
 JOBS_RANKED_NOTE = "ranked: data engineering \u00b7 Python \u00b7 streaming platforms first"
-JOBS_TEAL_LABEL = "remote or preferred location \u00b7 related AI/ML fit"
+JOBS_TEAL_LABEL = "remote or preferred location"
+JOBS_LEGEND_FIT = "STRONG FIT = role matches the configured interests \u00b7 RELATED = near-miss (adjacent AI/ML in the same field). Badges depend ONLY on the role, never on whether comp is stated."
 ALIGNERR = "Gig-platform digest (Mon 9:35 AM EST): hourly contract listings, $40–95/hr, none matching the configured interests — tracking links only."
 JOBS_SKIPPED = "Skipped as off-target: two sales roles, a staffing-agency blast with no named employer, and a job-board newsletter with no actual postings."
 
@@ -150,6 +151,10 @@ def _fin_axis():
         return ("log", 10.0 ** math.floor(math.log10(mn)), 10.0 ** math.ceil(math.log10(mx)))
     return ("linear",) + nice_step_top(mx)
 FIN_AXIS = _fin_axis()          # (mode, step-or-decade-min, top)
+
+def pct_axis(values):
+    """Even (step, top) for a signed percentage column."""
+    return nice_step_top(max(abs(v) for v in values) or 1.0)
 FIN_BAR_SCALE = FIN_AXIS[2]
 FIN_NOTES = [
     "First Meridian Bank — Visa ···1234 statement posted (Mon 8:59 AM EST): balance $1,210.45 · minimum $35.00 · due March 27.",
@@ -177,17 +182,32 @@ HIPRI = [
     ]),
 ]
 
+# Travel -------------------------------------------------------------
+# Flights persist in every brief until the flight date passes — they are NOT
+# gated on a new email arriving in the window. Every clock time is the LOCAL
+# time at that airport, which is why each carries its own zone abbreviation.
+FLIGHTS = dict(
+    airline="Delta", conf="SAMPLE7", pax="ALEX Q SAMPLE",
+    booked="Confirmation received Feb 11 — carried forward each run until the trip date passes.",
+    legs=[  # date, flight, from, dep (airport-local), to, arr (airport-local)
+        ("Mon, Mar 23, 2026", "NW 412", "Denver (DEN)", "1:29 PM CST",
+         "Chicago (ORD)", "7:19 PM EDT"),
+        ("Mon, Mar 23, 2026", "NW 987", "Chicago (ORD)", "9:55 PM EDT",
+         "Boston (BOS)", "11:51 PM EDT"),
+    ],
+    note="All times are LOCAL TO EACH AIRPORT — departure in the origin's zone, arrival in the destination's. No schedule changes since booking.",
+)
+
 # Markets ------------------------------------------------------------
-MKT_ROWS = [  # name, close, pts, pct, week
-    ("S&P 500", "6,412.30", "+38.21", +0.60, "+1.2% wk"),
-    ("Dow", "47,105.88", "−121.40", -0.26, "+0.4% wk"),
-    ("Nasdaq", "21,980.14", "+184.02", +0.84, "+2.1% wk"),
-    ("Russell 2000", "2,610.77", "+9.15", +0.35, "+0.8% wk"),
+MKT_ROWS = [  # name, close, pts24, pct24, pts7, pct7
+    ("S&P 500", "6,412.30", "+38.21", +0.60, "+76.40", +1.20),
+    ("Dow", "47,105.88", "−121.40", -0.26, "+187.50", +0.40),
+    ("Nasdaq", "21,980.14", "+184.02", +0.84, "+452.10", +2.10),
+    ("Russell 2000", "2,610.77", "+9.15", +0.35, "+20.70", +0.80),
 ]
-MKT_SCALE = 1.0
 FUNDS = [  # ticker, name, nav, chg, asof, ytd, note
-    ("VTSAX", "Vanguard Total Stock Market Admiral", "$132.48", "+$0.71 · +0.54% Up", "Mon Mar 2 close (5:48 PM ET)", "4.2% YTD", "NAV from Zacks; YCharts agrees."),
-    ("VTIAX", "Vanguard Total Intl Stock Admiral", "$36.02", "−$0.08 · −0.22% Down", "Mon Mar 2 close (5:48 PM ET)", "6.1% YTD", "NAV from Zacks."),
+    ("VTSAX", "Vanguard Total Stock Market Admiral", "$132.48", "+$0.71 · +0.54% Up", "Mon Mar 2 close (5:48 PM ET)", "4.2%", "NAV from Zacks; YCharts agrees."),
+    ("VTIAX", "Vanguard Total Intl Stock Admiral", "$36.02", "−$0.08 · −0.22% Down", "Mon Mar 2 close (5:48 PM ET)", "6.1%", "NAV from Zacks."),
 ]
 MKT_BULLETS = [
     "Fed: FOMC minutes due Wed 2:00 PM ET; futures price a hold at the current range. February CPI lands Thu 8:30 AM ET (consensus 2.6% y/y).",
@@ -196,15 +216,18 @@ MKT_BULLETS = [
 ]
 
 # Crypto -------------------------------------------------------------
-CRYPTO_ROWS = [  # name, price, 24h pct, 24h $, 7d pct, 7d $
-    ("BTC", "$91,240", "+1.2%", "+$1,082", +4.1, "+$3,594"),
-    ("ETH", "$3,105", "+0.8%", "+$25", +2.9, "+$88"),
-    ("SOL", "$168.40", "−0.6%", "−$1.02", +1.5, "+$2.49"),
-    ("XRP", "$1.72", "+0.3%", "+$0.005", -1.2, "−$0.021"),
-    ("BNB", "$612.00", "+0.5%", "+$3.05", +0.9, "+$5.46"),
-    ("DOGE", "$0.142", "−1.8%", "−$0.0026", -3.4, "−$0.0050"),
+CRYPTO_ROWS = [  # name, price, pct24, amt24, pct7, amt7
+    ("BTC", "$91,240", +1.2, "+$1,082", +4.1, "+$3,594"),
+    ("ETH", "$3,105", +0.8, "+$25", +2.9, "+$88"),
+    ("SOL", "$168.40", -0.6, "−$1.02", +1.5, "+$2.49"),
+    ("XRP", "$1.72", +0.3, "+$0.005", -1.2, "−$0.021"),
+    ("BNB", "$612.00", +0.5, "+$3.05", +0.9, "+$5.46"),
+    ("DOGE", "$0.142", -1.8, "−$0.0026", -3.4, "−$0.0050"),
 ]
-CRYPTO_SCALE = 5.0
+MKT_24 = pct_axis([r[3] for r in MKT_ROWS])
+MKT_7D = pct_axis([r[5] for r in MKT_ROWS])
+CRY_24 = pct_axis([r[2] for r in CRYPTO_ROWS])
+CRY_7D = pct_axis([r[4] for r in CRYPTO_ROWS])
 CRYPTO_NOTE = "Prices from CoinMarketCap ~9:55 AM EST; 7 d figures cross-checked against CoinGecko."
 CRYPTO_BULLETS = [
     "BTC held above $90K for a fourth session; weekly ETF inflows remain positive per Farside's tracker.",
@@ -271,22 +294,30 @@ def loc_tier(loc):
     return "", ""
 
 # ------------------------------------------------------------------ RENDER: FILE (tokens)
-def axis_div(scale, unit="%"):
-    """Fine-grain diverging axis: ticks at every quarter of the half-width,
-    labels at −s, −s/2, 0, +s/2, +s (unit on the outer labels)."""
-    t = []
-    for i in range(9):
-        t.append(f'<i class="{"mj" if i % 2 == 0 else ""}" style="left:{i * 12.5:g}%"></i>')
-    for v, p, c in ((-scale, 0, "l"), (-scale / 2, 25, "mid"), (0.0, 50, ""), (scale / 2, 75, "mid"), (scale, 100, "r")):
-        lab = "0" if v == 0 else f"{v:+g}".replace("-", "−")
-        if c in ("l", "r"): lab += unit
-        t.append(f'<span class="{c}" style="left:{p}%">{lab}</span>')
-    return '<div class="daxis" aria-hidden="true">' + "".join(t) + "</div>"
-def axis_foot(scale, label):
-    return f'<div class="daxis-foot">{axis_div(scale)}<div class="meta">{e(label)}</div></div>'
-def em_axis(scale):
-    return " · ".join("0" if v == 0 else f"{v:+.1f}".replace("-", "−")
-                           for v in (-scale, -scale / 2, 0, scale / 2, scale))
+def pct_tick(v):
+    """Even percentage axis label: −3% · 0 · +3%."""
+    return "0" if v == 0 else f"{v:+g}".replace("-", "\u2212") + "%"
+def _axis_marks(ax):
+    step, top = ax
+    return int(round(top / step))
+def axis_div(ax, cls=""):
+    """Fine-grain diverging ruler: a notch at every EVEN step, labels only at
+    −top, 0, +top. Same contract as the money axis."""
+    n = _axis_marks(ax)
+    top = ax[1]
+    t = [f'<i class="{"mj" if k in (-n, 0, n) else ""}" style="left:{50 + k * 50 / n:g}%"></i>'
+         for k in range(-n, n + 1)]
+    for v, p, c in ((-top, 0, "l"), (0, 50, ""), (top, 100, "r")):
+        t.append(f'<span class="{c}" style="left:{p}%">{pct_tick(v)}</span>')
+    return f'<div class="daxis{" " + cls if cls else ""}" aria-hidden="true">' + "".join(t) + "</div>"
+def axis_foot(ax, label):
+    return f'<div class="daxis-foot">{axis_div(ax)}<div class="meta">{e(label)}</div></div>'
+def em_axis(ax):
+    top = ax[1]
+    return f"{pct_tick(-top)} \u00b7 0 \u00b7 {pct_tick(top)}"
+def axis_note(ax, what):
+    step, top = ax
+    return f"{what}: diverging, 0 at centre \u2192 {pct_tick(top)} each side; even {step:g}% steps"
 def _money_fmt(v):
     return "$" + (f"{v:,.0f}" if v >= 10 else f"{v:,.2f}")
 def money_tick(v):
@@ -342,12 +373,14 @@ def money_axis_note():
         return (f"diverging, 0 at centre \u2192 {money_tick(b)} each side; "
                 f"even {_money_fmt(a)} steps")
     return f"diverging LOG scale, decade steps {_money_fmt(a)} \u2192 {_money_fmt(b)} each side"
-def bar_div(pct, scale):
-    w = min(abs(pct) / scale, 1.0) * 50
+def bar_div(pct, ax):
+    n = _axis_marks(ax)
+    w = min(abs(pct) / ax[1], 1.0) * 50
     side = "right" if pct >= 0 else "left"
     cls = "pos" if pct >= 0 else "neg"
-    ticks = "".join(f'<i style="left:{q * 12.5:g}%"></i>' for q in range(1, 8) if q != 4)
-    return f'<div class="dbar" aria-hidden="true">{ticks}<div class="fill {cls} {side}" style="width:{w:.1f}%"></div></div>'
+    ticks = "".join(f'<i style="left:{50 + sgn * k * 50 / n:g}%"></i>'
+                    for sgn in (-1, 1) for k in range(1, n + 1))
+    return f'<div class="dbar" aria-hidden="true">{ticks}<div class="fill {cls} {side}" style="width:{max(w, 1.5):.1f}%"></div></div>'
 
 def li_lead(text):
     a, sep, b = lead_split(text)
@@ -417,6 +450,11 @@ ul{{margin:8px 0 0;padding-left:20px}} li{{margin:9px 0;line-height:1.55}}
 .grid3{{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}}
 .grid3 .card{{min-width:0}} .grid3 h2{{font-size:17px}}
 .grid3 .tbl-wrap table{{min-width:0;font-size:12px}} .grid3 th,.grid3 td{{padding:6px 6px}} .grid3 td.num{{white-space:normal}} .grid3 .dbar{{width:56px}} .grid3 .daxis{{width:56px}} .grid3 .daxis span.mid{{display:none}}
+/* market + crypto carry TWO chart columns, so they span the grid rather than
+   being squeezed into a third of it */
+.grid3 .card.wide{{grid-column:1/-1}}
+.grid3 .card.wide .tbl-wrap table{{font-size:14px}} .grid3 .card.wide th,.grid3 .card.wide td{{padding:9px 10px}}
+.grid3 .card.wide .dbar,.grid3 .card.wide .daxis{{width:100%;min-width:120px;max-width:none}}
 .hp{{border-left:4px solid var(--ink-3);padding:10px 14px;margin:10px 0;background:var(--surface-2);border-radius:0 8px 8px 0}} .hp.warn{{border-color:var(--warning)}} .hp.ok{{border-color:var(--positive)}} .hp.info{{border-color:var(--accent)}}
 .hp .t{{font-weight:600;font-family:Archivo,sans-serif}} .hp.warn .t{{color:var(--warning)}} .hp.ok .t{{color:var(--positive)}} .hp.info .t{{color:var(--accent)}}
 details{{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 16px;margin-top:18px}} summary{{cursor:pointer;font-family:Archivo,sans-serif;font-weight:600;font-size:14px}}
@@ -455,8 +493,13 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
     for sev, t, d in ACTIONS:
         o.append(f'<div class="act {sev}"><div class="stripe"></div><div class="body"><div class="act-title"><span class="tag">{tagmap[sev]}</span>{e(t)}</div><div class="det">{e(d)}</div></div></div>')
     o.append('</div></section>')
+    # 4 high priority
+    o.append('<section><h2><span class="num">1.</span> High priority</h2><div class="card">')
+    for sev, t, items in HIPRI:
+        o.append(f'<div class="hp {sev}"><div class="t">{e(t)}</div><ul>' + "".join(li_lead(i) for i in items) + "</ul></div>")
+    o.append('</div></section>')
     # 1 jobs
-    o.append(f'<section><h2><span class="num">1.</span> Relevant job posts <span class="sub">{e(JOBS_RANKED_NOTE)}</span></h2><div class="card">')
+    o.append(f'<section><h2><span class="num">2.</span> Relevant job posts <span class="sub">{e(JOBS_RANKED_NOTE)}</span></h2><div class="card">')
     o.append('<h3 style="margin-top:0">Application status</h3><ul class="jobs">')
     for t, m, d in JOBS_STATUS:
         o.append(f'<li><span class="lead">{e(t)}</span> <span class="meta">— {e(m)}</span><br>{e(d)}</li>')
@@ -467,7 +510,7 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
         compc = f'<span class="c-pos">{e(comp)}</span>' if comp != "not stated" else f'<span class="muted">{e(comp)}</span>'
         locc = f'<span class="c-accent">{e(loc)}</span>' if lcls else e(loc)
         o.append('<tr>' + tdl("Role", role) + tdl("Company", e(c)) + tdl("Comp", compc, "mono") + tdl("Location", locc) + tdl("Source · received", e(src), "meta") + tdl("Link", f'<a href="{e(link)}">open</a>') + '</tr>')
-    o.append('</tbody></table></div><div class="legend"><span><b class="c-pos">Green</b> = comp stated / strong fit</span><span><b class="c-accent">Teal</b> = ' + e(JOBS_TEAL_LABEL) + '</span><span><b class="c-warn">Amber</b> = deadline stated (none today)</span><span class="muted">Grey = not stated</span></div>')
+    o.append('</tbody></table></div><div class="legend"><span><b class="c-pos">Green</b> = comp stated</span><span><b class="c-accent">Teal</b> = ' + e(JOBS_TEAL_LABEL) + '</span><span><b class="c-warn">Amber</b> = deadline stated (none today)</span><span class="muted">Grey = not stated</span></div><div class="cap">' + e(JOBS_LEGEND_FIT) + '</div>')
     o.append('<h3>Also seen (lower fit)</h3><ul class="jobs">')
     for r, c, loc, link in JOBS_OTHER:
         lcls, _ = loc_tier(loc)
@@ -475,7 +518,7 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
         o.append(f'<li>{e(r)} — {e(c)} · {locc} · <a href="{e(link)}">link</a></li>')
     o.append(f'</ul><p class="meta">{e(ALIGNERR)}</p><p class="meta">{e(JOBS_SKIPPED)}</p></div></section>')
     # 2 finances
-    o.append('<section><h2><span class="num">2.</span> Deposits &amp; finances</h2><div class="card"><div class="tiles">')
+    o.append('<section><h2><span class="num">3.</span> Deposits &amp; finances</h2><div class="card"><div class="tiles">')
     for l, v, d in FIN_SUMMARY:
         o.append(f'<div class="tile"><div class="lbl">{e(l)}</div><div class="v mono">{e(v)}</div><div class="d">{e(d)}</div></div>')
     o.append('</div><h3 style="margin-top:0">Money movements (outside → you / you → outside)</h3><div class="tbl-wrap"><table><thead><tr><th>When</th><th>Payee / source</th><th>Detail</th><th>Direction</th><th style="text-align:right">Amount</th><th>Out ← 0 → In, $ {axis_html}</th></tr></thead><tbody>'.format(axis_html=money_axis()))
@@ -488,12 +531,7 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
     for n in FIN_NOTES: o.append(li_lead(n))
     o.append('</ul></div></section>')
     # 3 voip
-    o.append(f'<section><h2><span class="num">3.</span> VoIP voicemails &amp; texts <span class="sub">searched by the configured provider senders + Google Voice, Twilio, OpenPhone, Grasshopper, RingCentral, Dialpad</span></h2><div class="card"><div class="nothing">{e(VOIP["headline"])}</div><ul>{li_lead(VOIP["last_msg"])}{li_lead(VOIP["last_acct"])}</ul></div></section>')
-    # 4 high priority
-    o.append('<section><h2><span class="num">4.</span> High priority</h2><div class="card">')
-    for sev, t, items in HIPRI:
-        o.append(f'<div class="hp {sev}"><div class="t">{e(t)}</div><ul>' + "".join(li_lead(i) for i in items) + "</ul></div>")
-    o.append('</div></section>')
+    o.append(f'<section><h2><span class="num">4.</span> VoIP voicemails &amp; texts <span class="sub">searched by the configured provider senders + Google Voice, Twilio, OpenPhone, Grasshopper, RingCentral, Dialpad</span></h2><div class="card"><div class="nothing">{e(VOIP["headline"])}</div><ul>{li_lead(VOIP["last_msg"])}{li_lead(VOIP["last_acct"])}</ul></div></section>')
     # 5 USPS
     o.append(f'<section><h2><span class="num">5.</span> USPS Informed Delivery <span class="sub">mail addressed to the intended recipient only; everyone else counted, never named</span></h2><div class="card"><div class="nothing">{e(USPS["headline"])}</div>')
     o.append('<div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Sender</th><th>Addressee (as printed)</th><th>Type / notes</th></tr></thead><tbody>')
@@ -510,24 +548,28 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
     o.append(f'</tbody></table></div><p class="meta">{e(PKG_NOTE)}</p></div></section>')
     # research grid
     o.append('<section><div class="grid3">')
-    o.append(f'<div class="card"><h2>US market</h2><div class="tbl-wrap"><table><thead><tr><th>Index</th><th style="text-align:right">Fri close</th><th style="text-align:right">Move (1 day)</th><th>1-day %{axis_div(MKT_SCALE)}</th></tr></thead><tbody>')
-    for n, c, pts, pct, wk in MKT_ROWS:
-        cls = "dir-pos" if pct >= 0 else "dir-neg"; word = "Up" if pct >= 0 else "Down"
-        o.append('<tr>' + tdl("Index", e(n), "mono") + tdl("Fri close", e(c), "num mono") + tdl("Move · week", f'<span class="{cls}">{e(pts)}<br>{pct:+.2f}% {word}</span><br><span class="meta">{e(wk)}</span>', "num mono") + tdl("Bar", bar_div(pct, MKT_SCALE)) + '</tr>')
-    o.append(f'</tbody></table></div>{axis_foot(MKT_SCALE, "1-day move, % of prior close")}<div class="cap">1-day close→close move, in index points and %; axis ticks every {MKT_SCALE / 4:.2f} pct-pt. Week column = trailing 5 sessions.</div>')
-    o.append('<h3>Vanguard funds</h3><div class="tbl-wrap"><table><thead><tr><th>Fund</th><th style="text-align:right">NAV</th><th style="text-align:right">Change (1 day)</th><th>As of</th></tr></thead><tbody>')
-    for tk, nm, nav, chg, asof, ytd, note in FUNDS:
-        cls = "dir-pos" if "+" in chg.split("·")[0] else "dir-neg"
-        o.append('<tr>' + tdl("Fund", f'<span class="lead">{e(tk)}</span>', "mono") + tdl("NAV", e(nav), "num mono") + tdl("Change", f'<span class="{cls}">{e(chg)}</span>', "num mono") + tdl("As of", e(asof), "meta") + '</tr>')
-    o.append('</tbody></table></div><div class="cap">' + " ".join(f'<b>{e(tk)}</b> ({e(nm)}): YTD {e(ytd)}. {e(note)}' for tk, nm, nav, chg, asof, ytd, note in FUNDS) + '</div><ul>')
-    for b in MKT_BULLETS: o.append(li_lead(b))
-    o.append('</ul></div>')
-    o.append(f'<div class="card"><h2>Cryptocurrency</h2><div class="tbl-wrap"><table><thead><tr><th>Asset</th><th style="text-align:right">Price</th><th style="text-align:right">24 h</th><th style="text-align:right">7 d</th><th>7-day %{axis_div(CRYPTO_SCALE)}</th></tr></thead><tbody>')
-    for n, p, d24, a24, d7, a7 in CRYPTO_ROWS:
-        cls = "dir-pos" if d7 >= 0 else "dir-neg"; word = "Up" if d7 >= 0 else "Down"
-        c24 = "c-neg" if d24.startswith("−") or d24.startswith("-") else "c-pos"
-        o.append('<tr>' + tdl("Asset", f'<span class="lead">{e(n)}</span>', "mono") + tdl("Price", e(p), "num mono") + tdl("24 h", f'<span class="{c24}">{e(d24)}<br><span style="white-space:nowrap">{e(a24)}</span></span>', "num mono") + tdl("7 d", f'<span class="{cls}">{d7:+.2f}% {word}<br><span style="white-space:nowrap">{e(a7)}</span></span>', "num mono") + tdl("7-day %", bar_div(d7, CRYPTO_SCALE)) + '</tr>')
-    o.append(f'</tbody></table></div>{axis_foot(CRYPTO_SCALE, "7-day change, %")}<div class="cap">24 h and 7 d changes each given as % and $; axis ticks every {CRYPTO_SCALE / 4:.2f} pct-pt. {e(CRYPTO_NOTE)}</div><ul>')
+    o.append('<div class="card"><h2>Upcoming flights</h2>')
+    o.append(f'<p><span class="lead">{e(FLIGHTS["airline"])}, confirmation {e(FLIGHTS["conf"])}</span> — {e(FLIGHTS["pax"])}</p>')
+    o.append(f'<p class="meta">{e(FLIGHTS["booked"])}</p>')
+    for d_, fl, frm, dep, to, arr in FLIGHTS["legs"]:
+        o.append(f'<p><b>{e(d_)}</b><br><span class="mono">{e(fl)}</span> · {e(frm)} <span class="mono">{e(dep)}</span> → {e(to)} <span class="mono">{e(arr)}</span></p>')
+    o.append(f'<div class="cap">{e(FLIGHTS["note"])}</div></div>')
+    o.append(f'<div class="card wide"><h2>US market</h2><div class="tbl-wrap"><table><thead><tr><th>Index</th><th style="text-align:right">Close</th><th>24H{axis_div(MKT_24)}</th><th>7D{axis_div(MKT_7D)}</th></tr></thead><tbody>')
+    for n, c, p24, v24, p7, v7 in MKT_ROWS:
+        c24 = "dir-pos" if v24 >= 0 else "dir-neg"; c7 = "dir-pos" if v7 >= 0 else "dir-neg"
+        w24 = "Up" if v24 >= 0 else "Down"; w7 = "Up" if v7 >= 0 else "Down"
+        o.append('<tr>' + tdl("Index", e(n), "mono") + tdl("Close", e(c), "num mono")
+                 + tdl("24H", f'<span class="{c24} mono">{e(p24)} pts · {v24:+.2f}% {w24}</span>{bar_div(v24, MKT_24)}')
+                 + tdl("7D", f'<span class="{c7} mono">{e(p7)} pts · {v7:+.2f}% {w7}</span>{bar_div(v7, MKT_7D)}') + '</tr>')
+    o.append(f'</tbody></table></div>{axis_foot(MKT_24, "24H move, % of prior close")}{axis_foot(MKT_7D, "7D move, % over 5 sessions")}<div class="cap">24H = 1-day close→close vs the prior session; 7D = trailing 5 sessions. Both in index points and %. {axis_note(MKT_24, "24H axis")}; {axis_note(MKT_7D, "7D axis")}.</div>')
+    o.append(f'<div class="card wide"><h2>Cryptocurrency</h2><div class="tbl-wrap"><table><thead><tr><th>Asset</th><th style="text-align:right">Price</th><th>24H{axis_div(CRY_24)}</th><th>7D{axis_div(CRY_7D)}</th></tr></thead><tbody>')
+    for n, pr, v24, a24, v7, a7 in CRYPTO_ROWS:
+        c24 = "dir-pos" if v24 >= 0 else "dir-neg"; c7 = "dir-pos" if v7 >= 0 else "dir-neg"
+        w24 = "Up" if v24 >= 0 else "Down"; w7 = "Up" if v7 >= 0 else "Down"
+        o.append('<tr>' + tdl("Asset", f'<span class="lead">{e(n)}</span>', "mono") + tdl("Price", e(pr), "num mono")
+                 + tdl("24H", f'<span class="{c24} mono">{v24:+.2f}% {w24} · {e(a24)}</span>{bar_div(v24, CRY_24)}')
+                 + tdl("7D", f'<span class="{c7} mono">{v7:+.2f}% {w7} · {e(a7)}</span>{bar_div(v7, CRY_7D)}') + '</tr>')
+    o.append(f'</tbody></table></div>{axis_foot(CRY_24, "24H change, %")}{axis_foot(CRY_7D, "7D change, %")}<div class="cap">24H and 7D changes each given as % and $. {axis_note(CRY_24, "24H axis")}; {axis_note(CRY_7D, "7D axis")}. {e(CRYPTO_NOTE)}</div><ul>')
     for b in CRYPTO_BULLETS: o.append(li_lead(b))
     o.append('</ul></div>')
     o.append('<div class="card"><h2>AI &amp; programming</h2><ul>')
@@ -615,8 +657,8 @@ def _em_bar(frac, col, right):
     pad = _em_cell(100 - p, f'border-bottom:1px solid {L["line"]}')
     empty = _em_cell(100, f'border-bottom:1px solid {L["line"]}')
     return _em_track(empty, fill + pad) if right else _em_track(pad + fill, empty)
-def em_bar_div(pct, scale):
-    return _em_bar(min(abs(pct) / scale, 1.0), L["pos"] if pct >= 0 else L["neg"], pct >= 0)
+def em_bar_div(pct, ax):
+    return _em_bar(min(abs(pct) / ax[1], 1.0), L["pos"] if pct >= 0 else L["neg"], pct >= 0)
 def em_bar_money(amt, dirw):
     side, cls = money_side(dirw)
     col = {"pos": L["pos"], "neg": L["neg"], "neu": L["ink3"]}[cls]
@@ -642,8 +684,13 @@ def email_html():
     tagmap = {"warn": "Check", "neg": "Urgent", "info": "Note", "ok": "Clear"}
     rows = "".join(stripe_row(sevcol[sev], f'<span style="font-size:10.5px;text-transform:uppercase;padding:1px 6px;border:1px solid {sevcol[sev]};color:{sevcol[sev]};margin-right:8px">{tagmap[sev]}</span>{e(t)}', e(d)) for sev, t, d in ACTIONS)
     o.append('<div style="margin-top:18px">' + h2("Needs you today", "ranked; nothing expires before tomorrow's run") + rows + '</div>')
+    # 4 hipri
+    inner = h2(f'{sp("1.", L["accent"])} High priority')
+    for sev, t_, items in HIPRI:
+        inner += f'<div style="border:1px solid {L["line"]};border-left:4px solid {sevcol[sev]};padding:8px 12px;margin:8px 0"><div style="font:600 15px {F_H};color:{sevcol[sev]}">{e(t_)}</div><ul style="margin:8px 0 0;padding-left:20px">' + "".join(em_li(i) for i in items) + '</ul></div>'
+    o.append(card(inner))
     # 1 jobs — 3 columns
-    inner = h2(f'{sp("1.", L["accent"])} Relevant job posts', JOBS_RANKED_NOTE)
+    inner = h2(f'{sp("2.", L["accent"])} Relevant job posts', JOBS_RANKED_NOTE)
     inner += h3("Application status") + ul([f'{lead(t)} {small("— " + e(m))}<br>{e(d)}' for t, m, d in JOBS_STATUS])
     inner += h3("Ranked leads")
     rws = []
@@ -654,12 +701,12 @@ def email_html():
         locc = sp(e(loc), L["accent"]) if lcls else e(loc)
         rws.append([td(f'<b>{e(r)}</b>{badge}<br>{small(e(c))}'), td(f'<span style="font-family:{F_M}">{compc}</span><br>{locc}'), td(f'<a href="{e(link)}" style="color:{L["accent"]};font-weight:600">open</a><br>{small(e(src))}')])
     inner += tbl(["Role · company", "Comp · location", "Link · source"], rws)
-    inner += f'<div style="font-size:12.5px;color:{L["ink3"]};margin-top:8px">{sp("Green",L["pos"])} = comp stated / strong fit · {sp("Teal",L["accent"])} = {JOBS_TEAL_LABEL} · {sp("Amber",L["warn"])} = deadline stated (none today) · Grey = not stated</div>'
+    inner += f'<div style="font-size:12.5px;color:{L["ink3"]};margin-top:8px">{sp("Green",L["pos"])} = comp stated · {sp("Teal",L["accent"])} = {JOBS_TEAL_LABEL} · {sp("Amber",L["warn"])} = deadline stated (none today) · Grey = not stated<br>{e(JOBS_LEGEND_FIT)}</div>'
     inner += h3("Also seen (lower fit)") + ul([f'{e(r)} — {e(c)} · ' + (sp(e(loc),L["accent"]) if loc_tier(loc)[0] else muted(e(loc))) + f' · <a href="{e(link)}" style="color:{L["accent"]}">link</a>' for r, c, loc, link in JOBS_OTHER])
     inner += f'<p style="font-size:13px;color:{L["ink3"]}">{e(ALIGNERR)}</p><p style="font-size:13px;color:{L["ink3"]}">{e(JOBS_SKIPPED)}</p>'
     o.append(card(inner))
     # 2 finances
-    inner = h2(f'{sp("2.", L["accent"])} Deposits &amp; finances')
+    inner = h2(f'{sp("3.", L["accent"])} Deposits &amp; finances')
     inner += "".join(f'<div style="border:1px solid {L["line"]};border-left:4px solid {L["accent"]};padding:8px 12px;margin:6px 0">{lbl(l)}<div style="font-family:{F_M};font-size:20px;font-weight:700">{e(v)}</div>{small(e(d))}</div>' for l, v, d in FIN_SUMMARY)
     inner += h3("Money movements (outside → you / you → outside)")
     rws = []
@@ -672,13 +719,8 @@ def email_html():
     inner += h3("Bills, statements & notices") + '<ul style="margin:8px 0 0;padding-left:20px">' + "".join(em_li(n) for n in FIN_NOTES) + "</ul>"
     o.append(card(inner))
     # 3 voip
-    inner = h2(f'{sp("3.", L["accent"])} VoIP voicemails &amp; texts', "searched by the configured provider senders + Google Voice, Twilio, OpenPhone, Grasshopper, RingCentral, Dialpad")
+    inner = h2(f'{sp("4.", L["accent"])} VoIP voicemails &amp; texts', "searched by the configured provider senders + Google Voice, Twilio, OpenPhone, Grasshopper, RingCentral, Dialpad")
     inner += f'<div style="color:{L["ink3"]};font-style:italic">{e(VOIP["headline"])}</div><ul style="margin:8px 0 0;padding-left:20px">{em_li(VOIP["last_msg"])}{em_li(VOIP["last_acct"])}</ul>'
-    o.append(card(inner))
-    # 4 hipri
-    inner = h2(f'{sp("4.", L["accent"])} High priority')
-    for sev, t_, items in HIPRI:
-        inner += f'<div style="border:1px solid {L["line"]};border-left:4px solid {sevcol[sev]};padding:8px 12px;margin:8px 0"><div style="font:600 15px {F_H};color:{sevcol[sev]}">{e(t_)}</div><ul style="margin:8px 0 0;padding-left:20px">' + "".join(em_li(i) for i in items) + '</ul></div>'
     o.append(card(inner))
     # 5 USPS
     inner = h2(f'{sp("5.", L["accent"])} USPS Informed Delivery', "mail addressed to the intended recipient only; everyone else counted, never named")
@@ -692,13 +734,25 @@ def email_html():
     rws = [[td(f'<b>{e(car)}</b><br>{small("ETA: " + e(eta))}'), td(f'<span style="font-family:{F_M};word-break:break-all">{e(trk)}</span>'), td(f'{e(item)}<br>{small("To: " + e(rcpt) + " · " + e(st))}')] for car, trk, item, rcpt, st, eta in PKG]
     inner += tbl(["Carrier · ETA", "Tracking", "Item · status"], rws) + f'<p style="font-size:13px;color:{L["ink3"]}">{e(PKG_NOTE)}</p>'
     o.append(card(inner))
+    # upcoming flights — carried forward until the trip date passes
+    inner = h2("Upcoming flights")
+    inner += f'<p>{lead(FLIGHTS["airline"] + ", confirmation " + FLIGHTS["conf"])} — {e(FLIGHTS["pax"])}</p>'
+    inner += f'<p style="font-size:13px;color:{L["ink3"]}">{e(FLIGHTS["booked"])}</p>'
+    for d_, fl, frm, dep, to, arr in FLIGHTS["legs"]:
+        inner += (f'<p style="margin:8px 0"><b>{e(d_)}</b><br><span style="font-family:{F_M}">{e(fl)}</span> · '
+                  f'{e(frm)} <span style="font-family:{F_M}">{e(dep)}</span> → {e(to)} <span style="font-family:{F_M}">{e(arr)}</span></p>')
+    inner += cap(FLIGHTS["note"])
+    o.append(card(inner))
     # markets
     inner = h2("US market")
     rws = []
-    for n, c, pts, pct, wk in MKT_ROWS:
-        col = L["pos"] if pct >= 0 else L["neg"]; word = "Up" if pct >= 0 else "Down"
-        rws.append([td(f'{lead(n)}<br>{small(e(wk))}', mono=True), td(f'{e(c)}<br>{sp(f"{e(pts)} · {pct:+.2f}% {word}", col)}', mono=True), td(em_bar_div(pct, MKT_SCALE))])
-    inner += tbl(["Index · week", "Fri close · 1-day move", th_axis("1-day % bar", em_axis(MKT_SCALE) + " %")], rws, ["32%", "30%", "38%"]) + cap(f"1-day close→close move, in index points and %; bar scale marks {em_axis(MKT_SCALE)} %, ticks = quarter half-width. Week = trailing 5 sessions.")
+    for n, c, p24, v24, p7, v7 in MKT_ROWS:
+        k24 = L["pos"] if v24 >= 0 else L["neg"]; k7 = L["pos"] if v7 >= 0 else L["neg"]
+        w24 = "Up" if v24 >= 0 else "Down"; w7 = "Up" if v7 >= 0 else "Down"
+        rws.append([td(f'{lead(n)}<br>{small(e(c))}', mono=True),
+                    td(f'{sp(f"{e(p24)} pts · {v24:+.2f}% {w24}", k24)}{em_bar_div(v24, MKT_24)}', mono=True),
+                    td(f'{sp(f"{e(p7)} pts · {v7:+.2f}% {w7}", k7)}{em_bar_div(v7, MKT_7D)}', mono=True)])
+    inner += tbl(["Index · close", th_axis("24H", em_axis(MKT_24)), th_axis("7D", em_axis(MKT_7D))], rws, ["28%", "36%", "36%"]) + cap(f"24H = 1-day close→close vs the prior session; 7D = trailing 5 sessions. Both in index points and %. {axis_note(MKT_24, '24H axis')}; {axis_note(MKT_7D, '7D axis')}.")
     inner += h3("Vanguard funds")
     rws = []
     for tk, nm, nav, chg, asof, ytd, note in FUNDS:
@@ -710,11 +764,13 @@ def email_html():
     # crypto
     inner = h2("Cryptocurrency")
     rws = []
-    for n, p, d24, a24, d7, a7 in CRYPTO_ROWS:
-        col = L["pos"] if d7 >= 0 else L["neg"]; word = "Up" if d7 >= 0 else "Down"
-        neg24 = d24.startswith("−") or d24.startswith("-")
-        rws.append([td(f'{lead(n)}<br>{e(p)}', mono=True), td(f'24h {sp(e(d24) + " · " + e(a24), L["neg"] if neg24 else L["pos"])}<br>7d {sp(f"{d7:+.2f}% {word} · " + e(a7), col)}', mono=True), td(em_bar_div(d7, CRYPTO_SCALE))])
-    inner += tbl(["Asset · price", "24 h · 7 d (% · $)", th_axis("7-day % bar", em_axis(CRYPTO_SCALE) + " %")], rws, ["30%", "32%", "38%"]) + cap(f"24 h and 7 d changes each given as % and $; bar scale marks {em_axis(CRYPTO_SCALE)} %, ticks = quarter half-width. {CRYPTO_NOTE}")
+    for n, pr, v24, a24, v7, a7 in CRYPTO_ROWS:
+        k24 = L["pos"] if v24 >= 0 else L["neg"]; k7 = L["pos"] if v7 >= 0 else L["neg"]
+        w24 = "Up" if v24 >= 0 else "Down"; w7 = "Up" if v7 >= 0 else "Down"
+        rws.append([td(f'{lead(n)}<br>{small(e(pr))}', mono=True),
+                    td(f'{sp(f"{v24:+.2f}% {w24} · {e(a24)}", k24)}{em_bar_div(v24, CRY_24)}', mono=True),
+                    td(f'{sp(f"{v7:+.2f}% {w7} · {e(a7)}", k7)}{em_bar_div(v7, CRY_7D)}', mono=True)])
+    inner += tbl(["Asset · price", th_axis("24H", em_axis(CRY_24)), th_axis("7D", em_axis(CRY_7D))], rws, ["28%", "36%", "36%"]) + cap(f"24H and 7D changes each given as % and $. {axis_note(CRY_24, '24H axis')}; {axis_note(CRY_7D, '7D axis')}. {CRYPTO_NOTE}")
     inner += '<ul style="margin:8px 0 0;padding-left:20px">' + "".join(em_li(b) for b in CRYPTO_BULLETS) + "</ul>"
     o.append(card(inner))
     # ai
@@ -744,7 +800,11 @@ def plain_text():
     A(f"Window covered: {MAST['window']}"); A(f"Scheduled slot: {MAST['slot']}"); A(f"Run stamp: {MAST['run']}"); A(MAST["note"]); A("")
     A("NEEDS YOU TODAY")
     for sev, t, d in ACTIONS: A(f"[{ {'warn':'CHECK','neg':'URGENT','info':'NOTE','ok':'CLEAR'}[sev] }] {t}\n    {d}")
-    A(""); A("1. RELEVANT JOB POSTS"); A("Application status:")
+    A(""); A("1. HIGH PRIORITY")
+    for sev, t, items in HIPRI:
+        A(f"[{sev.upper()}] {t}")
+        for i in items: A(f"  - {i}")
+    A(""); A("2. RELEVANT JOB POSTS"); A("Application status:")
     for t, m, d in JOBS_STATUS: A(f"  - {t} — {m}\n    {d}")
     A("Ranked leads (fit tier in brackets):")
     for r, c, comp, loc, src, link in JOBS_TOP:
@@ -752,31 +812,37 @@ def plain_text():
     A("Also seen (lower fit):")
     for r, c, loc, link in JOBS_OTHER: A(f"  - {r} — {c} · {loc} · {link}")
     A(ALIGNERR); A(JOBS_SKIPPED); A("")
-    A("2. DEPOSITS & FINANCES")
+    A("3. DEPOSITS & FINANCES")
     for l, v, d in FIN_SUMMARY: A(f"  {l}: {v} ({d})")
     A("Money movements:")
     A(f"  (Bar axis in the HTML outputs: {money_axis_note()}; in = green, out/past due = red, internal = grey.)")
     for when, payee, det, amt, cur, dirw, sign in FIN_MOVES: A(f"  - {when} · {payee} · {sign} {dirw} · {cur_sym(cur)}{amt:,.2f} · {det}")
     A("Transfers between own accounts: nothing new.")
     for n in FIN_NOTES: A(f"  - {n}")
-    A(""); A("3. VOIP VOICEMAILS & TEXTS"); A(VOIP["headline"]); A("  - " + VOIP["last_msg"]); A("  - " + VOIP["last_acct"]); A("")
-    A("4. HIGH PRIORITY")
-    for sev, t, items in HIPRI:
-        A(f"[{sev.upper()}] {t}")
-        for i in items: A(f"  - {i}")
+    A(""); A("4. VOIP VOICEMAILS & TEXTS"); A(VOIP["headline"]); A("  - " + VOIP["last_msg"]); A("  - " + VOIP["last_acct"]); A("")
     A(""); A("5. USPS INFORMED DELIVERY (intended recipient's mail only)"); A(USPS["headline"])
     for d_, s_, a_, ty in USPS["pieces"]: A(f"  - {d_} · {s_} · addressed to {a_} · {ty}")
     A("  " + USPS["counts"]); A("  Note: " + USPS["note"])
     A(""); A("6. PACKAGE TRACKING")
     for car, trk, item, rcpt, st, eta in PKG: A(f"  - {car} · {trk} · {item} · to {rcpt} · {st} · ETA {eta}")
     A("  " + PKG_NOTE)
+    A(""); A("UPCOMING FLIGHTS (carried forward until the trip date passes)")
+    A(f"  {FLIGHTS['airline']}, confirmation {FLIGHTS['conf']} — {FLIGHTS['pax']}")
+    A(f"  {FLIGHTS['booked']}")
+    for d_, fl, frm, dep, to, arr in FLIGHTS["legs"]:
+        A(f"  - {d_}: {fl} · {frm} {dep} -> {to} {arr}")
+    A(f"  {FLIGHTS['note']}")
     A(""); A("US MARKET (Fri Sep 4 close; Mon Sep 7 closed for Labor Day)")
-    for n, c, pts, pct, wk in MKT_ROWS: A(f"  {n}: {c} ({pts} pts, {pct:+.2f}% {'Up' if pct>=0 else 'Down'}; {wk})")
+    for n, c, p24, v24, p7, v7 in MKT_ROWS:
+        A(f"  {n}: {c} | 24H {p24} pts, {v24:+.2f}% {'Up' if v24>=0 else 'Down'} | 7D {p7} pts, {v7:+.2f}% {'Up' if v7>=0 else 'Down'}")
+    A(f"  (24H axis ±{MKT_24[1]:g}%, step {MKT_24[0]:g}%; 7D axis ±{MKT_7D[1]:g}%, step {MKT_7D[0]:g}%.)")
     A("  Vanguard funds:")
     for tk, nm, nav, chg, asof, ytd, note in FUNDS: A(f"    {tk} ({nm}): NAV {nav} · {chg} · as of {asof} · YTD {ytd}. {note}")
     for b in MKT_BULLETS: A(f"  - {b}")
     A(""); A("CRYPTOCURRENCY")
-    for n, p, d24, a24, d7, a7 in CRYPTO_ROWS: A(f"  {n}: {p} · 24h {d24} ({a24}) · 7d {d7:+.2f}% {'Up' if d7>=0 else 'Down'} ({a7})")
+    for n, pr, v24, a24, v7, a7 in CRYPTO_ROWS:
+        A(f"  {n}: {pr} | 24H {v24:+.2f}% {'Up' if v24>=0 else 'Down'} ({a24}) | 7D {v7:+.2f}% {'Up' if v7>=0 else 'Down'} ({a7})")
+    A(f"  (24H axis ±{CRY_24[1]:g}%, step {CRY_24[0]:g}%; 7D axis ±{CRY_7D[1]:g}%, step {CRY_7D[0]:g}%.)")
     A("  (24 h and 7 d changes each as % and $.)")
     A("  " + CRYPTO_NOTE)
     for b in CRYPTO_BULLETS: A(f"  - {b}")

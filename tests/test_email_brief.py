@@ -63,8 +63,9 @@ class TestGeneratorOutputs(unittest.TestCase):
     def test_sections_in_email_and_text(self):
         for i in range(1, 8):
             self.assertIn(f">{i}.</span>", self.r["email"], f"email missing section {i}")
-        for line in ("1. RELEVANT JOB POSTS", "5. USPS INFORMED DELIVERY",
-                     "6. PACKAGE TRACKING", "7. RETAIL SALES"):
+        for line in ("1. HIGH PRIORITY", "2. RELEVANT JOB POSTS",
+                     "5. USPS INFORMED DELIVERY", "6. PACKAGE TRACKING",
+                     "7. RETAIL SALES"):
             self.assertIn(line, self.r["text"])
 
     def test_plain_text_is_a_full_fallback_not_a_stub(self):
@@ -90,18 +91,20 @@ class TestGeneratorOutputs(unittest.TestCase):
 
     def test_market_axes_timescale_magnitude_and_journals(self):
         page, em, tx = self.r["page"], self.r["email"], self.r["text"]
-        # fine-grain axis: header ruler + phone-width copy, markets + crypto
+        # four header rulers: 24H + 7D on both the market and crypto tables
         self.assertGreaterEqual(page.count('class="daxis"'), 4)
-        # the FILE page must use the real diverging track (email-style border
-        # bars shadowing bar_div once shipped floating blobs — never again)
-        self.assertGreaterEqual(page.count('class="dbar"'), 10,
+        # every index and coin row carries two diverging tracks, plus money
+        self.assertGreaterEqual(page.count('class="dbar"'), 20,
                                 "file page lost its .dbar diverging tracks")
-        self.assertIn(">\u22120.5<", page.replace("\u2212", "\u2212"))
-        for probe in ("1-day", "7-day"):
-            self.assertIn(probe, page, f"file missing timescale label {probe}")
-            self.assertIn(probe, em, f"email missing timescale label {probe}")
-        # email carries the tick values as text (no ruler survives the sanitizer)
-        self.assertIn("+0.5", em); self.assertIn("+2.5", em)
+        # both horizons labelled identically in both tables
+        for probe in ("24H", "7D"):
+            self.assertIn(probe, page, f"file missing horizon label {probe}")
+            self.assertIn(probe, em, f"email missing horizon label {probe}")
+            self.assertIn(probe, tx, f"text missing horizon label {probe}")
+        # separate even axes per horizon (7-day spread is wider than 1-day)
+        for ticks in ("\u22121% \u00b7 0 \u00b7 +1%", "\u22123% \u00b7 0 \u00b7 +3%",
+                      "\u22122% \u00b7 0 \u00b7 +2%", "\u22126% \u00b7 0 \u00b7 +6%"):
+            self.assertIn(ticks, em, f"email missing axis {ticks}")
         # magnitude: crypto % moves paired with $ moves everywhere
         for out in (page, em, tx):
             self.assertIn("$1,082", out, "crypto 24h move must carry $ magnitude")
@@ -140,6 +143,34 @@ class TestGeneratorOutputs(unittest.TestCase):
                                 "email bars must use percentage half-tracks")
         # fills are drawn with borders — backgrounds never survive the sanitizer
         self.assertIn("border-top:5px solid", em)
+
+    def test_high_priority_leads_the_numbered_sections(self):
+        """Section 1, immediately after the action bar."""
+        page, tx = self.r["page"], self.r["text"]
+        self.assertIn('<span class="num">1.</span> High priority', page)
+        self.assertLess(page.index("High priority"), page.index("Relevant job posts"))
+        self.assertLess(tx.index("NEEDS YOU TODAY"), tx.index("1. HIGH PRIORITY"))
+        self.assertLess(tx.index("1. HIGH PRIORITY"), tx.index("2. RELEVANT JOB POSTS"))
+
+    def test_market_and_crypto_carry_24h_and_7d_bars(self):
+        """Both tables, both horizons, same bar scheme, separate even axes."""
+        page, em, tx = self.r["page"], self.r["email"], self.r["text"]
+        for out in (page, em):
+            for sec in ("US market", "Cryptocurrency"):
+                block = out.split(sec)[1][:6000]
+                self.assertIn("24H", block, f"{sec} missing the 24H column")
+                self.assertIn("7D", block, f"{sec} missing the 7D column")
+        self.assertIn("24H", tx); self.assertIn("7D", tx)
+        self.assertNotIn(">MOVE<", page, "no per-table label variants")
+
+    def test_flights_persist_and_state_airport_local_time(self):
+        page, em, tx = self.r["page"], self.r["email"], self.r["text"]
+        for out in (page, em, tx):
+            self.assertIn("Upcoming flights", out) if out is not tx else self.assertIn("UPCOMING FLIGHTS", out)
+            self.assertIn("LOCAL TO EACH AIRPORT", out.upper())
+        self.assertIn("carried forward", page.lower() + tx.lower())
+        # every leg time carries its own zone abbreviation
+        self.assertRegex(page, r"\d{1,2}:\d{2} [AP]M (CST|EDT|EST|PDT|PST|CDT)")
 
     def test_retail_sales_is_the_last_section(self):
         """Lowest priority — retail sits below the research sections."""
@@ -269,7 +300,7 @@ class TestTemplate(unittest.TestCase):
             "ATTACHMENT SIZE CEILING",
             "24,600",
             "EVERY FIT BADGE IS A BORDERED CHIP",   # jobs badge chip, not bare text
-            '"RELATED" badge',                      # near-miss label (was ADJACENT)
+            '"RELATED" on near-misses',             # near-miss label (was ADJACENT)
             "EVERY BAR IS DIVERGING FROM A CENTRED ZERO",
             "AXIS BREAKS ARE EVEN ROUND NUMBERS, NEVER RAW DATA VALUES",
             "MINIMAL TICKS, NEVER CRAMPED",
@@ -277,6 +308,11 @@ class TestTemplate(unittest.TestCase):
             "FLUID, NOT FIXED-PIXEL STUBS",         # email bar tracks
             "PIN THE COLUMN PROPORTIONS",           # stops mid-word breaks
             "LOWEST PRIORITY",                      # retail sales sits last
+            "TWO INDEPENDENT SIGNALS",              # colour vs fit badge
+            "THE AXIS MUST LINE UP WITH THE BARS",
+            "TWO CHART COLUMNS",                    # 24H + 7D
+            "THIS SECTION PERSISTS",                # flights
+            "LOCAL TIME AT THAT AIRPORT",
             "THIS SPEC ALWAYS OUTRANKS THE PREVIOUS BRIEF",  # design changes must stick
             "renumber the remaining sections consecutively",
         ):

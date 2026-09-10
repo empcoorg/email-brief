@@ -185,7 +185,9 @@ class TestBarGeometry(_BrowserCase):
                 continue  # internal transfer: magnitude only, colour implies no direction
             self.assertEqual(b["pos"], b["right"], "sign/side mismatch in bar fill")
             self.assertEqual(b["border"], "1px", "bar track must have a visible 1px border")
-            self.assertEqual(b["ticks"], 6, "bar track must carry micro-notch ticks")
+            # one notch per even step, symmetric about the centre line
+            self.assertGreaterEqual(b["ticks"], 4, "bar track must carry micro-notch ticks")
+            self.assertEqual(b["ticks"] % 2, 0, "ticks must be symmetric about 0")
         pg.close()
 
     def test_header_axis_aligned_with_bar_column(self):
@@ -255,7 +257,8 @@ class TestBarGeometry(_BrowserCase):
             return f"rgb({n >> 16}, {(n >> 8) & 255}, {n & 255})"
         for f in r["fills"]:
             self.assertEqual(f["border"], "1px", "money track must have a visible border")
-            self.assertEqual(f["ticks"], 6, "money track must carry micro-notch ticks")
+            self.assertGreaterEqual(f["ticks"], 4, "money track must carry micro-notch ticks")
+            self.assertEqual(f["ticks"] % 2, 0, "money ticks must be symmetric about 0")
             cls = f["cls"].split()
             if "pos" in cls:
                 self.assertEqual(f["color"], rgb(r["pos"]), "money-in fill must be the positive token")
