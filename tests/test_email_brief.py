@@ -422,8 +422,8 @@ class TestTemplate(unittest.TestCase):
             "renumber the remaining sections consecutively",
             # delivery
             "Delivery beats completeness",
-            "ATTACHMENT SIZE CEILING",
-            "24,600",
+            "python3 -m brief attachment",        # check before sending
+            "truncates an oversized attachment SILENTLY",
         ):
             self.assertIn(phrase, self.fence, f"template lost invariant: {phrase!r}")
 

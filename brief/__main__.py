@@ -17,6 +17,26 @@ from .render import render_all
 EMAIL_BUDGET = 85 * 1024   # Gmail clips ~102 KB and its sanitizer inflates ~12%
 
 
+def _check_attachments(paths):
+    """Would each file survive the send path, or be silently truncated?"""
+    from .attachments import check, max_bytes
+    bad = 0
+    for path in paths:
+        try:
+            ok, _chars, msg = check(path)
+        except OSError as ex:
+            print(f"{path}: {ex}", file=sys.stderr)
+            bad += 1
+            continue
+        print(f"{'OK  ' if ok else 'OVER'} {path}: {msg}")
+        bad += 0 if ok else 1
+    if bad:
+        print(f"{bad} attachment(s) would be silently truncated by the send path. "
+              f"Re-encode to at most {max_bytes():,} B each.", file=sys.stderr)
+        return 4
+    return 0
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="python3 -m brief", description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -29,7 +49,13 @@ def main(argv=None):
     g = sub.add_parser("significant",
                        help="does this payload justify an extra send? exit 0 yes, 3 no")
     g.add_argument("payload")
+    at = sub.add_parser("attachment",
+                        help="will this file survive the send path? exit 0 yes, 4 no")
+    at.add_argument("files", nargs="+")
     a = ap.parse_args(argv)
+
+    if a.cmd == "attachment":
+        return _check_attachments(a.files)
 
     try:
         payload = load(a.payload)

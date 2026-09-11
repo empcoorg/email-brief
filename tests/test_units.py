@@ -249,3 +249,74 @@ class TestEveningSignificance(unittest.TestCase):
             r = subprocess.run([sys.executable, "-m", "brief", "significant", fh.name],
                                cwd=ROOT, capture_output=True, text=True)
             self.assertEqual(r.returncode, expect, r.stdout + r.stderr)
+
+
+class TestAttachmentCeiling(unittest.TestCase):
+    """The send path truncates an oversized attachment SILENTLY — it ships half
+    a JPEG with grey below and reports success. So the size is checked before
+    sending rather than discovered by reading the message back."""
+
+    def setUp(self):
+        from brief import attachments
+        self.a = attachments
+
+    def test_base64_length_arithmetic(self):
+        self.assertEqual(self.a.b64_chars(3), 4)
+        self.assertEqual(self.a.b64_chars(15_000), 20_000)
+        self.assertEqual(self.a.b64_chars(0), 0)
+        # never under-report: a partial group still costs a full quad
+        self.assertEqual(self.a.b64_chars(1), 4)
+        self.assertEqual(self.a.b64_chars(4), 8)
+
+    def test_max_bytes_round_trips_under_the_limit(self):
+        for limit in (self.a.SAFE_B64_CHARS, self.a.CEILING_B64_CHARS, 4000):
+            n = self.a.max_bytes(limit)
+            self.assertLessEqual(self.a.b64_chars(n), limit, f"limit {limit}")
+            self.assertGreater(self.a.b64_chars(n + 3), limit, "should be the largest that fits")
+
+    def test_verdicts_at_the_boundaries(self):
+        safe = self.a.max_bytes()
+        self.assertTrue(self.a.fits(safe))
+        self.assertFalse(self.a.fits(safe + 3))
+        # past the real ceiling the message must say so explicitly
+        over = self.a.max_bytes(self.a.CEILING_B64_CHARS) + 3
+        ok, _chars, msg = self.a.check(over)
+        self.assertFalse(ok)
+        self.assertIn("truncation ceiling", msg)
+        self.assertIn("WILL ship half an image", msg)
+
+    def test_verify_sent_detects_truncation(self):
+        import tempfile
+        with tempfile.NamedTemporaryFile(delete=False) as fh:
+            fh.write(b"x" * 10_000)
+        ok, msg = self.a.verify_sent(fh.name, 10_000)
+        self.assertTrue(ok); self.assertIn("intact", msg)
+        ok, msg = self.a.verify_sent(fh.name, 5_000)
+        self.assertFalse(ok)
+        self.assertIn("TRUNCATED", msg)
+        self.assertIn("Do not resend", msg, "the one-send rule still stands")
+
+    def test_cli_reports_and_exits(self):
+        import subprocess, sys, tempfile
+        small = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
+        small.write(b"x" * 9_000); small.close()
+        big = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
+        big.write(b"x" * 40_000); big.close()
+
+        r = subprocess.run([sys.executable, "-m", "brief", "attachment", small.name],
+                           cwd=ROOT, capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("OK", r.stdout)
+
+        r = subprocess.run([sys.executable, "-m", "brief", "attachment", small.name, big.name],
+                           cwd=ROOT, capture_output=True, text=True)
+        self.assertEqual(r.returncode, 4, "an oversized attachment must fail the command")
+        self.assertIn("OVER", r.stdout)
+        self.assertIn("truncated", r.stderr)
+
+    def test_cli_reports_a_missing_file_without_crashing(self):
+        import subprocess, sys
+        r = subprocess.run([sys.executable, "-m", "brief", "attachment", "/nope/missing.jpg"],
+                           cwd=ROOT, capture_output=True, text=True)
+        self.assertEqual(r.returncode, 4)
+        self.assertIn("missing.jpg", r.stderr)
