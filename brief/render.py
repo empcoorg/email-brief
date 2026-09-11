@@ -23,7 +23,7 @@ __all__ = ["render_all", "file_html", "email_html", "plain_text"]
 def _derive():
     """Axes that depend on the payload's own numbers, recomputed per render."""
     g = globals()
-    g["FIN_AXIS"] = _money_axis_calc([m[3] for m in FIN_MOVES])
+    g["FIN_AXIS"] = _money_axis_calc([m[5] for m in FIN_MOVES])
     g["FIN_BAR_SCALE"] = FIN_AXIS[2]
     g["MKT_24"] = pct_axis([r[3] for r in MKT_ROWS])
     g["MKT_7D"] = pct_axis([r[5] for r in MKT_ROWS])
@@ -138,6 +138,20 @@ def _money_frac(amt):
     if mode == "linear":
         return min(amt / b, 1.0)
     return max(0.0, min(1.0, (math.log10(max(amt, a)) - math.log10(a)) / (math.log10(b) - math.log10(a))))
+def money_amount(amt, cur, usd, sign):
+    """Displayed amount: the charge in its own currency, plus the USD figure the
+    bar is plotted from when they differ.
+
+    A foreign charge shown only as "MX$10,200.00" next to a bar on a USD axis
+    reads as $13,600 of movement. Stating the conversion is what makes the bar
+    honest.
+    """
+    shown = ("" if sign == "\u00b1" else sign) + f"{cur_sym(cur)}{amt:,.2f}"
+    if cur != "USD":
+        shown += f" (\u2248 ${usd:,.2f} USD)"
+    return shown
+
+
 def money_side(dirw):
     """Which side of zero a movement sits on, and in which colour.
 
@@ -169,8 +183,9 @@ def money_axis():
     n = _money_steps()
     t = [f'<i class="{"mj" if k in (-n, 0, n) else ""}" style="left:{50 + k * 50 / n:g}%"></i>'
          for k in range(-n, n + 1)]
-    for v, p, c in ((-b, 0, "l"), (0, 50, ""), (b, 100, "r")):
-        t.append(f'<span class="{c}" style="left:{p}%">{money_tick(v)}</span>')
+    lo, mid, hi = money_labels(FIN_AXIS)
+    for lab, p, c in ((lo, 0, "l"), (mid, 50, ""), (hi, 100, "r")):
+        t.append(f'<span class="{c}" style="left:{p}%">{e(lab)}</span>')
     return '<div class="daxis money" aria-hidden="true">' + "".join(t) + "</div>"
 def money_axis_ticks_text():
     """The same axis as text, for the email (no ruler survives the sanitizer)."""
@@ -330,12 +345,12 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
     o.append('<section><h2><span class="num">3.</span> Deposits &amp; finances</h2><div class="card"><div class="tiles">')
     for l, v, d in FIN_SUMMARY:
         o.append(f'<div class="tile"><div class="lbl">{e(l)}</div><div class="v mono">{e(v)}</div><div class="d">{e(d)}</div></div>')
-    o.append('</div><h3 style="margin-top:0">Money movements (outside → you / you → outside)</h3><div class="tbl-wrap"><table><thead><tr><th>When</th><th>Payee / source</th><th>Detail</th><th>Direction</th><th style="text-align:right">Amount</th><th>Out ← 0 → In, $ {axis_html}</th></tr></thead><tbody>'.format(axis_html=money_axis()))
-    for when, payee, det, amt, cur, dirw, sign in FIN_MOVES:
+    o.append('</div><h3 style="margin-top:0">Money movements (outside → you / you → outside)</h3><div class="tbl-wrap"><table><thead><tr><th>When</th><th>Payee / source</th><th>Detail</th><th>Direction</th><th style="text-align:right">Amount</th><th>Out ← 0 → In, USD {axis_html}</th></tr></thead><tbody>'.format(axis_html=money_axis()))
+    for when, payee, det, amt, cur, usd, dirw, sign in FIN_MOVES:
         cls = "dir-neg" if dirw in ("Out", "Past due") else ("dir-pos" if dirw == "In" else "dir-neu")
-        amt_s = (sign if sign != "±" else "") + f"{cur_sym(cur)}{amt:,.2f}"
-        o.append('<tr>' + tdl("When", e(when), "mono") + tdl("Payee / source", e(payee)) + tdl("Detail", e(det)) + tdl("Direction", f'<span class="{cls}">{e(sign)} {e(dirw)}</span>') + tdl("Amount", f'<span class="{cls}">{amt_s}</span>', "num mono") + tdl("Out ← 0 → In, $", money_bar(amt, dirw)) + '</tr>')
-    o.append(f'</tbody></table></div><div class="daxis-foot">{money_axis()}<div class="meta">Out ← 0 → In, $ — {money_axis_note()}</div></div><div class="cap">Bar axis: {money_axis_note()}. Money in = green on the right, out / past due = red on the left, internal transfer = neutral grey (magnitude only — an internal move has no direction). The sign and direction word state it too.</div>')
+        amt_s = money_amount(amt, cur, usd, sign)
+        o.append('<tr>' + tdl("When", e(when), "mono") + tdl("Payee / source", e(payee)) + tdl("Detail", e(det)) + tdl("Direction", f'<span class="{cls}">{e(sign)} {e(dirw)}</span>') + tdl("Amount", f'<span class="{cls}">{amt_s}</span>', "num mono") + tdl("Out ← 0 → In, USD", money_bar(usd, dirw)) + '</tr>')
+    o.append(f'</tbody></table></div><div class="daxis-foot">{money_axis()}<div class="meta">Out ← 0 → In, USD — {money_axis_note()}</div></div><div class="cap">Bar axis, in USD: {money_axis_note()}. Amounts are shown in their original currency; bars are plotted from the USD equivalent. Money in = green on the right, out / past due = red on the left, internal transfer = neutral grey (magnitude only — an internal move has no direction). The sign and direction word state it too.</div>')
     o.append('<h3>Transfers between your own accounts</h3><div class="nothing">' + e(FIN_INTERNAL) + '</div><h3>Bills, statements &amp; notices</h3><ul>')
     for n in FIN_NOTES: o.append(li_lead(n))
     o.append('</ul></div></section>')
@@ -557,11 +572,11 @@ def email_html():
     inner += "".join(f'<div style="border:1px solid {L["line"]};border-left:4px solid {L["accent"]};padding:8px 12px;margin:6px 0">{lbl(l)}<div style="font-family:{F_M};font-size:20px;font-weight:700">{e(v)}</div>{small(e(d))}</div>' for l, v, d in FIN_SUMMARY)
     inner += h3("Money movements (outside → you / you → outside)")
     rws = []
-    for when, payee, det, amt, cur, dirw, sign in FIN_MOVES:
+    for when, payee, det, amt, cur, usd, dirw, sign in FIN_MOVES:
         col = L["pos"] if dirw == "In" else (L["ink2"] if dirw == "Internal" else L["neg"])
-        amt_s = ("" if sign == "±" else sign) + f"{cur_sym(cur)}{amt:,.2f}"
-        rws.append([td(f'<span style="font-family:{F_M}">{e(when)}</span><br>{e(payee)}'), td(e(det)), td(f'{sp(e(sign+" "+dirw), col)} {sp(amt_s, col)}<br>{em_bar_money(amt, dirw)}')])
-    inner += tbl(["When · payee", "Detail", th_axis("Direction · amount", money_labels(FIN_AXIS))], rws, ["30%", "32%", "38%"]) + cap(f"Bar axis: {money_axis_note()}. In = green right of 0, out / past due = red left of 0, internal = grey (magnitude only) — sign and word state it too.")
+        amt_s = money_amount(amt, cur, usd, sign)
+        rws.append([td(f'<span style="font-family:{F_M}">{e(when)}</span><br>{e(payee)}'), td(e(det)), td(f'{sp(e(sign+" "+dirw), col)} {sp(amt_s, col)}<br>{em_bar_money(usd, dirw)}')])
+    inner += tbl(["When · payee", "Detail", th_axis("Direction · amount", money_labels(FIN_AXIS))], rws, ["30%", "32%", "38%"]) + cap(f"Bar axis, in USD: {money_axis_note()}. Amounts shown in their original currency; bars plotted from the USD equivalent. In = green right of 0, out / past due = red left of 0, internal = grey (magnitude only) — sign and word state it too.")
     inner += h3("Transfers between your own accounts") + f'<div style="color:{L["ink3"]};font-style:italic">{e(FIN_INTERNAL)}</div>'
     inner += h3("Bills, statements & notices") + '<ul style="margin:8px 0 0;padding-left:20px">' + "".join(em_li(n) for n in FIN_NOTES) + "</ul>"
     o.append(card(inner))
@@ -675,7 +690,8 @@ def plain_text():
     for l, v, d in FIN_SUMMARY: A(f"  {l}: {v} ({d})")
     A("Money movements:")
     A(f"  (Bar axis in the HTML outputs: {money_axis_note()}; in = green, out/past due = red, internal = grey.)")
-    for when, payee, det, amt, cur, dirw, sign in FIN_MOVES: A(f"  - {when} · {payee} · {sign} {dirw} · {cur_sym(cur)}{amt:,.2f} · {det}")
+    for when, payee, det, amt, cur, usd, dirw, sign in FIN_MOVES:
+        A(f"  - {when} · {payee} · {sign} {dirw} · {money_amount(amt, cur, usd, sign)} · {det}")
     A("Transfers between own accounts: nothing new.")
     for n in FIN_NOTES: A(f"  - {n}")
     A(""); A("4. UPCOMING FLIGHTS (carried forward until the trip date passes)")

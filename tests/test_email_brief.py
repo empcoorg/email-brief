@@ -196,11 +196,11 @@ class TestGeneratorOutputs(unittest.TestCase):
         # even breaks: $2,450 of movement must yield round $1,000 steps to $3k,
         # never a data-derived $1,225 midpoint
         self.assertIn("even $1,000 steps", fin)
-        self.assertIn(">−$3k<", fin); self.assertIn(">$3k<", fin); self.assertIn(">0<", fin)
+        self.assertIn(">−$3k<", fin); self.assertIn(">$3k USD<", fin); self.assertIn(">0<", fin)
         for raw in ("$1,225", "$2,450"):
             self.assertNotIn(f">{raw}<", fin, f"axis label {raw} is a raw data value, not an even break")
         # email carries the same axis as text, on its own line under the column name
-        self.assertRegex(em, r"−\$3k</td>"); self.assertRegex(em, r"\$3k</td>")
+        self.assertRegex(em, r"−\$3k</td>"); self.assertRegex(em, r"\$3k USD</td>")
         self.assertIn("green right of 0", em)
 
     def test_email_bars_are_fluid_not_fixed_stubs(self):

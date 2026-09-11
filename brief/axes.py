@@ -89,10 +89,17 @@ def pct_labels(axis):
     return (pct_tick(-top), "0", pct_tick(top))
 
 
-def money_labels(axis):
-    """The three labels a money axis shows: (-top, 0, +top)."""
+def money_labels(axis, unit="USD"):
+    """The three labels a money axis shows: (-top, 0, +top).
+
+    The unit rides on the right-hand label. Every money bar in the brief is
+    plotted in ONE currency, so the axis has to say which: a row reading
+    "MX$10,200.00" against an unlabelled "$100k" scale invites the reader to
+    assume the bar is 13,600 of whatever the axis counts.
+    """
     top = axis[2] if len(axis) == 3 else axis[1]
-    return (money_tick(-top), "0", money_tick(top))
+    right = money_tick(top)
+    return (money_tick(-top), "0", f"{right} {unit}" if unit else right)
 
 
 def money_tick(v):

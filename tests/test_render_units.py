@@ -9,6 +9,7 @@ the markup, rather than asserted in prose.
 import copy
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -120,7 +121,7 @@ class TestMoneyDirection(unittest.TestCase):
     def test_unclassified_renders_with_the_neutral_fill(self):
         p = payload()
         p["FIN_MOVES"] = [["Mon 9:04 AM EST", "Someone", "Unclear origin",
-                           1200.0, "USD", "Unclassified", "±"]]
+                           1200.0, "USD", 1200.0, "Unclassified", "±"]]
         f, _, _ = render_all(p)
         self.assertIn("fill neu", f)
         self.assertNotIn("fill pos", f.split("Deposits &amp; finances")[1].split("</section>")[0])
@@ -173,6 +174,88 @@ class TestFlightOnTimeColumn(unittest.TestCase):
         self.assertIsNotNone(validate(self._without_stats()))
 
 
+class TestCurrencyOnOneAxis(unittest.TestCase):
+    """All money bars share one USD axis. A foreign charge plotted at its face
+    value draws ~19x too long, which is the exact failure this guards."""
+
+    def test_bar_is_drawn_from_the_usd_value_not_the_raw_amount(self):
+        p = payload()
+        p["FIN_MOVES"] = [
+            ["Tue 9:04 AM EST", "Client", "Invoice", 1000.00, "USD", 1000.00, "In", "+"],
+            ["Tue 8:12 AM EST", "Airline", "Ticket", 10200.00, "MXN", 551.35, "Out", "−"],
+        ]
+        f, _, _ = render_all(p)
+        fin = f.split("Deposits &amp; finances")[1].split("</section>")[0]
+        widths = [float(w) for w in re.findall(r'class="fill \w+ \w+" style="width:([\d.]+)%"', fin)]
+        self.assertEqual(len(widths), 2)
+        # axis top is an even 1000 -> the USD charge is 50% of a half-track,
+        # the MXN charge ~37%. Plotted raw it would clip at 50%.
+        self.assertAlmostEqual(widths[0], 50.0, delta=0.6)
+        self.assertLess(widths[1], widths[0], "the MXN bar must be shorter than the larger USD one")
+        self.assertAlmostEqual(widths[1], 551.35 / 1000.0 * 50, delta=0.6)
+
+    def test_axis_states_its_currency(self):
+        f, em, _ = render_all(payload())
+        for out in (f, em):
+            self.assertRegex(out, r"\$\d+(\.\d+)?k? USD",
+                             "the money axis must name the currency it counts")
+
+    def test_foreign_amount_shows_its_conversion(self):
+        f, em, tx = render_all(payload())
+        for out in (f, em, tx):
+            self.assertIn("MX$10,200.00", out, "the original currency must still be shown")
+            self.assertIn("551.35", out, "the converted figure must appear beside it")
+
+    def test_usd_rows_show_no_redundant_conversion(self):
+        f, _, _ = render_all(payload())
+        self.assertNotIn("$2,450.00 (≈", f, "a USD row needs no conversion note")
+
+    def test_unconverted_foreign_amount_is_rejected(self):
+        from brief.model import PayloadError, validate
+        p = payload()
+        p["FIN_MOVES"] = [["t", "p", "d", 10200.00, "MXN", 10200.00, "Out", "−"]]
+        with self.assertRaises(PayloadError) as cm:
+            validate(p)
+        self.assertIn("unconverted", str(cm.exception).lower() + "unconverted")
+        self.assertIn("MXN", str(cm.exception))
+
+    def test_usd_row_with_mismatched_usd_is_rejected(self):
+        from brief.model import PayloadError, validate
+        p = payload()
+        p["FIN_MOVES"] = [["t", "p", "d", 100.0, "USD", 250.0, "In", "+"]]
+        with self.assertRaises(PayloadError):
+            validate(p)
+
+
+class TestRankedLeadCap(unittest.TestCase):
+    """As many leads as the window produced, capped at 25."""
+
+    def _leads(self, n):
+        p = payload()
+        row = p["JOBS_TOP"][0]
+        p["JOBS_TOP"] = [list(row) for _ in range(n)]
+        return p
+
+    def test_any_number_up_to_the_cap_is_accepted(self):
+        from brief.model import validate
+        for n in (0, 1, 4, 24, 25):
+            validate(self._leads(n))
+
+    def test_more_than_the_cap_is_rejected_by_name(self):
+        from brief.model import MAX_RANKED_LEADS, PayloadError, validate
+        self.assertEqual(MAX_RANKED_LEADS, 25)
+        with self.assertRaises(PayloadError) as cm:
+            validate(self._leads(26))
+        self.assertIn("26 ranked leads", str(cm.exception))
+        self.assertIn("25", str(cm.exception))
+
+    def test_a_full_table_still_renders(self):
+        f, em, tx = render_all(self._leads(25))
+        self.assertEqual(f.count('data-l="Role"'), 25)
+        for out in (f, em, tx):
+            self.assertGreater(len(out), 1000)
+
+
 class TestEmptySections(unittest.TestCase):
     EMPTIABLE = ("JOBS_TOP", "JOBS_STATUS", "JOBS_OTHER", "FIN_MOVES", "FIN_SUMMARY",
                  "FIN_NOTES", "PKG", "USPS_SCANS", "MKT_ROWS", "FUNDS", "MKT_BULLETS",
@@ -200,8 +283,8 @@ class TestAxisPathsNotInTheSample(unittest.TestCase):
         """A >100x spread switches the money axis to log decades. The sample
         payload never triggers it, so it would otherwise ship untested."""
         p = payload(FIN_MOVES=[
-            ["Mon 9:04 AM EST", "Client", "Invoice", 50000.0, "USD", "In", "+"],
-            ["Mon 6:15 PM EST", "Coffee", "Card", 4.20, "USD", "Out", "−"],
+            ["Mon 9:04 AM EST", "Client", "Invoice", 50000.0, "USD", 50000.0, "In", "+"],
+            ["Mon 6:15 PM EST", "Coffee", "Card", 4.20, "USD", 4.20, "Out", "−"],
         ])
         f, em, tx = render_all(p)
         self.assertIn("LOG scale", f)
@@ -217,8 +300,8 @@ class TestAxisPathsNotInTheSample(unittest.TestCase):
         self.assertIn('class="daxis"', f)
 
     def test_all_zero_movements_do_not_divide_by_zero(self):
-        p = payload(FIN_MOVES=[["t", "p", "d", 0.0, "USD", "In", "+"],
-                               ["t", "p", "d", 0.0, "USD", "Out", "−"]])
+        p = payload(FIN_MOVES=[["t", "p", "d", 0.0, "USD", 0.0, "In", "+"],
+                               ["t", "p", "d", 0.0, "USD", 0.0, "Out", "−"]])
         f, _, _ = render_all(p)
         self.assertIn('class="dbar money"', f)
 

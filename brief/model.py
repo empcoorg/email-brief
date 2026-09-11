@@ -30,7 +30,7 @@ SPEC = {
     "ALIGNERR":   ("str", None, "gig-platform digest summary"),
     "JOBS_SKIPPED": ("str", None, "what was skipped as off-target"),
     "FIN_SUMMARY": ("rows", 3, "summary tiles: (label, value, detail)"),
-    "FIN_MOVES":  ("rows", 7, "money movements: (when, payee, detail, amount, currency, direction, sign)"),
+    "FIN_MOVES":  ("rows", 8, "money movements: (when, payee, detail, amount, currency, usd, direction, sign)"),
     "FIN_NOTES":  ("list", None, "bills/statements bullets"),
     "FIN_INTERNAL": ("str", None, "internal-transfer summary line"),
     "FLIGHTS":    ("obj", ("airline", "conf", "pax", "booked", "legs", "note"), "upcoming flights"),
@@ -54,6 +54,10 @@ SPEC = {
 }
 
 FIT_TIERS = ("strong", "related", "")
+
+# As many relevant leads as the window produced, but a brief nobody scrolls to
+# the end of is not a brief. 25 is the ceiling; there is no floor.
+MAX_RANKED_LEADS = 25
 
 FLIGHT_LEG_KEYS = ("date", "flight", "ident", "frm", "dep", "to", "arr", "fa")
 # "stats" (the flight's recent on-time record) is OPTIONAL: when the source is
@@ -117,6 +121,27 @@ def validate(payload):
         if not isinstance(row[3], (int, float)):
             _fail("FIN_MOVES", f"row {n}: amount must be a number, got {row[3]!r} — "
                                "bars cannot be drawn from a formatted string")
+        if not isinstance(row[5], (int, float)):
+            _fail("FIN_MOVES", f"row {n}: usd must be a number, got {row[5]!r} — every "
+                               "movement needs its USD equivalent, because all money bars "
+                               "share one USD axis")
+        if row[4] == "USD" and abs(row[3] - row[5]) > 0.01:
+            _fail("FIN_MOVES", f"row {n}: currency is USD but amount {row[3]} and usd "
+                               f"{row[5]} disagree")
+        if row[4] != "USD" and row[3] == row[5] and row[3] != 0:
+            _fail("FIN_MOVES", f"row {n}: currency is {row[4]} but usd equals the raw "
+                               f"amount ({row[3]}) — an unconverted figure would plot a "
+                               "foreign charge at its face value on the USD axis")
+    if len(payload["JOBS_TOP"]) > MAX_RANKED_LEADS:
+        _fail("JOBS_TOP", f"{len(payload['JOBS_TOP'])} ranked leads, maximum is "
+                          f"{MAX_RANKED_LEADS} — keep the best {MAX_RANKED_LEADS} by fit "
+                          "and move the rest to JOBS_OTHER")
+    for n, row in enumerate(payload["JOBS_TOP"]):
+        if row[5] not in FIT_TIERS:
+            _fail("JOBS_TOP", f"row {n}: fit must be one of {sorted(FIT_TIERS)}, got "
+                              f"{row[5]!r} — the fit tier depends on the owner's "
+                              "interests, so the run must decide it; the renderer cannot")
+
     for key, idx in (("MKT_ROWS", (3, 5)), ("CRYPTO_ROWS", (2, 4)), ("FUNDS", (4,))):
         for n, row in enumerate(payload[key]):
             for i in idx:
