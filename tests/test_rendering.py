@@ -355,7 +355,7 @@ class TestBarGeometry(_BrowserCase):
                 self.assertIn("left", cls, "money out must sit left of the centre line")
         self.assertIsNotNone(r["axis"], "money table must pair a header axis with its bars")
         self.assertLessEqual(r["axis"]["dl"], 1.6); self.assertLessEqual(r["axis"]["dw"], 1.6)
-        self.assertEqual(r["axis"]["labels"], ["−$3k", "0", "$3k"],
+        self.assertEqual(r["axis"]["labels"], ["−$6k", "0", "$6k"],
                          "money axis must label even breaks either side of a centred 0")
         # the FILE names the unit in the column header instead of on the ruler,
         # where a wrapped "USD" under the tick reads as a broken label
