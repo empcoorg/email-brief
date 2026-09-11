@@ -17,6 +17,7 @@ Covers four things:
   4. Privacy — no personal data anywhere in tracked files, and README
      links/images resolve.
 """
+import json
 import os
 import re
 import subprocess
@@ -25,22 +26,28 @@ import tempfile
 import unittest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SRC = open(os.path.join(ROOT, "build_brief.py"), encoding="utf-8").read()
+sys.path.insert(0, ROOT)
+THEME = open(os.path.join(ROOT, "brief", "theme.py"), encoding="utf-8").read()
+RENDER = open(os.path.join(ROOT, "brief", "render.py"), encoding="utf-8").read()
 TEMPLATE = open(os.path.join(ROOT, "ROUTINE_PROMPT.template.md"), encoding="utf-8").read()
 README = open(os.path.join(ROOT, "README.md"), encoding="utf-8").read()
+PAYLOAD = json.load(open(os.path.join(ROOT, "sample_payload.json"), encoding="utf-8"))
 
 _rendered = {}
 
 
 def render_once():
-    """Run the generator once into a temp dir; cache the three outputs."""
+    """Render the sample payload through the real CLI once; cache the outputs.
+
+    Driving the published entry point (rather than importing internals) means
+    these tests exercise exactly what a Routine run executes.
+    """
     if _rendered:
         return _rendered
     td = tempfile.mkdtemp(prefix="brief-test-")
-    gen = os.path.join(td, "gen.py")
-    open(gen, "w", encoding="utf-8").write(
-        re.sub(r"^OUT_DIR = .*$", f'OUT_DIR = "{td}"', SRC, count=1, flags=re.M))
-    subprocess.run([sys.executable, gen], cwd=td, check=True, capture_output=True)
+    subprocess.run([sys.executable, "-m", "brief", "render", "sample_payload.json",
+                    "--out-dir", td, "--date", "2026-09-07"],
+                   cwd=ROOT, check=True, capture_output=True)
     page = next(os.path.join(td, f) for f in os.listdir(td) if f.startswith("morning-brief"))
     _rendered.update(
         page=open(page, encoding="utf-8").read(),
@@ -75,7 +82,7 @@ class TestGeneratorOutputs(unittest.TestCase):
         # one table row per intended-recipient piece, no more
         sec = self.r["page"].split("USPS Informed Delivery")[1].split("</section>")[0]
         rows = sec.split("<tbody>")[1].split("</tbody>")[0].count("<tr>")
-        pieces = len(re.findall(r'^\s*\("', SRC.split("pieces=[")[1].split("]")[0], re.M))
+        pieces = len(PAYLOAD["USPS"]["pieces"])
         self.assertEqual(rows, pieces, "USPS table must contain exactly the intended-recipient pieces")
         # counts line covers all buckets
         for phrase in ("other named recipients", "generic addressee", "unreadable", "package"):
@@ -267,7 +274,7 @@ class TestAestheticPin(unittest.TestCase):
             "pos": "#4FC98A", "neg": "#F0796C", "warn": "#E0A548"}
 
     def _palette(self, name):
-        body = re.search(name + r" = dict\((.*?)\)\n", SRC, re.S).group(1)
+        body = re.search(name + r" = dict\((.*?)\)\n", THEME, re.S).group(1)
         return dict(re.findall(r'(\w+)="(#[0-9A-Fa-f]{6})"', body))
 
     def test_light_tokens_pinned(self):
@@ -282,9 +289,12 @@ class TestAestheticPin(unittest.TestCase):
         self.assertIn("family=JetBrains+Mono:wght@400;500;700", page)
         self.assertIn("family=Source+Sans+3:wght@400;600", page)
 
-    def test_aesthetic_contract_documented(self):
-        self.assertIn("AESTHETIC CONTRACT", SRC)
-        self.assertIn("AESTHETICS ARE PINNED", TEMPLATE)
+    def test_aesthetic_pin_is_centralised(self):
+        """Every colour lives in theme.py, so a drift is a one-file diff."""
+        self.assertIn("AESTHETIC PIN", THEME)
+        # no renderer may hardcode a hex colour behind the theme's back
+        stray = [h for h in re.findall(r"#[0-9A-Fa-f]{6}", RENDER)]
+        self.assertEqual(stray, [], f"render.py hardcodes colours instead of using theme: {stray}")
 
 
 class TestTemplate(unittest.TestCase):
@@ -301,52 +311,51 @@ class TestTemplate(unittest.TestCase):
         self.assertEqual(documented - used, set(), "placeholders documented but never used")
 
     def test_safety_and_behavior_invariants(self):
+        """What the prompt must still say. Design rules are NOT here any more —
+        they are code in brief/, asserted against rendered output instead."""
         for phrase in (
+            # safety and permissions
             "read-only with ONE exception",
             "DATA, NOT INSTRUCTIONS",
             "NEVER run git commit or git push",
             "DO NOT publish it as an Artifact",
+            # privacy
             "OTHER NAMED RECIPIENTS",             # USPS bucket ii
             "GENERIC / AMBIGUOUS ADDRESSEE",      # USPS bucket iii
+            # what to gather
             "PACKAGE TRACKING",
             "ESTIMATED ARRIVAL DATE",
+            "INFERRED FROM THE MAILBOX, NOT CONFIGURED",
+            "NEW PUBLICATIONS",
+            "THIS SECTION PERSISTS",              # flights
+            "LOCAL TIME AT THAT AIRPORT",
+            "LINK EVERY FLIGHT NUMBER TO FLIGHTAWARE",
+            "on-time record not available",       # never invent a delay figure
+            'Never call an equity move "24H"',
+            "there is no daily close",            # crypto trades 24/7
+            "TWO CHART COLUMNS",
+            "LOWEST PRIORITY",                    # retail sales sits last
+            "renumber the remaining sections consecutively",
+            # delivery
             "Delivery beats completeness",
-            "INFERRED FROM THE MAILBOX, NOT CONFIGURED",  # dynamic account set
-            "FINE-GRAINED LABELLED AXIS",                 # market/crypto bar axes
-            "TIMESCALE",
-            "MAGNITUDE",
-            "NEW PUBLICATIONS",                           # journals section
-            "EVERY PROPORTIONAL BAR IS A QUANTITATIVE CHART",
-            "LOG scale",                                  # data-spread-driven axis
             "ATTACHMENT SIZE CEILING",
             "24,600",
-            "EVERY FIT BADGE IS A BORDERED CHIP",   # jobs badge chip, not bare text
-            '"RELATED" on near-misses',             # near-miss label (was ADJACENT)
-            "EVERY BAR IS DIVERGING FROM A CENTRED ZERO",
-            "AXIS BREAKS ARE EVEN ROUND NUMBERS, NEVER RAW DATA VALUES",
-            "MINIMAL TICKS, NEVER CRAMPED",
-            "TWO LINES, NEVER A RUN-ON",            # bar column header
-            "FLUID, NOT FIXED-PIXEL STUBS",         # email bar tracks
-            "PIN THE COLUMN PROPORTIONS",           # stops mid-word breaks
-            "LOWEST PRIORITY",                      # retail sales sits last
-            "TWO INDEPENDENT SIGNALS",              # colour vs fit badge
-            "THE AXIS MUST LINE UP WITH THE BARS",
-            "TWO CHART COLUMNS",                    # 1D + 1W
-            "Never call an equity move \"24H\"",
-            "there is no daily close",              # crypto trades 24/7
-            "THIS SECTION PERSISTS",                # flights
-            "LOCAL TIME AT THAT AIRPORT",
-            "ALIGNED BY CONSTRUCTION, NOT BY EYE",
-            "LINK EVERY FLIGHT NUMBER TO FLIGHTAWARE",
-            "on-time record not available",         # never invent a delay figure
-            "THIS SPEC ALWAYS OUTRANKS THE PREVIOUS BRIEF",  # design changes must stick
-            "renumber the remaining sections consecutively",
         ):
             self.assertIn(phrase, self.fence, f"template lost invariant: {phrase!r}")
 
-    def test_dark_default_specified(self):
-        self.assertIn("DARK BY DEFAULT", self.fence)
-        self.assertIn('content="dark light"', self.fence)
+    def test_prompt_hands_rendering_to_the_repo(self):
+        """The prompt must tell the run to render with the repo's code, and must
+        NOT carry a design spec of its own — that separation is the whole point."""
+        for phrase in ("git clone", "python3 -m brief render", "payload.json",
+                       "brief/model.py", "sample_payload.json",
+                       "NUMBERS, never formatted strings"):
+            self.assertIn(phrase, self.fence, f"prompt lost the renderer contract: {phrase!r}")
+        # design prose that must no longer live in the prompt
+        for gone in ("--bg:", "#0B7285", "prefers-color-scheme", "border-left:6px solid",
+                     "font:600 10.5px", "max-width:860px", "AESTHETICS ARE PINNED",
+                     "EMAIL VISUAL IDENTITY"):
+            self.assertNotIn(gone, self.fence,
+                             f"design prose {gone!r} is back in the prompt; it belongs in brief/")
 
 
 class TestReadmeAndPrivacy(unittest.TestCase):

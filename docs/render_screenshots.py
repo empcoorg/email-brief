@@ -22,10 +22,9 @@ DOCS = os.path.join(ROOT, "docs")
 async def main():
     from playwright.async_api import async_playwright
     with tempfile.TemporaryDirectory() as td:
-        gen = os.path.join(td, "gen.py")
-        src = open(os.path.join(ROOT, "build_brief.py")).read()
-        open(gen, "w").write(re.sub(r'^OUT_DIR = .*$', f'OUT_DIR = "{td}"', src, count=1, flags=re.M))
-        subprocess.run([sys.executable, gen], cwd=td, check=True, capture_output=True)
+        subprocess.run([sys.executable, "-m", "brief", "render", "sample_payload.json",
+                        "--out-dir", td, "--date", "2026-09-07"],
+                       cwd=ROOT, check=True, capture_output=True)
         page_html = next(os.path.join(td, f) for f in os.listdir(td) if f.startswith("morning-brief"))
         async with async_playwright() as p:
             b = await p.chromium.launch(executable_path=os.environ.get("BRIEF_CHROMIUM", "/opt/pw-browsers/chromium") if os.path.exists(os.environ.get("BRIEF_CHROMIUM", "/opt/pw-browsers/chromium")) else None)

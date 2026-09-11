@@ -1,0 +1,458 @@
+{
+ "MAST": {
+  "title": "Morning Brief",
+  "dateline": "Tuesday, March 3, 2026",
+  "revised": "",
+  "tz": "America/New_York · EST (UTC−5)",
+  "window": "Mon Mar 2, 9:00 AM → Tue Mar 3, 10:02 AM EST",
+  "slot": "Tue Mar 3, 10:00 AM EST",
+  "run": "Tue Mar 3, 10:02 AM EST",
+  "note": "Only brief until the next scheduled run — covers the full ~25 h since yesterday's 10:00 AM brief. All content on this page is mock data for a fictional “Alex Sample”."
+ },
+ "USPS": {
+  "headline": "1 mailpiece for the intended recipient (Alex Sample) today — detailed below with its full scan. Everyone else's mail is counted, never named.",
+  "pieces": [
+   [
+    "Tue Mar 3",
+    "First Meridian Bank",
+    "ALEX Q SAMPLE",
+    "First-Class, window envelope · scan attached to the email as usps-2026-03-03-1.jpg"
+   ]
+  ],
+  "counts": "Not for the recipient: 2 piece(s) addressed to other named recipients — excluded (counted, never named) · 1 piece with generic addressee (“Current Resident”) — counted separately · 0 unreadable address blocks · 0 packages.",
+  "note": "Only mail addressed to the intended recipient is ever detailed; its complete mailpiece scan is rendered below (full image, downsampled but readable) and attached to the email. Other named recipients and generic addressees (“Resident”, “Homeowner”, “Current Occupant”) appear only as counts. An unreadable address block is listed by sender as “addressee unverified” rather than dropped."
+ },
+ "USPS_SCANS": [
+  [
+   "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI3NjAiIGhlaWdodD0iMzYwIiB2aWV3Qm94PSIwIDAgNzYwIDM2MCI+PHJlY3Qgd2lkdGg9Ijc2MCIgaGVpZ2h0PSIzNjAiIGZpbGw9IiNlOWU3ZTIiLz48cmVjdCB4PSI4IiB5PSI4IiB3aWR0aD0iNzQ0IiBoZWlnaHQ9IjM0NCIgZmlsbD0iI2Y2ZjRlZiIgc3Ryb2tlPSIjYjhiNGFjIi8+PHRleHQgeD0iMjAiIHk9IjMyIiBmb250LWZhbWlseT0ibW9ub3NwYWNlIiBmb250LXNpemU9IjEzIiBmaWxsPSIjNmI2NzVmIj4zNTcyMCAqKioqKkFVVE8qKkFMTCBGT1IgQUFEQyAwMDA8L3RleHQ+PHRleHQgeD0iMjgiIHk9IjY2IiBmb250LWZhbWlseT0iR2VvcmdpYSxzZXJpZiIgZm9udC1zaXplPSIxNSIgZmlsbD0iIzRhNDYzZiI+RklSU1QgTUVSSURJQU4gQkFOSzwvdGV4dD48dGV4dCB4PSIyOCIgeT0iODQiIGZvbnQtZmFtaWx5PSJHZW9yZ2lhLHNlcmlmIiBmb250LXNpemU9IjEzIiBmaWxsPSIjNGE0NjNmIj5QTyBCT1ggMTAwPC90ZXh0Pjx0ZXh0IHg9IjI4IiB5PSIxMDAiIGZvbnQtZmFtaWx5PSJHZW9yZ2lhLHNlcmlmIiBmb250LXNpemU9IjEzIiBmaWxsPSIjNGE0NjNmIj5TUFJJTkdGSUVMRCBTVCAwMDAwMDwvdGV4dD48cmVjdCB4PSI2MDAiIHk9IjI4IiB3aWR0aD0iMTMwIiBoZWlnaHQ9IjcyIiBmaWxsPSJub25lIiBzdHJva2U9IiM4Yjg3N2UiIHN0cm9rZS1kYXNoYXJyYXk9IjQgMyIvPjx0ZXh0IHg9IjY2NSIgeT0iNjAiIGZvbnQtZmFtaWx5PSJtb25vc3BhY2UiIGZvbnQtc2l6ZT0iMTEiIGZpbGw9IiM2YjY3NWYiIHRleHQtYW5jaG9yPSJtaWRkbGUiPlVTIFBPU1RBR0U8L3RleHQ+PHRleHQgeD0iNjY1IiB5PSI3NiIgZm9udC1mYW1pbHk9Im1vbm9zcGFjZSIgZm9udC1zaXplPSIxMSIgZmlsbD0iIzZiNjc1ZiIgdGV4dC1hbmNob3I9Im1pZGRsZSI+RklSU1QtQ0xBU1M8L3RleHQ+PHRleHQgeD0iMjQwIiB5PSIyMDAiIGZvbnQtZmFtaWx5PSJtb25vc3BhY2UiIGZvbnQtc2l6ZT0iMjAiIGZpbGw9IiMyZjJjMjciPkFMRVggUSBTQU1QTEU8L3RleHQ+PHRleHQgeD0iMjQwIiB5PSIyMjYiIGZvbnQtZmFtaWx5PSJtb25vc3BhY2UiIGZvbnQtc2l6ZT0iMTciIGZpbGw9IiMyZjJjMjciPjEyMyBNQUlOIFNUIEFQVCA0PC90ZXh0Pjx0ZXh0IHg9IjI0MCIgeT0iMjUwIiBmb250LWZhbWlseT0ibW9ub3NwYWNlIiBmb250LXNpemU9IjE3IiBmaWxsPSIjMmYyYzI3Ij5TUFJJTkdGSUVMRCBTVCAwMDAwMC0wMDAwPC90ZXh0PjxyZWN0IHg9IjI0MCIgeT0iMjcyIiB3aWR0aD0iNCIgaGVpZ2h0PSIyNiIgZmlsbD0iIzJmMmMyNyIvPjxyZWN0IHg9IjI0NyIgeT0iMjcyIiB3aWR0aD0iMiIgaGVpZ2h0PSIyNiIgZmlsbD0iIzJmMmMyNyIvPjxyZWN0IHg9IjI1NCIgeT0iMjcyIiB3aWR0aD0iMiIgaGVpZ2h0PSIyNiIgZmlsbD0iIzJmMmMyNyIvPjxyZWN0IHg9IjI2MSIgeT0iMjcyIiB3aWR0aD0iNCIgaGVpZ2h0PSIyNiIgZmlsbD0iIzJmMmMyNyIvPjxyZWN0IHg9IjI2OCIgeT0iMjcyIiB3aWR0aD0iMiIgaGVpZ2h0PSIyNiIgZmlsbD0iIzJmMmMyNyIvPjxyZWN0IHg9IjI3NSIgeT0iMjcyIiB3aWR0aD0iMiIgaGVpZ2h0PSIyNiIgZmlsbD0iIzJmMmMyNyIvPjxyZWN0IHg9IjI4MiIgeT0iMjcyIiB3aWR0aD0iNCIgaGVpZ2h0PSIyNiIgZmlsbD0iIzJmMmMyNyIvPjxyZWN0IHg9IjI4OSIgeT0iMjcyIiB3aWR0aD0iMiIgaGVpZ2h0PSIyNiIgZmlsbD0iIzJmMmMyNyIvPjxyZWN0IHg9IjI5NiIgeT0iMjcyIiB3aWR0aD0iMiIgaGVpZ2h0PSIyNiIgZmlsbD0iIzJmMmMyNyIvPjxyZWN0IHg9IjMwMyIgeT0iMjcyIiB3aWR0aD0iNCIgaGVpZ2h0PSIyNiIgZmlsbD0iIzJmMmMyNyIvPjxyZWN0IHg9IjMxMCIgeT0iMjcyIiB3aWR0aD0iMiIgaGVpZ2h0PSIyNiIgZmlsbD0iIzJmMmMyNyIvPjxyZWN0IHg9IjMxNyIgeT0iMjcyIiB3aWR0aD0iMiIgaGVpZ2h0PSIyNiIgZmlsbD0iIzJmMmMyNyIvPjxyZWN0IHg9IjMyNCIgeT0iMjcyIiB3aWR0aD0iNCIgaGVpZ2h0PSIyNiIgZmlsbD0iIzJmMmMyNyIvPjxyZWN0IHg9IjMzMSIgeT0iMjcyIiB3aWR0aD0iMiIgaGVpZ2h0PSIyNiIgZmlsbD0iIzJmMmMyNyIvPjxyZWN0IHg9IjMzOCIgeT0iMjcyIiB3aWR0aD0iMiIgaGVpZ2h0PSIyNiIgZmlsbD0iIzJmMmMyNyIvPjxyZWN0IHg9IjM0NSIgeT0iMjcyIiB3aWR0aD0iNCIgaGVpZ2h0PSIyNiIgZmlsbD0iIzJmMmMyNyIvPjxyZWN0IHg9IjM1MiIgeT0iMjcyIiB3aWR0aD0iMiIgaGVpZ2h0PSIyNiIgZmlsbD0iIzJmMmMyNyIvPjxyZWN0IHg9IjM1OSIgeT0iMjcyIiB3aWR0aD0iMiIgaGVpZ2h0PSIyNiIgZmlsbD0iIzJmMmMyNyIvPjxyZWN0IHg9IjM2NiIgeT0iMjcyIiB3aWR0aD0iNCIgaGVpZ2h0PSIyNiIgZmlsbD0iIzJmMmMyNyIvPjxyZWN0IHg9IjM3MyIgeT0iMjcyIiB3aWR0aD0iMiIgaGVpZ2h0PSIyNiIgZmlsbD0iIzJmMmMyNyIvPjxyZWN0IHg9IjM4MCIgeT0iMjcyIiB3aWR0aD0iMiIgaGVpZ2h0PSIyNiIgZmlsbD0iIzJmMmMyNyIvPjxyZWN0IHg9IjM4NyIgeT0iMjcyIiB3aWR0aD0iNCIgaGVpZ2h0PSIyNiIgZmlsbD0iIzJmMmMyNyIvPjxyZWN0IHg9IjM5NCIgeT0iMjcyIiB3aWR0aD0iMiIgaGVpZ2h0PSIyNiIgZmlsbD0iIzJmMmMyNyIvPjxyZWN0IHg9IjQwMSIgeT0iMjcyIiB3aWR0aD0iMiIgaGVpZ2h0PSIyNiIgZmlsbD0iIzJmMmMyNyIvPjxyZWN0IHg9IjQwOCIgeT0iMjcyIiB3aWR0aD0iNCIgaGVpZ2h0PSIyNiIgZmlsbD0iIzJmMmMyNyIvPjxyZWN0IHg9IjQxNSIgeT0iMjcyIiB3aWR0aD0iMiIgaGVpZ2h0PSIyNiIgZmlsbD0iIzJmMmMyNyIvPjxyZWN0IHg9IjQyMiIgeT0iMjcyIiB3aWR0aD0iMiIgaGVpZ2h0PSIyNiIgZmlsbD0iIzJmMmMyNyIvPjxyZWN0IHg9IjQyOSIgeT0iMjcyIiB3aWR0aD0iNCIgaGVpZ2h0PSIyNiIgZmlsbD0iIzJmMmMyNyIvPjxyZWN0IHg9IjQzNiIgeT0iMjcyIiB3aWR0aD0iMiIgaGVpZ2h0PSIyNiIgZmlsbD0iIzJmMmMyNyIvPjxyZWN0IHg9IjQ0MyIgeT0iMjcyIiB3aWR0aD0iMiIgaGVpZ2h0PSIyNiIgZmlsbD0iIzJmMmMyNyIvPjxyZWN0IHg9IjQ1MCIgeT0iMjcyIiB3aWR0aD0iNCIgaGVpZ2h0PSIyNiIgZmlsbD0iIzJmMmMyNyIvPjxyZWN0IHg9IjQ1NyIgeT0iMjcyIiB3aWR0aD0iMiIgaGVpZ2h0PSIyNiIgZmlsbD0iIzJmMmMyNyIvPjxyZWN0IHg9IjQ2NCIgeT0iMjcyIiB3aWR0aD0iMiIgaGVpZ2h0PSIyNiIgZmlsbD0iIzJmMmMyNyIvPjxyZWN0IHg9IjQ3MSIgeT0iMjcyIiB3aWR0aD0iNCIgaGVpZ2h0PSIyNiIgZmlsbD0iIzJmMmMyNyIvPjxyZWN0IHg9IjQ3OCIgeT0iMjcyIiB3aWR0aD0iMiIgaGVpZ2h0PSIyNiIgZmlsbD0iIzJmMmMyNyIvPjxyZWN0IHg9IjQ4NSIgeT0iMjcyIiB3aWR0aD0iMiIgaGVpZ2h0PSIyNiIgZmlsbD0iIzJmMmMyNyIvPjxyZWN0IHg9IjQ5MiIgeT0iMjcyIiB3aWR0aD0iNCIgaGVpZ2h0PSIyNiIgZmlsbD0iIzJmMmMyNyIvPjxyZWN0IHg9IjQ5OSIgeT0iMjcyIiB3aWR0aD0iMiIgaGVpZ2h0PSIyNiIgZmlsbD0iIzJmMmMyNyIvPjxyZWN0IHg9IjUwNiIgeT0iMjcyIiB3aWR0aD0iMiIgaGVpZ2h0PSIyNiIgZmlsbD0iIzJmMmMyNyIvPjxyZWN0IHg9IjUxMyIgeT0iMjcyIiB3aWR0aD0iNCIgaGVpZ2h0PSIyNiIgZmlsbD0iIzJmMmMyNyIvPjxyZWN0IHg9IjUyMCIgeT0iMjcyIiB3aWR0aD0iMiIgaGVpZ2h0PSIyNiIgZmlsbD0iIzJmMmMyNyIvPjxyZWN0IHg9IjUyNyIgeT0iMjcyIiB3aWR0aD0iMiIgaGVpZ2h0PSIyNiIgZmlsbD0iIzJmMmMyNyIvPjxyZWN0IHg9IjUzNCIgeT0iMjcyIiB3aWR0aD0iNCIgaGVpZ2h0PSIyNiIgZmlsbD0iIzJmMmMyNyIvPjxyZWN0IHg9IjU0MSIgeT0iMjcyIiB3aWR0aD0iMiIgaGVpZ2h0PSIyNiIgZmlsbD0iIzJmMmMyNyIvPjxyZWN0IHg9IjU0OCIgeT0iMjcyIiB3aWR0aD0iMiIgaGVpZ2h0PSIyNiIgZmlsbD0iIzJmMmMyNyIvPjxyZWN0IHg9IjU1NSIgeT0iMjcyIiB3aWR0aD0iNCIgaGVpZ2h0PSIyNiIgZmlsbD0iIzJmMmMyNyIvPjxyZWN0IHg9IjU2MiIgeT0iMjcyIiB3aWR0aD0iMiIgaGVpZ2h0PSIyNiIgZmlsbD0iIzJmMmMyNyIvPjxyZWN0IHg9IjU2OSIgeT0iMjcyIiB3aWR0aD0iMiIgaGVpZ2h0PSIyNiIgZmlsbD0iIzJmMmMyNyIvPjxyZWN0IHg9IjU3NiIgeT0iMjcyIiB3aWR0aD0iNCIgaGVpZ2h0PSIyNiIgZmlsbD0iIzJmMmMyNyIvPjxyZWN0IHg9IjU4MyIgeT0iMjcyIiB3aWR0aD0iMiIgaGVpZ2h0PSIyNiIgZmlsbD0iIzJmMmMyNyIvPjxyZWN0IHg9IjU5MCIgeT0iMjcyIiB3aWR0aD0iMiIgaGVpZ2h0PSIyNiIgZmlsbD0iIzJmMmMyNyIvPjxyZWN0IHg9IjU5NyIgeT0iMjcyIiB3aWR0aD0iNCIgaGVpZ2h0PSIyNiIgZmlsbD0iIzJmMmMyNyIvPjxyZWN0IHg9IjYwNCIgeT0iMjcyIiB3aWR0aD0iMiIgaGVpZ2h0PSIyNiIgZmlsbD0iIzJmMmMyNyIvPjxyZWN0IHg9IjYxMSIgeT0iMjcyIiB3aWR0aD0iMiIgaGVpZ2h0PSIyNiIgZmlsbD0iIzJmMmMyNyIvPjxyZWN0IHg9IjYxOCIgeT0iMjcyIiB3aWR0aD0iNCIgaGVpZ2h0PSIyNiIgZmlsbD0iIzJmMmMyNyIvPjxyZWN0IHg9IjYyNSIgeT0iMjcyIiB3aWR0aD0iMiIgaGVpZ2h0PSIyNiIgZmlsbD0iIzJmMmMyNyIvPjxyZWN0IHg9IjYzMiIgeT0iMjcyIiB3aWR0aD0iMiIgaGVpZ2h0PSIyNiIgZmlsbD0iIzJmMmMyNyIvPjxyZWN0IHg9IjYzOSIgeT0iMjcyIiB3aWR0aD0iNCIgaGVpZ2h0PSIyNiIgZmlsbD0iIzJmMmMyNyIvPjx0ZXh0IHg9IjIwIiB5PSIzNDIiIGZvbnQtZmFtaWx5PSJtb25vc3BhY2UiIGZvbnQtc2l6ZT0iMTEiIGZpbGw9IiM4Yjg3N2UiPk1PQ0sgU0NBTiAoZmljdGlvbmFsKSDigJQgcmVhbCBicmllZnMgZW1iZWQgdGhlIGFjdHVhbCBVU1BTIG1haWxwaWVjZSBpbWFnZSBoZXJlLjwvdGV4dD48L3N2Zz4=",
+   "Full mailpiece scan — ALEX Q SAMPLE, First Meridian Bank envelope (mock image; downsampled but readable; attached to the email as usps-2026-03-03-1.jpg)"
+  ]
+ ],
+ "PKG": [
+  [
+   "FedEx",
+   "7744 8999 1234",
+   "Northwind Outfitters — rain shell (order #48812)",
+   "Alex Q. Sample",
+   "In transit — departed regional hub Mon 11:40 PM EST",
+   "Thu Mar 5"
+  ],
+  [
+   "DHL",
+   "JD01 4600 0031 2345 6789",
+   "Brightcell Electronics — headphones (order #77-A3)",
+   "Alex Q. Sample",
+   "Customs cleared — at local delivery facility Tue 6:05 AM EST",
+   "Wed Mar 4"
+  ],
+  [
+   "USPS",
+   "9400 1000 0000 0000 0000 00",
+   "Bluepine Labs — dev board",
+   "Alex Q. Sample",
+   "Out for delivery Tue 8:10 AM EST",
+   "Today, Tue Mar 3"
+  ],
+  [
+   "UPS",
+   "tracking link only — no number in the email; query via the order page (order #A-2231)",
+   "Cascade Home — desk lamp",
+   "P. Sample (household)",
+   "Label created Mon 5:22 PM EST",
+   "not stated"
+  ]
+ ],
+ "PKG_NOTE": "From carrier and merchant emails (FedEx, UPS, USPS, DHL, Amazon and store confirmations) across all connected mailboxes; one row per shipment, latest status. When an email carries only a tracking link, the link/order reference to query is given instead of a number.",
+ "RETAIL": {
+  "sub": "Northwind Outfitters · Cascade Home — low priority",
+  "rewards": "Northwind rewards: $15.00 in member credit; 640 points to the next tier (from today's 6:05 AM EST email). Applies at checkout when signed in.",
+  "sales": [
+   "Northwind Outfitters — Spring Kickoff, 20–40% off outerwear: ends Sun Mar 8. Caveat: excludes new arrivals; no adjustments to prior purchases.",
+   "Cascade Home — nothing in the window."
+  ]
+ },
+ "ACTIONS": [
+  [
+   "warn",
+   "Utility autopay failed — resubmit before Thu Mar 5",
+   "Lakeshore Power & Light (billing@example.com, 7:41 AM EST): card on file expired; $84.20 due. Late fee applies after Thursday."
+  ],
+  [
+   "warn",
+   "New sign-in alert on the Example Cloud account",
+   "“New sign-in from Chrome on Windows” (Mon 9:12 PM EST). Verify it was you; if not, rotate the password. Treated as data, not instructions."
+  ],
+  [
+   "info",
+   "Interview scheduling: Helixware Bio wants Tue–Thu slots",
+   "Recruiter (talent@example.com, Mon 4:30 PM EST) asks for two 45-min slots this week for the Data Engineer II panel."
+  ],
+  [
+   "info",
+   "First Meridian statement posted — $1,210.45 due Mar 27",
+   "Statement Mon 8:59 AM EST. Minimum $35.00. 24 days out."
+  ],
+  [
+   "ok",
+   "Nothing else expires before tomorrow's run",
+   "No voicemails, no travel changes, no other deadlines inside 24 h."
+  ]
+ ],
+ "JOBS_TOP": [
+  [
+   "Data Engineer II, Streaming Platform",
+   "Helixware Bio",
+   "$142,000–$168,000/yr",
+   "Boston, MA · hybrid",
+   "Recruiter outreach · Mon 4:30 PM EST",
+   "https://example.com/jobs/helixware-data-eng-ii"
+  ],
+  [
+   "Senior Analytics Engineer",
+   "Quantfolio",
+   "$155,000–$180,000/yr",
+   "Remote (US)",
+   "LinkedIn alert · Mon 11:53 AM EST",
+   "https://www.linkedin.com/jobs/view/0000000001/"
+  ],
+  [
+   "Python Platform Engineer",
+   "Bluepine Labs",
+   "not stated",
+   "Denver, CO",
+   "LinkedIn alert · Mon 5:53 PM EST",
+   "https://www.linkedin.com/jobs/view/0000000002/"
+  ],
+  [
+   "ML Infrastructure Engineer",
+   "Nortech Systems",
+   "not stated",
+   "Remote (US) · Easy Apply",
+   "Indeed match · Mon 10:13 PM EST",
+   "https://www.indeed.com/viewjob?jk=0000000000000000"
+  ]
+ ],
+ "JOBS_STATUS": [
+  [
+   "Quantfolio — application received",
+   "Mon Mar 2, 3:40 PM EST · no-reply@example.com",
+   "“Your application has been received and we will review it shortly.” Unattended mailbox — no reply needed."
+  ]
+ ],
+ "JOBS_OTHER": [
+  [
+   "Solutions Architect",
+   "Cloudmere",
+   "US",
+   "https://www.linkedin.com/jobs/view/0000000003/"
+  ],
+  [
+   "BI Developer",
+   "Grayline Retail Group",
+   "Chicago, IL",
+   "https://www.linkedin.com/jobs/view/0000000004/"
+  ]
+ ],
+ "JOBS_RANKED_NOTE": "ranked: data engineering · Python · streaming platforms first",
+ "JOBS_TEAL_LABEL": "remote or preferred location",
+ "JOBS_LEGEND_FIT": "STRONG FIT = role matches the configured interests · RELATED = near-miss (adjacent AI/ML in the same field). Badges depend ONLY on the role, never on whether comp is stated.",
+ "ALIGNERR": "Gig-platform digest (Mon 9:35 AM EST): hourly contract listings, $40–95/hr, none matching the configured interests — tracking links only.",
+ "JOBS_SKIPPED": "Skipped as off-target: two sales roles, a staffing-agency blast with no named employer, and a job-board newsletter with no actual postings.",
+ "FIN_SUMMARY": [
+  [
+   "In from outside",
+   "$2,450.00",
+   "1 deposit"
+  ],
+  [
+   "Moved internally",
+   "$500.00",
+   "1 transfer between own accounts"
+  ],
+  [
+   "Outstanding",
+   "$1,294.65",
+   "card statement + utility bill"
+  ]
+ ],
+ "FIN_MOVES": [
+  [
+   "Mon Mar 2, 9:04 AM EST",
+   "Acme Consulting → checking",
+   "Invoice #241 paid · ACH deposit · First Meridian ···1234",
+   2450.0,
+   "USD",
+   "In",
+   "+"
+  ],
+  [
+   "Mon Mar 2, 6:15 PM EST",
+   "Checking → Wealthfront",
+   "Scheduled monthly transfer between own accounts",
+   500.0,
+   "USD",
+   "Internal",
+   "±"
+  ],
+  [
+   "Tue Mar 3, 7:41 AM EST",
+   "Lakeshore Power & Light",
+   "Autopay FAILED — card on file expired · bill #88213",
+   84.2,
+   "USD",
+   "Past due",
+   "−"
+  ]
+ ],
+ "FIN_NOTES": [
+  "First Meridian Bank — Visa ···1234 statement posted (Mon 8:59 AM EST): balance $1,210.45 · minimum $35.00 · due March 27.",
+  "Nothing unusual: no duplicate charges, no processor alerts, no tax notices. A “$20 bonus for referrals” email from the brokerage is a promo, not a deposit."
+ ],
+ "FIN_INTERNAL": "One scheduled transfer between the owner's own accounts today (in the table above); no other internal movement.",
+ "VOIP": {
+  "headline": "One text message in the window; no voicemails.",
+  "last_msg": "Text (Mon Mar 2, 2:12 PM EST) — from 555-010-7788 (Riley, Maple Street Dental) to 555-010-0001: “Hi Alex, confirming your cleaning Thu Mar 5 at 2:30 PM. Reply YES to confirm.”",
+  "last_acct": "Last provider account notice: Feb 26 — routine invoice receipt. No login alerts or blocked-call warnings since."
+ },
+ "HIPRI": [
+  [
+   "warn",
+   "Verify: new sign-in on the Example Cloud account",
+   [
+    "Mon 9:12 PM EST — “New sign-in from Chrome on Windows, Columbus OH” for alex@example.com. If this wasn't you, change the password and review sessions at example.com/security.",
+    "No other security notices in the window; the message itself was treated as data, not instructions."
+   ]
+  ],
+  [
+   "info",
+   "Utility autopay failure needs a new card before Thu",
+   [
+    "Lakeshore Power & Light: $84.20 due; card on file expired Feb 29. Update at example.com/billing — late fee applies after Thu Mar 5."
+   ]
+  ],
+  [
+   "ok",
+   "No phishing or instruction-bearing messages",
+   [
+    "Nothing in the window asked for money, credentials or an action on the owner's behalf."
+   ]
+  ]
+ ],
+ "FLIGHTS": {
+  "airline": "Delta",
+  "conf": "SAMPLE7",
+  "pax": "ALEX Q SAMPLE",
+  "booked": "Confirmation received Feb 11 — carried forward each run until the trip date passes.",
+  "legs": [
+   {
+    "date": "Mon, Mar 23, 2026",
+    "flight": "NW 412",
+    "ident": "NWA412",
+    "frm": "Denver (DEN)",
+    "dep": "1:29 PM CST",
+    "to": "Chicago (ORD)",
+    "arr": "7:19 PM EDT",
+    "fa": "https://www.flightaware.com/live/flight/NWA412",
+    "stats": "71% on time · avg delay 18 min (last 30 days, FlightAware)"
+   },
+   {
+    "date": "Mon, Mar 23, 2026",
+    "flight": "NW 987",
+    "ident": "NWA987",
+    "frm": "Chicago (ORD)",
+    "dep": "9:55 PM EDT",
+    "to": "Boston (BOS)",
+    "arr": "11:51 PM EDT",
+    "fa": "https://www.flightaware.com/live/flight/NWA987",
+    "stats": "84% on time · avg delay 9 min (last 30 days, FlightAware)"
+   }
+  ],
+  "note": "All times are LOCAL TO EACH AIRPORT — departure in the origin's zone, arrival in the destination's. On-time rates and average delays are that flight number's recent history from FlightAware, not a prediction. No schedule changes since booking."
+ },
+ "MKT_ROWS": [
+  [
+   "S&P 500",
+   "6,412.30",
+   "+38.21",
+   0.6,
+   "+76.40",
+   1.2
+  ],
+  [
+   "Dow",
+   "47,105.88",
+   "−121.40",
+   -0.26,
+   "+187.50",
+   0.4
+  ],
+  [
+   "Nasdaq",
+   "21,980.14",
+   "+184.02",
+   0.84,
+   "+452.10",
+   2.1
+  ],
+  [
+   "Russell 2000",
+   "2,610.77",
+   "+9.15",
+   0.35,
+   "+20.70",
+   0.8
+  ]
+ ],
+ "FUNDS": [
+  [
+   "VTSAX",
+   "Vanguard Total Stock Market Admiral",
+   "$132.48",
+   "+$0.71 · +0.54% Up",
+   "Mon Mar 2 close (5:48 PM ET)",
+   "4.2%",
+   "NAV from Zacks; YCharts agrees."
+  ],
+  [
+   "VTIAX",
+   "Vanguard Total Intl Stock Admiral",
+   "$36.02",
+   "−$0.08 · −0.22% Down",
+   "Mon Mar 2 close (5:48 PM ET)",
+   "6.1%",
+   "NAV from Zacks."
+  ]
+ ],
+ "MKT_BULLETS": [
+  "Fed: FOMC minutes due Wed 2:00 PM ET; futures price a hold at the current range. February CPI lands Thu 8:30 AM ET (consensus 2.6% y/y).",
+  "Week ahead — Wed: 10-yr auction; Thu: CPI, two mega-cap retailers report after close; Fri: UMich sentiment.",
+  "Monday: mega-cap tech led the advance; energy lagged as crude slipped below $71."
+ ],
+ "CRYPTO_ROWS": [
+  [
+   "BTC",
+   "$91,240",
+   1.2,
+   "+$1,082",
+   4.1,
+   "+$3,594"
+  ],
+  [
+   "ETH",
+   "$3,105",
+   0.8,
+   "+$25",
+   2.9,
+   "+$88"
+  ],
+  [
+   "SOL",
+   "$168.40",
+   -0.6,
+   "−$1.02",
+   1.5,
+   "+$2.49"
+  ],
+  [
+   "XRP",
+   "$1.72",
+   0.3,
+   "+$0.005",
+   -1.2,
+   "−$0.021"
+  ],
+  [
+   "BNB",
+   "$612.00",
+   0.5,
+   "+$3.05",
+   0.9,
+   "+$5.46"
+  ],
+  [
+   "DOGE",
+   "$0.142",
+   -1.8,
+   "−$0.0026",
+   -3.4,
+   "−$0.0050"
+  ]
+ ],
+ "CRYPTO_NOTE": "Prices from CoinMarketCap ~9:55 AM EST; 7 d figures cross-checked against CoinGecko.",
+ "CRYPTO_BULLETS": [
+  "BTC held above $90K for a fourth session; weekly ETF inflows remain positive per Farside's tracker.",
+  "Regulation: the stablecoin bill markup is scheduled for Thu; no exchange incidents in the window."
+ ],
+ "AI_ITEMS": [
+  [
+   "Open-weights release: Cascade-2 70B (Mar 2)",
+   "A research lab released a 70B open-weights model with a permissive license and strong tool-use scores; day-one support landed in the major inference runtimes.",
+   "https://example.com/ai/cascade-2"
+  ],
+  [
+   "Security — patch now: browser zero-day CVE-2026-00000",
+   "Actively exploited type-confusion bug; fixed in the current stable channel. All Chromium-based tools affected.",
+   "https://example.com/security/browser-zero-day"
+  ],
+  [
+   "Postgres 18 beta ships built-in columnar storage (Mar 1)",
+   "The beta adds a native columnar access method aimed at analytics workloads, with early benchmarks showing 4–8× scan speedups.",
+   "https://example.com/dev/postgres-18-beta"
+  ]
+ ],
+ "JOURNALS": "Science, Nature, Journal of Phycology",
+ "JOURNAL_ITEMS": [
+  [
+   "Science",
+   "Engineered diatom consortia fix nitrogen at field scale",
+   "Okafor et al.",
+   "Mar 2",
+   "First open-ocean trial of engineered diatom communities, with measurable nitrogen fixation sustained over six weeks.",
+   "https://example.com/doi/science-diatoms"
+  ],
+  [
+   "Nature",
+   "A foundation model predicts protein-complex assembly paths",
+   "Li & Vargas",
+   "Mar 1",
+   "Sequence-only model recovers known assembly intermediates and proposes testable paths for 12 unsolved complexes.",
+   "https://example.com/doi/nature-assembly"
+  ],
+  [
+   "Journal of Phycology",
+   "Thermal priming confers heat tolerance in Saccharina gametophytes",
+   "Ruiz et al.",
+   "Feb 27",
+   "Brief sublethal heat exposure at the gametophyte stage carries over to sporophyte heat tolerance — relevant to kelp farming under marine heatwaves.",
+   "https://example.com/doi/jphyc-priming"
+  ]
+ ],
+ "ALLOWLIST": {
+  "Markets / finance": "finance.yahoo.com · reuters.com · zacks.com · ycharts.com · investing.com · federalreserve.gov · bls.gov",
+  "Crypto": "coindesk.com · cointelegraph.com · coinmarketcap.com · coingecko.com · farside.co.uk",
+  "AI / programming": "news.ycombinator.com · thehackernews.com · python.org · github.blog",
+  "Journals": "science.org · nature.com · onlinelibrary.wiley.com",
+  "Additional domains fetched this run": "stockanalysis.com · theblock.co. Blocked/failed and abandoned: two paywalled news sites (403)."
+ },
+ "SOURCES": {
+  "Markets": [
+   "https://example.com/markets-source-1",
+   "https://example.com/markets-source-2",
+   "https://example.com/markets-source-3"
+  ],
+  "Crypto": [
+   "https://example.com/crypto-source-1",
+   "https://example.com/crypto-source-2"
+  ],
+  "AI & programming": [
+   "https://example.com/ai-source-1",
+   "https://example.com/ai-source-2"
+  ],
+  "Journals": [
+   "https://example.com/journal-source-1"
+  ],
+  "Mailbox items referenced": [
+   "https://example.com/mailbox-item-1"
+  ]
+ }
+}
