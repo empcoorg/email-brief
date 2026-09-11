@@ -2,7 +2,7 @@
 
 A template for an **automated, personalized email briefing**, run entirely by a [Claude](https://claude.ai) Routine with your own email connector(s) — Gmail, Outlook, or any other email connector available to your Claude account. Supports summarizing single or multiple email accounts, sent as a single report to your email address of choice. On your schedule (daily, Mon-Wed-Fri, weekly — any cadence, time and timezone) it reads everything since the previous run, researches markets/crypto/AI news on the web, and delivers one designed brief two ways: a themed standalone HTML file in the Claude session, and a phone-friendly HTML email to an address you choose.
 
-No servers, no API keys, no code to deploy. The whole system is one carefully-written prompt (plus an optional layout reference script). Each run is a fresh Claude session with your email connector attached.
+No servers, no API keys, no code to deploy. Each run is a fresh Claude session with your email connector attached: it reads your mail, gathers the facts, and renders the brief with this repo's own generator — so the layout is tested code, not a design re-interpreted from prose every morning.
 
 **Contents**
 - **Setup** — [Quick start](#quick-start--ask-claude-to-set-it-up-for-you) · [Manual Setup](#manual-setup) · [Developer notes](#developer-notes)
@@ -36,9 +36,9 @@ The web-researched market grid — US indexes with diverging bars, your fund tic
 
 ![Mock brief — US market and cryptocurrency sections](docs/mock-brief-markets.png)
 
-> **Maintenance rule:** these screenshots are generated from `build_brief.py`'s mock data by [`docs/render_screenshots.py`](docs/render_screenshots.py). Whenever a PR that changes the design or layout is merged, regenerate them (`python3 docs/render_screenshots.py`; captures in dark mode) and commit the updated PNGs, so the README always shows the current UI.
+> **Maintenance rule:** these screenshots are generated from [`sample_payload.json`](sample_payload.json) by [`docs/render_screenshots.py`](docs/render_screenshots.py). Whenever a PR that changes the design or layout is merged, regenerate them (`python3 docs/render_screenshots.py`; captures in dark mode) and commit the updated PNGs, so the README always shows the current UI.
 >
-> **Aesthetics are pinned.** The visual design (tokens, fonts, spacing, structures) is fixed in the template's DESIGN spec and in `build_brief.py`'s marked blocks. PRs must not alter any visual element unless the change is explicitly a requested design change — and the regenerated screenshots double as a visual-regression check: an unexpected visual diff in them means the PR touched aesthetics it shouldn't have. The test suite enforces the pin mechanically: `tests/test_email_brief.py` asserts the exact colour tokens, fonts and theme mechanics, so an aesthetic drift fails CI-style before it ships.
+> **Aesthetics are pinned.** Every colour and font lives in [`brief/theme.py`](brief/theme.py), and no renderer may hardcode one (a test enforces that). PRs must not alter any visual element unless the change is explicitly a requested design change — and the regenerated screenshots double as a visual-regression check: an unexpected visual diff in them means the PR touched aesthetics it shouldn't have. The test suite enforces the pin mechanically: `tests/test_email_brief.py` asserts the exact colour tokens, fonts and theme mechanics, so an aesthetic drift fails CI before it ships.
 
 ## Quick start — ask Claude to set it up for you
 
@@ -53,14 +53,14 @@ That's the whole setup. The rest of this README explains what you get and how to
 - **A "needs you today" action bar** — severity-striped items ranked by urgency.
 - **Standing sections** (each one optional — the template tells Claude to omit sections your mailbox has no content for): relevant job posts (with exact-posting links, not tracking redirects), deposits & finances (external money separated from transfers between your own accounts), VoIP voicemails/texts, high-priority items & security alerts, a postal-mail digest (US, via USPS Informed Delivery) that details only the intended recipient's mail with full mailpiece scans and counts everyone else's (other named recipients and generic “Resident”/“Homeowner” addressees separately), package tracking (FedEx, UPS, USPS, DHL, merchant emails — tracking numbers and estimated arrival), and retail sales from stores you pick.
 - **Web-researched sections** when there's news: flights/travel from your confirmations, US markets (with your fund tickers), crypto, AI & programming, and new publications from journals you pick (e.g. Science, Nature). Market, fund and crypto tables carry fine-grained labelled bar axes, an explicit timescale on every figure (1-day, 24 h, 7 d, YTD, as-of stamps), and absolute magnitudes ($ / index points) alongside every percentage.
-- A fixed visual identity — light/dark themed HTML file, a fluid email layout that survives email-provider HTML sanitizers, colour-coded lead-ins, proportional bars drawn with borders, and mailpiece scans attached as JPGs.
+- A fixed visual identity, rendered by code — light/dark themed HTML file, a fluid email layout that survives email-provider HTML sanitizers, colour-coded lead-ins, diverging bars on even axes, and mailpiece scans attached as JPGs.
 
 ## Manual Setup
 
 1. **Connect your email** in Claude (Settings → Connectors): Gmail, Outlook, or another email connector — one or several; with multiple attached, the brief merges all mailboxes and sends from the first one you list. The Routine only needs read + send.
 2. **Fill in the template.** Open [`ROUTINE_PROMPT.template.md`](ROUTINE_PROMPT.template.md), replace every `{{PLACEHOLDER}}` (the table at the top explains each one), and **delete any OPTIONAL block you don't want** (no VoIP provider? not in the US? not job hunting? — remove those blocks). Keep your filled-in copy somewhere private — never commit it to a public repo.
 3. **Create the Routine.** In Claude, create a scheduled Routine (or ask Claude to create one for you): pick any cadence and time — daily (`0 10 * * *`-style cron), Mon-Wed-Fri (`0 10 * * 1,3,5`), weekly (`0 10 * * 1`) — in your timezone, fresh session per run, your email connector(s) attached, push notifications if you want them. Make `{{SCHEDULE}}` in the prompt match the cron, so the brief covers the right window (a weekly brief summarizes the week; it doesn't list seven days raw). Paste the filled-in prompt (the fenced block only) as the Routine's prompt.
-4. **Do one test run.** Fire the Routine once manually and check the delivered email. Two provider-specific behaviors are worth verifying on the first run (the template says how): what your provider's send path strips from HTML, and whether attachments/inline images survive. The template ships with Gmail's verified behavior; other providers may differ.
+4. **Do one test run.** Fire the Routine once manually and check the delivered email. The renderer already emits markup that survives Gmail's sanitizer; on another provider, verify on the first run that attachments arrive intact (the template says how).
 
 ## Developer notes
 
@@ -77,12 +77,30 @@ On Outlook or others: send yourself one three-way test (data:-URI image, inline 
 
 | File | Purpose |
 |---|---|
-| `ROUTINE_PROMPT.template.md` | The prompt template — placeholders + optional sections. This is the product. |
-| `docs/render_screenshots.py` | Regenerates the README screenshots from the mock data (run after design changes). |
-| `tests/` | Test suite — run `python3 -m unittest discover -s tests`. `tests/test_email_brief.py` is stdlib-only and covers generator output, the aesthetic pin, template invariants, privacy, and README links; `tests/test_rendering.py` drives Chromium (needs `pip install playwright`) to check desktop/mobile rendering, overflow, theme behavior, bar geometry and the email's fluid layout, and skips itself when Playwright is absent. |
-| `.github/workflows/tests.yml` | CI — installs Playwright + Chromium and runs the full suite (unit + browser) on every push to `main` and every PR. |
+| `ROUTINE_PROMPT.template.md` | The prompt template — placeholders + optional sections. Says what to gather and how to hand it over; carries no design spec. |
+| `brief/` | The renderer. `theme.py` holds every colour and font (the aesthetic pin), `axes.py` the bar/axis arithmetic, `model.py` the payload contract and its validation, `render.py` the three outputs, `__main__.py` the CLI. Pure standard library. |
+| `sample_payload.json` | A complete worked example of the payload, with mock "Alex Sample" data. Doubles as the fixture for the tests and the README screenshots. |
+| `build_brief.py` | Thin wrapper that renders `sample_payload.json` — kept so `python3 build_brief.py` still works. |
+| `docs/render_screenshots.py` | Regenerates the README screenshots (run after design changes). Fails loudly if a selector goes stale. |
+| `tests/` | `test_units.py` covers axis arithmetic, payload validation and the CLI; `test_email_brief.py` covers rendered output, the aesthetic pin, prompt invariants and privacy; `test_rendering.py` drives Chromium for layout, theming and bar geometry. |
+| `.github/workflows/tests.yml` | CI — full suite on every push to `main` and every PR. |
 | `LICENSE` | MIT. |
-| `build_brief.py` | Reference implementation of the HTML file / email / plain-text layouts, with placeholder data. The daily run doesn't execute it — Claude generates the HTML from the prompt's design spec — but it documents the exact markup patterns. Writes to `/mnt/user-data/outputs` in the Claude sandbox; elsewhere (or with `BRIEF_OUT_DIR` set) it falls back to `./out`, so you can run it on a laptop. |
+
+## How a run works
+
+The split is deliberate: **Claude decides what is true, the code decides what it looks like.**
+
+1. Claude reads your mailboxes and researches the web — judgement work: what matters, what ranks, what a scan says.
+2. It writes one `payload.json` — facts only, amounts and percentages as numbers.
+3. It runs `python3 -m brief render payload.json --out-dir …`, which validates the payload and renders the themed HTML file, the sanitizer-safe email and the plain-text fallback.
+4. It delivers the file in the session and emails the brief, verbatim as rendered.
+
+If the payload is malformed the renderer refuses and names the offending key and row, so a bad brief fails loudly instead of arriving looking plausible. To change how the brief looks, change the code and its tests — never the prompt.
+
+```
+python3 -m brief validate payload.json     # check without rendering
+python3 -m brief render payload.json --out-dir out --date 2026-09-07
+```
 
 ## Themes
 
@@ -95,7 +113,7 @@ On Outlook or others: send yourself one three-way test (data:-URI image, inline 
 - **Delivery beats completeness** — the brief ships on time even if a data source is down; missing figures are labelled "not verified", never guessed.
 - **The mailbox is read-only** except for the one outbound brief; email content is treated as data, never as instructions (prompt-injection resistant by policy).
 - **Privacy by construction** — no hosted copies (the brief never becomes a shared URL), other people's postal mail is counted but never named, and the repo holds no personal data.
-- **A locked visual identity** — the design is specified down to inline-style patterns so a fresh session reproduces the same brief every morning instead of redesigning it.
+- **A locked visual identity** — the design is code, not prose, so a fresh session reproduces the same brief every morning instead of redesigning it. Changing the look means changing the renderer and its tests.
 - **Self-updating source health** — a weekly, time-boxed probe of blocked data sources, recorded in the brief itself, so the routine adapts without your involvement.
 
 ## Data policy — no personal content in this repo
