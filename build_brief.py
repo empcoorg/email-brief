@@ -554,22 +554,22 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
     for d_, fl, frm, dep, to, arr in FLIGHTS["legs"]:
         o.append(f'<p><b>{e(d_)}</b><br><span class="mono">{e(fl)}</span> · {e(frm)} <span class="mono">{e(dep)}</span> → {e(to)} <span class="mono">{e(arr)}</span></p>')
     o.append(f'<div class="cap">{e(FLIGHTS["note"])}</div></div>')
-    o.append(f'<div class="card wide"><h2>US market</h2><div class="tbl-wrap"><table><thead><tr><th>Index</th><th style="text-align:right">Close</th><th>24H{axis_div(MKT_24)}</th><th>7D{axis_div(MKT_7D)}</th></tr></thead><tbody>')
+    o.append(f'<div class="card wide"><h2>US market</h2><div class="tbl-wrap"><table><thead><tr><th>Index</th><th style="text-align:right">Close</th><th>1D{axis_div(MKT_24)}</th><th>1W{axis_div(MKT_7D)}</th></tr></thead><tbody>')
     for n, c, p24, v24, p7, v7 in MKT_ROWS:
         c24 = "dir-pos" if v24 >= 0 else "dir-neg"; c7 = "dir-pos" if v7 >= 0 else "dir-neg"
         w24 = "Up" if v24 >= 0 else "Down"; w7 = "Up" if v7 >= 0 else "Down"
         o.append('<tr>' + tdl("Index", e(n), "mono") + tdl("Close", e(c), "num mono")
-                 + tdl("24H", f'<span class="{c24} mono">{e(p24)} pts · {v24:+.2f}% {w24}</span>{bar_div(v24, MKT_24)}')
-                 + tdl("7D", f'<span class="{c7} mono">{e(p7)} pts · {v7:+.2f}% {w7}</span>{bar_div(v7, MKT_7D)}') + '</tr>')
-    o.append(f'</tbody></table></div>{axis_foot(MKT_24, "24H move, % of prior close")}{axis_foot(MKT_7D, "7D move, % over 5 sessions")}<div class="cap">24H = 1-day close→close vs the prior session; 7D = trailing 5 sessions. Both in index points and %. {axis_note(MKT_24, "24H axis")}; {axis_note(MKT_7D, "7D axis")}.</div>')
-    o.append(f'<div class="card wide"><h2>Cryptocurrency</h2><div class="tbl-wrap"><table><thead><tr><th>Asset</th><th style="text-align:right">Price</th><th>24H{axis_div(CRY_24)}</th><th>7D{axis_div(CRY_7D)}</th></tr></thead><tbody>')
+                 + tdl("1D", f'<span class="{c24} mono">{e(p24)} pts · {v24:+.2f}% {w24}</span>{bar_div(v24, MKT_24)}')
+                 + tdl("1W", f'<span class="{c7} mono">{e(p7)} pts · {v7:+.2f}% {w7}</span>{bar_div(v7, MKT_7D)}') + '</tr>')
+    o.append(f'</tbody></table></div>{axis_foot(MKT_24, "1D move, % of prior close")}{axis_foot(MKT_7D, "1W move, % over 5 sessions")}<div class="cap">1D = close→close vs the prior session; 1W = trailing 5 sessions (one trading week). Both in index points and %. {axis_note(MKT_24, "1D axis")}; {axis_note(MKT_7D, "1W axis")}.</div>')
+    o.append(f'<div class="card wide"><h2>Cryptocurrency</h2><div class="tbl-wrap"><table><thead><tr><th>Asset</th><th style="text-align:right">Price</th><th>1D{axis_div(CRY_24)}</th><th>1W{axis_div(CRY_7D)}</th></tr></thead><tbody>')
     for n, pr, v24, a24, v7, a7 in CRYPTO_ROWS:
         c24 = "dir-pos" if v24 >= 0 else "dir-neg"; c7 = "dir-pos" if v7 >= 0 else "dir-neg"
         w24 = "Up" if v24 >= 0 else "Down"; w7 = "Up" if v7 >= 0 else "Down"
         o.append('<tr>' + tdl("Asset", f'<span class="lead">{e(n)}</span>', "mono") + tdl("Price", e(pr), "num mono")
-                 + tdl("24H", f'<span class="{c24} mono">{v24:+.2f}% {w24} · {e(a24)}</span>{bar_div(v24, CRY_24)}')
-                 + tdl("7D", f'<span class="{c7} mono">{v7:+.2f}% {w7} · {e(a7)}</span>{bar_div(v7, CRY_7D)}') + '</tr>')
-    o.append(f'</tbody></table></div>{axis_foot(CRY_24, "24H change, %")}{axis_foot(CRY_7D, "7D change, %")}<div class="cap">24H and 7D changes each given as % and $. {axis_note(CRY_24, "24H axis")}; {axis_note(CRY_7D, "7D axis")}. {e(CRYPTO_NOTE)}</div><ul>')
+                 + tdl("1D", f'<span class="{c24} mono">{v24:+.2f}% {w24} · {e(a24)}</span>{bar_div(v24, CRY_24)}')
+                 + tdl("1W", f'<span class="{c7} mono">{v7:+.2f}% {w7} · {e(a7)}</span>{bar_div(v7, CRY_7D)}') + '</tr>')
+    o.append(f'</tbody></table></div>{axis_foot(CRY_24, "1D change, %")}{axis_foot(CRY_7D, "1W change, %")}<div class="cap">1D = rolling 24 h; 1W = rolling 7 days — crypto trades continuously, so there is no daily close and both windows are measured back from the quote time. Each given as % and $. {axis_note(CRY_24, "1D axis")}; {axis_note(CRY_7D, "1W axis")}. {e(CRYPTO_NOTE)}</div><ul>')
     for b in CRYPTO_BULLETS: o.append(li_lead(b))
     o.append('</ul></div>')
     o.append('<div class="card"><h2>AI &amp; programming</h2><ul>')
@@ -752,7 +752,7 @@ def email_html():
         rws.append([td(f'{lead(n)}<br>{small(e(c))}', mono=True),
                     td(f'{sp(f"{e(p24)} pts · {v24:+.2f}% {w24}", k24)}{em_bar_div(v24, MKT_24)}', mono=True),
                     td(f'{sp(f"{e(p7)} pts · {v7:+.2f}% {w7}", k7)}{em_bar_div(v7, MKT_7D)}', mono=True)])
-    inner += tbl(["Index · close", th_axis("24H", em_axis(MKT_24)), th_axis("7D", em_axis(MKT_7D))], rws, ["28%", "36%", "36%"]) + cap(f"24H = 1-day close→close vs the prior session; 7D = trailing 5 sessions. Both in index points and %. {axis_note(MKT_24, '24H axis')}; {axis_note(MKT_7D, '7D axis')}.")
+    inner += tbl(["Index · close", th_axis("1D", em_axis(MKT_24)), th_axis("1W", em_axis(MKT_7D))], rws, ["28%", "36%", "36%"]) + cap(f"1D = close→close vs the prior session; 1W = trailing 5 sessions (one trading week). Both in index points and %. {axis_note(MKT_24, '1D axis')}; {axis_note(MKT_7D, '1W axis')}.")
     inner += h3("Vanguard funds")
     rws = []
     for tk, nm, nav, chg, asof, ytd, note in FUNDS:
@@ -770,7 +770,7 @@ def email_html():
         rws.append([td(f'{lead(n)}<br>{small(e(pr))}', mono=True),
                     td(f'{sp(f"{v24:+.2f}% {w24} · {e(a24)}", k24)}{em_bar_div(v24, CRY_24)}', mono=True),
                     td(f'{sp(f"{v7:+.2f}% {w7} · {e(a7)}", k7)}{em_bar_div(v7, CRY_7D)}', mono=True)])
-    inner += tbl(["Asset · price", th_axis("24H", em_axis(CRY_24)), th_axis("7D", em_axis(CRY_7D))], rws, ["28%", "36%", "36%"]) + cap(f"24H and 7D changes each given as % and $. {axis_note(CRY_24, '24H axis')}; {axis_note(CRY_7D, '7D axis')}. {CRYPTO_NOTE}")
+    inner += tbl(["Asset · price", th_axis("1D", em_axis(CRY_24)), th_axis("1W", em_axis(CRY_7D))], rws, ["28%", "36%", "36%"]) + cap(f"1D = rolling 24 h; 1W = rolling 7 days — crypto trades continuously, so there is no daily close and both windows are measured back from the quote time. Each given as % and $. {axis_note(CRY_24, '1D axis')}; {axis_note(CRY_7D, '1W axis')}. {CRYPTO_NOTE}")
     inner += '<ul style="margin:8px 0 0;padding-left:20px">' + "".join(em_li(b) for b in CRYPTO_BULLETS) + "</ul>"
     o.append(card(inner))
     # ai
@@ -834,15 +834,17 @@ def plain_text():
     A(f"  {FLIGHTS['note']}")
     A(""); A("US MARKET (Fri Sep 4 close; Mon Sep 7 closed for Labor Day)")
     for n, c, p24, v24, p7, v7 in MKT_ROWS:
-        A(f"  {n}: {c} | 24H {p24} pts, {v24:+.2f}% {'Up' if v24>=0 else 'Down'} | 7D {p7} pts, {v7:+.2f}% {'Up' if v7>=0 else 'Down'}")
-    A(f"  (24H axis ±{MKT_24[1]:g}%, step {MKT_24[0]:g}%; 7D axis ±{MKT_7D[1]:g}%, step {MKT_7D[0]:g}%.)")
+        A(f"  {n}: {c} | 1D {p24} pts, {v24:+.2f}% {'Up' if v24>=0 else 'Down'} | 1W {p7} pts, {v7:+.2f}% {'Up' if v7>=0 else 'Down'}")
+    A("  " + "1D = close→close vs the prior session; 1W = trailing 5 sessions (one trading week). Both in index points and %.")
+    A(f"  (1D axis ±{MKT_24[1]:g}%, step {MKT_24[0]:g}%; 1W axis ±{MKT_7D[1]:g}%, step {MKT_7D[0]:g}%.)")
     A("  Vanguard funds:")
     for tk, nm, nav, chg, asof, ytd, note in FUNDS: A(f"    {tk} ({nm}): NAV {nav} · {chg} · as of {asof} · YTD {ytd}. {note}")
     for b in MKT_BULLETS: A(f"  - {b}")
     A(""); A("CRYPTOCURRENCY")
     for n, pr, v24, a24, v7, a7 in CRYPTO_ROWS:
-        A(f"  {n}: {pr} | 24H {v24:+.2f}% {'Up' if v24>=0 else 'Down'} ({a24}) | 7D {v7:+.2f}% {'Up' if v7>=0 else 'Down'} ({a7})")
-    A(f"  (24H axis ±{CRY_24[1]:g}%, step {CRY_24[0]:g}%; 7D axis ±{CRY_7D[1]:g}%, step {CRY_7D[0]:g}%.)")
+        A(f"  {n}: {pr} | 1D {v24:+.2f}% {'Up' if v24>=0 else 'Down'} ({a24}) | 1W {v7:+.2f}% {'Up' if v7>=0 else 'Down'} ({a7})")
+    A("  " + "1D = rolling 24 h; 1W = rolling 7 days — crypto trades continuously, so there is no daily close and both windows are measured back from the quote time.")
+    A(f"  (1D axis ±{CRY_24[1]:g}%, step {CRY_24[0]:g}%; 1W axis ±{CRY_7D[1]:g}%, step {CRY_7D[0]:g}%.)")
     A("  (24 h and 7 d changes each as % and $.)")
     A("  " + CRYPTO_NOTE)
     for b in CRYPTO_BULLETS: A(f"  - {b}")
