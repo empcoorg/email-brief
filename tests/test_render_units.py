@@ -227,6 +227,63 @@ class TestCurrencyOnOneAxis(unittest.TestCase):
             validate(p)
 
 
+class TestTieredDetail(unittest.TestCase):
+    """Critical detail gets FORMATTED, not deleted: three tiers that stay
+    scannable, rather than one sentence that reads as a wall."""
+
+    THREE = ["Flight + exit-row seat · conf SAMPLE7",
+             "Sample Bank Visa ···1234 · non-refundable/no changes",
+             "9,800.00 fare+taxes + 400.00 seat MXN · FX 18.50 MXN/USD (investing.com, Mar 3)"]
+
+    def _row(self, detail):
+        p = payload()
+        p["FIN_MOVES"] = [["Tue 8:12 AM EST", "Airline", detail, 10200.0, "MXN", 551.35, "Out", "−"]]
+        return p
+
+    def test_a_plain_string_still_works(self):
+        f, em, tx = render_all(self._row("Simple one-line detail"))
+        for out in (f, em, tx):
+            self.assertIn("Simple one-line detail", out)
+
+    def test_three_tiers_all_render_and_keep_every_fact(self):
+        f, em, tx = render_all(self._row(self.THREE))
+        for out in (f, em, tx):
+            for line in self.THREE:
+                self.assertIn(line, out, f"a detail line was dropped: {line[:40]}")
+
+    def test_tiers_are_visually_weighted_not_just_concatenated(self):
+        f, em, _ = render_all(self._row(self.THREE))
+        cell = f.split('data-l="Detail"')[1].split("</td>")[0]
+        self.assertEqual(cell.count("<br>"), 2, "tiers must be separate lines")
+        self.assertIn('class="meta"', cell, "tier 2 must be muted")
+        self.assertIn("font-size:12px", cell, "tier 3 must be smaller still")
+        # the email has no classes, so it uses the inline muted style
+        ecell = em.split("Flight + exit-row")[1][:400]
+        self.assertIn("font-size:12.5px", ecell)
+
+    def test_plain_text_indents_the_tiers(self):
+        _, _, tx = render_all(self._row(self.THREE))
+        for line in self.THREE:
+            self.assertIn(f"      {line}", tx, "plain text must indent detail under its row")
+
+    def test_a_fourth_line_is_rejected(self):
+        from brief.model import MAX_DETAIL_LINES, PayloadError, validate
+        self.assertEqual(MAX_DETAIL_LINES, 3)
+        with self.assertRaises(PayloadError) as cm:
+            validate(self._row(self.THREE + ["one line too many"]))
+        self.assertIn("4 detail lines", str(cm.exception))
+
+    def test_non_string_lines_are_rejected(self):
+        from brief.model import PayloadError, validate
+        with self.assertRaises(PayloadError):
+            validate(self._row(["fine", 42]))
+
+    def test_blank_lines_are_dropped_not_rendered_as_gaps(self):
+        f, _, _ = render_all(self._row(["Real line", "", "   "]))
+        cell = f.split('data-l="Detail"')[1].split("</td>")[0]
+        self.assertNotIn("<br>", cell, "empty tiers must not leave blank lines")
+
+
 class TestRankedLeadCap(unittest.TestCase):
     """As many leads as the window produced, capped at 25."""
 

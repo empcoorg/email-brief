@@ -355,9 +355,12 @@ class TestBarGeometry(_BrowserCase):
                 self.assertIn("left", cls, "money out must sit left of the centre line")
         self.assertIsNotNone(r["axis"], "money table must pair a header axis with its bars")
         self.assertLessEqual(r["axis"]["dl"], 1.6); self.assertLessEqual(r["axis"]["dw"], 1.6)
-        self.assertEqual(r["axis"]["labels"], ["−$3k", "0", "$3k USD"],
-                         "money axis must label even breaks either side of a centred 0, "
-                         "and name the currency it counts")
+        self.assertEqual(r["axis"]["labels"], ["−$3k", "0", "$3k"],
+                         "money axis must label even breaks either side of a centred 0")
+        # the FILE names the unit in the column header instead of on the ruler,
+        # where a wrapped "USD" under the tick reads as a broken label
+        self.assertIn("USD", pg.inner_text("th:has(.daxis.money)"),
+                      "the money column header must name the currency it counts")
         self.assertTrue(any(l.startswith("$") for l in r["axis"]["labels"]),
                         "money axis labels must carry $ units")
         pg.close()
