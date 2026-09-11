@@ -150,9 +150,9 @@ class TestRendering(_BrowserCase):
             self._assert_no_horizontal_overflow(pg, width, f"email @{width}")
             pg.close()
 
-    def test_email_axis_zero_sits_over_the_track_centre(self):
+    def test_email_axis_zero_sits_over_the_track_center(self):
         """The email cannot position elements, so the axis is three equal cells.
-        The centre label must still land on the track's centre — a label that
+        The center label must still land on the track's center — a label that
         disagrees with the geometry beneath it misreads the chart."""
         for width in (860, 390):
             pg = self._page(width, content=self.email_html)
@@ -185,7 +185,23 @@ class TestRendering(_BrowserCase):
                                     f"expected market+crypto axis headers @{width}px, saw {len(pairs)}")
             for p_ in pairs:
                 self.assertLessEqual(abs(p_["dz"]), 2.0,
-                                     f"email axis 0 is {p_['dz']:.1f}px off the track centre @{width}px")
+                                     f"email axis 0 is {p_['dz']:.1f}px off the track center @{width}px")
+            pg.close()
+
+    def test_severity_chips_never_wrap_in_the_email(self):
+        """Mobile mail broke "CHECK" into "CHEC / K" when the chip had its own
+        ~70px column. It now shares the title's column; this measures that the
+        fix holds at real phone widths WITHOUT nowrap, which the sanitizer
+        rule forbids."""
+        for width in (390, 320):
+            pg = self._page(width, content=self.email_html)
+            chips = pg.evaluate("""() => [...document.querySelectorAll('span')]
+                .filter(s => ['CHECK', 'URGENT', 'NOTE', 'CLEAR'].includes(s.textContent.trim()))
+                .map(s => ({t: s.textContent.trim(), h: s.getBoundingClientRect().height}))""")
+            self.assertGreaterEqual(len(chips), 2, f"no severity chips found @{width}px")
+            for c in chips:
+                self.assertLess(c["h"], 24,
+                                f'chip {c["t"]!r} wrapped to {c["h"]}px at {width}px')
             pg.close()
 
     def test_email_tables_max_three_columns(self):
@@ -198,7 +214,7 @@ class TestRendering(_BrowserCase):
 
 class TestBarGeometry(_BrowserCase):
     """Quantitative-chart guarantees for the diverging bars: fills anchored to
-    the centre baseline, a visible bordered track, and the header axis ruler
+    the center baseline, a visible bordered track, and the header axis ruler
     pixel-aligned with the bar column. Guards against helper shadowing or CSS
     drift that turns the charts into floating blobs."""
 
@@ -218,12 +234,12 @@ class TestBarGeometry(_BrowserCase):
         for b in bars:
             anchor = b["fl"] if b["right"] else b["fr_"]
             self.assertLessEqual(abs(anchor - b["center"]), 1.6,
-                                 f"fill not anchored to the centre baseline: {b}")
+                                 f"fill not anchored to the center baseline: {b}")
             if b["neu"]:
-                continue  # internal transfer: magnitude only, colour implies no direction
+                continue  # internal transfer: magnitude only, color implies no direction
             self.assertEqual(b["pos"], b["right"], "sign/side mismatch in bar fill")
             self.assertEqual(b["border"], "1px", "bar track must have a visible 1px border")
-            # one notch per even step, symmetric about the centre line
+            # one notch per even step, symmetric about the center line
             self.assertGreaterEqual(b["ticks"], 4, "bar track must carry micro-notch ticks")
             self.assertEqual(b["ticks"] % 2, 0, "ticks must be symmetric about 0")
         pg.close()
@@ -265,7 +281,7 @@ class TestBarGeometry(_BrowserCase):
         pg.close()
 
     def test_axis_aligns_with_track_at_every_width(self):
-        """The ruler's 0 must fall on the track's centre at every width. At phone
+        """The ruler's 0 must fall on the track's center at every width. At phone
         width the header collapses and the ruler repeats below the table, where
         it has to inset by the cell padding or it is wider than the bars."""
         for width in (1280, 1024, 768):
@@ -294,7 +310,7 @@ class TestBarGeometry(_BrowserCase):
             for p_ in pairs:
                 self.assertLessEqual(abs(p_["dl"]), 1.6, f"ruler offset from track @{width}px: {p_}")
                 self.assertLessEqual(abs(p_["dw"]), 1.6, f"ruler width differs @{width}px: {p_}")
-                self.assertLessEqual(abs(p_["dz"]), 1.6, f"axis 0 misses track centre @{width}px: {p_}")
+                self.assertLessEqual(abs(p_["dz"]), 1.6, f"axis 0 misses track center @{width}px: {p_}")
             pg.close()
 
         # phone: the repeated ruler under the table must match the track width
@@ -349,14 +365,14 @@ class TestBarGeometry(_BrowserCase):
             cls = f["cls"].split()
             if "pos" in cls:
                 self.assertEqual(f["color"], rgb(r["pos"]), "money-in fill must be the positive token")
-                self.assertIn("right", cls, "money in must sit right of the centre line")
+                self.assertIn("right", cls, "money in must sit right of the center line")
             if "neg" in cls:
                 self.assertEqual(f["color"], rgb(r["neg"]), "money-out fill must be the negative token")
-                self.assertIn("left", cls, "money out must sit left of the centre line")
+                self.assertIn("left", cls, "money out must sit left of the center line")
         self.assertIsNotNone(r["axis"], "money table must pair a header axis with its bars")
         self.assertLessEqual(r["axis"]["dl"], 1.6); self.assertLessEqual(r["axis"]["dw"], 1.6)
         self.assertEqual(r["axis"]["labels"], ["−$6k", "0", "$6k"],
-                         "money axis must label even breaks either side of a centred 0")
+                         "money axis must label even breaks either side of a centered 0")
         # the FILE names the unit in the column header instead of on the ruler,
         # where a wrapped "USD" under the tick reads as a broken label
         self.assertIn("USD", pg.inner_text("th:has(.daxis.money)"),

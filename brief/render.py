@@ -15,7 +15,8 @@ import base64, hashlib, html as H, json, math, os
 from .axes import (fraction, money_axis as _money_axis_calc, money_labels, money_tick,
                    nice_step_top, pct_axis, pct_labels, pct_tick, steps_per_side,
                    tick_positions)
-from .theme import BODY_FS, D, F_B, F_H, F_M, GOOGLE_FONTS, L, attr, e, url
+from .theme import (BODY_FS, D, F_B, F_H, F_M, GOOGLE_FONTS, L, attr, e,
+                    space_ranges, url)
 
 __all__ = ["render_all", "file_html", "email_html", "plain_text"]
 
@@ -24,8 +25,9 @@ SEV_WORD = {"warn": "CHECK", "neg": "URGENT", "info": "NOTE", "ok": "CLEAR"}
 
 
 def sev_chip(sev):
-    """Severity as a bordered chip in its own colour."""
-    return f'<span class="badge c-{sev}" style="margin-left:0">{SEV_WORD.get(sev, sev.upper())}</span>'
+    """Severity as a bordered chip in its own color."""
+    return (f'<span class="badge c-{sev}" style="margin-left:0;white-space:nowrap">'
+            f'{SEV_WORD.get(sev, sev.upper())}</span>')
 
 
 class SectionNumber:
@@ -99,7 +101,7 @@ FIT_LABEL = {"strong": ("STRONG FIT", "pos"), "related": ("RELATED", "accent")}
 
 
 def job_fit(tier):
-    """Badge text and colour class for a payload fit tier.
+    """Badge text and color class for a payload fit tier.
 
     The renderer does NOT decide fit. Which roles are a strong fit depends on
     the owner's configured interests, which only the run knows; a keyword list
@@ -114,8 +116,8 @@ def loc_tier(loc):
     return "", ""
 
 # ------------------------------------------------------------------ RENDER: FILE (tokens)
-# Direction glyphs. SHAPE carries the meaning, colour only reinforces it — the
-# brief never lets colour be the sole channel, and an arrow is a non-colour cue
+# Direction glyphs. SHAPE carries the meaning, color only reinforces it — the
+# brief never lets color be the sole channel, and an arrow is a non-color cue
 # that costs a third of the width of the word it replaces.
 ARROW_UP, ARROW_DOWN = "\u25b2", "\u25bc"
 
@@ -158,7 +160,7 @@ def em_axis(ax):
     return f"{pct_tick(-top)} \u00b7 0 \u00b7 {pct_tick(top)}"
 def axis_note(ax, what):
     step, top = ax
-    return f"{what}: diverging, 0 at centre \u2192 {pct_tick(top)} each side; even {step:g}% steps"
+    return f"{what}: diverging, 0 at center \u2192 {pct_tick(top)} each side; even {step:g}% steps"
 def _money_fmt(v):
     return "$" + (f"{v:,.0f}" if v >= 10 else f"{v:,.2f}")
 def money_tick(v):
@@ -169,7 +171,7 @@ def money_tick(v):
     s = f"{a / 1000:g}k" if a >= 1000 else f"{a:g}"
     return ("\u2212$" if v < 0 else "$") + s
 def _money_steps():
-    """Steps per side of the centre line."""
+    """Steps per side of the center line."""
     import math
     mode, a, b = FIN_AXIS
     return int(round(b / a)) if mode == "linear" else int(round(math.log10(b / a)))
@@ -222,7 +224,7 @@ def detail_html_email(detail):
 
 
 def horizon_cell_file(amount, pct, axis, unit="", reverse=False):
-    """One horizon's figure centred over its bar, for the standalone file.
+    """One horizon's figure centered over its bar, for the standalone file.
 
     `reverse` puts the percentage first, which reads better where the absolute
     move is a price delta rather than index points.
@@ -249,11 +251,11 @@ def money_amount(amt, cur, usd, sign):
 
 
 def money_side(dirw):
-    """Which side of zero a movement sits on, and in which colour.
+    """Which side of zero a movement sits on, and in which color.
 
     Left/red for money leaving, right/green for money arriving, neutral grey for
     a transfer between the owner's own accounts (magnitude only — an internal
-    move has no direction, so colour must not imply one).
+    move has no direction, so color must not imply one).
 
     ANYTHING UNRECOGNISED IS NEUTRAL, never positive. The prompt tells the run to
     label an ambiguous movement "unclassified" rather than guess; drawing that as
@@ -267,7 +269,7 @@ def money_side(dirw):
 
 
 def money_bar(amt, dirw):
-    w = _money_frac(amt) * 50           # half-track either side of centre
+    w = _money_frac(amt) * 50           # half-track either side of center
     side, fcls = money_side(dirw)
     n = _money_steps()
     ticks = "".join(f'<i style="left:{50 + sgn * s * 50 / n:g}%"></i>'
@@ -290,7 +292,7 @@ def money_axis_ticks_text():
 def money_axis_note():
     mode, a, b = FIN_AXIS
     if mode == "linear":
-        return (f"diverging, 0 at centre \u2192 {money_tick(b)} each side; "
+        return (f"diverging, 0 at center \u2192 {money_tick(b)} each side; "
                 f"even {_money_fmt(a)} steps")
     return f"diverging LOG scale, decade steps {_money_fmt(a)} \u2192 {_money_fmt(b)} each side"
 def bar_div(pct, ax):
@@ -368,7 +370,7 @@ td.num{{text-align:right;white-space:nowrap}}
 .daxis span{{position:absolute;top:5px;font:500 8.5px 'JetBrains Mono',monospace;letter-spacing:0;text-transform:none;color:var(--ink-3);transform:translateX(-50%)}}
 .daxis span.l{{transform:none}} .daxis span.r{{transform:translateX(-100%)}}
 .daxis-foot{{display:none}}
-/* the figure sits centred over the track, i.e. over the axis zero the bar grows from */
+/* the figure sits centered over the track, i.e. over the axis zero the bar grows from */
 .barfig{{display:block;text-align:center;margin-bottom:2px}}
 .cap{{font-size:12.5px;color:var(--ink-3);padding:8px 2px}}
 .tiles{{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}}
@@ -403,7 +405,7 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
 }}
 """
     o = []
-    o.append("<title>Morning Brief</title>")
+    o.append(f"<title>{e(MAST['title'])}</title>")
     o.append('<meta name="color-scheme" content="dark light">')
     o.append('<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>')
     o.append('<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Source+Sans+3:wght@400;600&display=swap" rel="stylesheet">')
@@ -423,11 +425,13 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
     o.append('</div></section>')
     # 4 high priority
     num = SectionNumber()
-    o.append(f'<section><h2><span class="num">{num()}.</span> High priority <span class="sub">ranked by severity \u00b7 act on these first</span></h2><div class="card"><div class="tbl-wrap"><table><thead><tr><th>Priority</th><th>What needs attention</th><th>Detail</th></tr></thead><tbody>')
+    o.append(f'<section><h2><span class="num">{num()}.</span> High priority <span class="sub">ranked by severity \u00b7 act on these first</span></h2><div class="card"><div class="tbl-wrap"><table><thead><tr><th>What needs attention</th><th>Detail</th></tr></thead><tbody>')
     for sev, t, items in HIPRI:
         detail = "<br>".join(lead_inner(i) for i in items)
-        o.append('<tr>' + tdl("Priority", sev_chip(sev))
-                 + tdl("What needs attention", f'<b class="c-{sev}">{e(t)}</b>')
+        # the chip rides WITH the title rather than in a column of its own: a
+        # narrow column of its own wrapped "CHECK" to "CHEC/K" in mobile mail
+        o.append('<tr>' + tdl("What needs attention",
+                              f'{sev_chip(sev)} <b class="c-{sev}">{e(t)}</b>')
                  + tdl("Detail", detail) + '</tr>')
     o.append('</tbody></table></div></div></section>')
     # 1 jobs
@@ -545,7 +549,7 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
     o.append(f'</tbody></table></div>{axis_foot(CRY_24, "1D change, %")}{axis_foot(CRY_7D, "1W change, %")}{axis_foot(CRY_YTD, "YTD change, %")}<div class="cap">1D = rolling 24 h; 1W = rolling 7 days; YTD = since the last price of the previous year - crypto trades continuously, so there is no daily close and every window is measured back from the quote time. Each given as % and $. {axis_note(CRY_24, "1D axis")}; {axis_note(CRY_7D, "1W axis")}; {axis_note(CRY_YTD, "YTD axis")}. {e(CRYPTO_NOTE)}</div><ul>')
     for b in CRYPTO_BULLETS: o.append(li_lead(b))
     o.append('</ul></div>')
-    o.append('<div class="card wide"><h2>Fed &amp; labour market</h2><div class="tbl-wrap"><table><thead><tr><th>Indicator</th><th>Latest</th><th>Change · context</th><th>As of</th></tr></thead><tbody>')
+    o.append('<div class="card wide"><h2>Fed &amp; labor market</h2><div class="tbl-wrap"><table><thead><tr><th>Indicator</th><th>Latest</th><th>Change · context</th><th>As of</th></tr></thead><tbody>')
     for name, latest, context, asof in MACRO_ROWS:
         o.append('<tr>' + tdl("Indicator", f'<span class="lead">{e(name)}</span>')
                  + tdl("Latest", f'<b class="mono">{e(latest)}</b>')
@@ -616,7 +620,7 @@ def th_axis(name, labels):
     """Two lines: the column name, then its axis.
 
     The axis is laid out as three equal cells rather than a run of text, so the
-    centre label sits over the TRACK'S CENTRE. A plain text run ("−1% · 0 · +1%")
+    center label sits over the TRACK'S CENTRE. A plain text run ("−1% · 0 · +1%")
     flows from the left edge and puts the zero wherever the characters happen to
     land, which misreads the chart beneath it — the label must agree with the
     geometry it describes. The email cannot position elements, but equal-width
@@ -662,7 +666,7 @@ def _seg(w, col): return f'<span style="display:inline-block;width:0;height:0;bo
 # FLUID DIVERGING BAR for the email. Percentage table cells, so the track fills
 # whatever width the column has at any screen size instead of sitting at a fixed
 # 80px stub; the fill is drawn with border-top/border-bottom because the send
-# path strips every `background`. Centre line = 0, left = negative, right =
+# path strips every `background`. Center line = 0, left = negative, right =
 # positive. Both `width=` attributes and inline width survive the sanitizer.
 def _em_cell(pct, style):
     # font-size / line-height are inherited from the track table
@@ -674,7 +678,7 @@ def _em_bar(frac, col, right):
 
     Percentage widths, so the track fills whatever width the column has; the
     fill is drawn with border-top/border-bottom because backgrounds never
-    survive the sanitizer; the centre line is a border on the cell that ends at
+    survive the sanitizer; the center line is a border on the cell that ends at
     zero. An earlier version nested a table inside each half, which read the
     same and cost twice the bytes - and the email has a hard 85 KB budget, so
     markup weight is a feature constraint, not a detail.
@@ -682,12 +686,12 @@ def _em_bar(frac, col, right):
     p = max(frac * 100, 3.0) / 2          # percent of the FULL track
     fill = f"border-top:5px solid {col};border-bottom:5px solid {col}"
     line = f'border-bottom:1px solid {L["line"]}'
-    centre = f';border-right:1px solid {L["lineS"]}'
+    center = f';border-right:1px solid {L["lineS"]}'
     if right:
-        cells = (_em_cell(50, line + centre)
+        cells = (_em_cell(50, line + center)
                  + _em_cell(p, fill) + _em_cell(50 - p, line))
     else:
-        cells = (_em_cell(50 - p, line) + _em_cell(p, fill + centre)
+        cells = (_em_cell(50 - p, line) + _em_cell(p, fill + center)
                  + _em_cell(50, line))
     return ('<table width="100%" cellpadding="0" cellspacing="0" style="table-layout:fixed;'
             'border-collapse:collapse;margin-top:4px;font-size:0;line-height:0">'
@@ -715,7 +719,7 @@ LAYOUT_NOTE = ("Layout: one fluid layout for phone and desktop (the mail path st
 # which section to cut at 6am, and beats Gmail truncating mid-table.
 EMAIL_BUDGET_BYTES = 85 * 1024
 SHED_ORDER = ("Retail sales", "Research & publications", "AI & programming",
-              "Fed & labour market", "Large caps", "Cryptocurrency", "US market")
+              "Fed & labor market", "Large caps", "Cryptocurrency", "US market")
 
 
 def _assemble_email(parts, droppable):
@@ -723,7 +727,7 @@ def _assemble_email(parts, droppable):
 
     `droppable` maps a card name to its index in `parts`. Cards are shed in
     SHED_ORDER - least actionable first - and the reader is told which ones and
-    where to find them. Nothing is shortened or summarised: a half-rendered
+    where to find them. Nothing is shortened or summarized: a half-rendered
     table is worse than an absent one.
     """
     dropped = []
@@ -756,7 +760,7 @@ def email_html():
     o = [f'<div style="padding:12px 6px;font-family:{F_B};color:{L["ink"]}"><table width="100%" cellpadding="0" cellspacing="0" style="max-width:860px;margin:0 auto"><tr><td>']
     stamps = "".join(f'<div style="margin-top:8px">{lbl(k)}<div style="font-family:{F_M};font-size:14px">{e(v)}</div></div>' for k, v in [("Timezone", MAST["tz"]), ("Scheduled slot", MAST["slot"]), ("Window covered", MAST["window"]), ("Run stamp", MAST["run"])])
     o.append(f'<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid {L["line"]};border-radius:14px"><tr><td style="padding:18px 16px">'
-             f'<div style="font-family:{F_H};font-size:28px;font-weight:700;color:{L["ink"]}">Morning Brief</div>'
+             f'<div style="font-family:{F_H};font-size:28px;font-weight:700;color:{L["ink"]}">{e(MAST["title"])}</div>'
              f'<div style="font-size:16px;font-weight:600;color:{L["ink2"]};margin-top:2px">{e(MAST["dateline"])}</div>{stamps}'
              f'<div style="font-size:13px;color:{L["ink3"]};margin-top:10px">{e(MAST["note"])}</div>'
              f'<div style="font-size:12.5px;color:{L["ink3"]};margin-top:6px;border-top:1px solid {L["line"]};padding-top:6px">{LAYOUT_NOTE}</div>'
@@ -770,12 +774,14 @@ def email_html():
     inner = h2(f'{sp(f"{num()}.", L["accent"])} High priority', "ranked by severity · act on these first")
     rws = []
     for sev, t_, items in HIPRI:
+        # No nowrap here: the sanitizer rule forbids it, and sharing a 40%
+        # column with the title gives the chip room to sit on one line anyway.
         chip = (f'<span style="font:600 10px {F_H};text-transform:uppercase;border:1px solid '
                 f'{sevcol[sev]};color:{sevcol[sev]};padding:1px 5px;border-radius:4px">'
                 f'{SEV_WORD.get(sev, sev.upper())}</span>')
-        rws.append([td(chip), td(sp(e(t_), sevcol[sev])),
+        rws.append([td(f"{chip} {sp(e(t_), sevcol[sev])}"),
                     td("<br>".join(em_lead_inner(i) for i in items))])
-    inner += tbl(["Priority", "What needs attention", "Detail"], rws, ["16%", "30%", "54%"])
+    inner += tbl(["What needs attention", "Detail"], rws, ["40%", "60%"])
     o.append(card(inner))
     # 1 jobs — 3 columns
     inner = h2(f'{sp(f"{num()}.", L["accent"])} Relevant job posts', JOBS_RANKED_NOTE)
@@ -882,8 +888,8 @@ def email_html():
     inner += tbl(["Ticker · price · YTD", th_axis("1D", pct_labels(STK_1D)), th_axis("1W", pct_labels(STK_1W))], rws, ["30%", "35%", "35%"])
     o.append(card(inner))
     mark("Large caps")
-    # Fed and labour market
-    inner = h2("Fed &amp; labour market")
+    # Fed and labor market
+    inner = h2("Fed &amp; labor market")
     inner += tbl(["Indicator", "Latest", "Change · context"],
                  [[td(lead(n)), td(f"<b>{e(v)}</b>", mono=True), td(f"{e(c)}<br>{small(e(a))}")]
                   for n, v, c, a in MACRO_ROWS], ["28%", "22%", "50%"])
@@ -895,7 +901,7 @@ def email_html():
                   for sec, ch, ctx, a in JOBS_SECTORS], ["30%", "18%", "52%"])
     inner += cap(MACRO_NOTE)
     o.append(card(inner))
-    mark("Fed & labour market")
+    mark("Fed & labor market")
     inner = h2("Cryptocurrency")
     rws = []
     for n, pr, v1, a1, v7, a7, vy, ay in CRYPTO_ROWS:
@@ -946,16 +952,21 @@ def email_html():
 
 # ------------------------------------------------------------------ RENDER: PLAIN TEXT
 def plain_text():
-    o = []; A = o.append
+    o = []
+
+    def A(line=""):
+        # the HTML paths get this through e(); the text path needs it too
+        o.append(space_ranges(line))
     A("MORNING BRIEF"); A(MAST["dateline"]); A(MAST["revised"]); A(f"Timezone: {MAST['tz']}")
     A(f"Window covered: {MAST['window']}"); A(f"Scheduled slot: {MAST['slot']}"); A(f"Run stamp: {MAST['run']}"); A(MAST["note"]); A("")
     A("NEEDS YOU TODAY")
     for sev, t, d in ACTIONS: A(f"[{ {'warn':'CHECK','neg':'URGENT','info':'NOTE','ok':'CLEAR'}[sev] }] {t}\n    {d}")
-    A(""); A("1. HIGH PRIORITY")
+    tnum = SectionNumber()
+    A(""); A(f"{tnum()}. HIGH PRIORITY")
     for sev, t, items in HIPRI:
         A(f"[{sev.upper()}] {t}")
         for i in items: A(f"  - {i}")
-    A(""); A("2. RELEVANT JOB POSTS"); A("Application status:")
+    A(""); A(f"{tnum()}. RELEVANT JOB POSTS"); A("Application status:")
     for t, m, d in JOBS_STATUS: A(f"  - {t} — {m}\n    {d}")
     A("Ranked leads (fit tier in brackets):")
     for r, c, comp, loc, src, tier, link in JOBS_TOP:
@@ -963,7 +974,7 @@ def plain_text():
     A("Also seen (lower fit):")
     for r, c, loc, link in JOBS_OTHER: A(f"  - {r} — {c} · {loc} · {link}")
     A(ALIGNERR); A(JOBS_SKIPPED); A("")
-    A("3. DEPOSITS & FINANCES")
+    A(f"{tnum()}. DEPOSITS & FINANCES")
     for l, v, d in FIN_SUMMARY: A(f"  {l}: {v} ({d})")
     A("Money movements:")
     A(f"  (Bar axis in the HTML outputs: {money_axis_note()}; in = green, out/past due = red, internal = grey.)")
@@ -973,7 +984,7 @@ def plain_text():
             A(f"      {line}")
     A("Transfers between own accounts: nothing new.")
     for n in FIN_NOTES: A(f"  - {n}")
-    A(""); A("4. UPCOMING FLIGHTS (carried forward until the trip date passes)")
+    A(""); A(f"{tnum()}. UPCOMING FLIGHTS (carried forward until the trip date passes)")
     A(f"  {FLIGHTS['airline']}, confirmation {FLIGHTS['conf']} — {FLIGHTS['pax']}")
     A(f"  {FLIGHTS['booked']}")
     for g in FLIGHTS["legs"]:
@@ -982,15 +993,15 @@ def plain_text():
             A(f"    on-time: {g['stats']}")
         A(f"    {g['fa']}")
     A(f"  {FLIGHTS['note']}")
-    A(""); A("5. VOIP VOICEMAILS & TEXTS"); A(VOIP["headline"]); A("  - " + VOIP["last_msg"]); A("  - " + VOIP["last_acct"]); A("")
-    A(""); A("6. USPS INFORMED DELIVERY (intended recipient's mail only)"); A(USPS["headline"])
+    A(""); A(f"{tnum()}. VOIP VOICEMAILS & TEXTS"); A(VOIP["headline"]); A("  - " + VOIP["last_msg"]); A("  - " + VOIP["last_acct"]); A("")
+    A(""); A(f"{tnum()}. USPS INFORMED DELIVERY (intended recipient's mail only)"); A(USPS["headline"])
     for d_, s_, a_, ty in USPS["pieces"]: A(f"  - {d_} · {s_} · addressed to {a_} · {ty}")
     A("  " + USPS["counts"]); A("  Note: " + USPS["note"])
     if PKG:
-        A(""); A("PACKAGE TRACKING (kept until delivered)")
+        A(""); A(f"{tnum()}. PACKAGE TRACKING (kept until delivered)")
         for car, trk, item, rcpt, st, eta in PKG: A(f"  - {car} · {trk} · {item} · to {rcpt} · {st} · ETA {eta}")
         A("  " + PKG_NOTE)
-    A(""); A("US MARKET (Fri Sep 4 close; Mon Sep 7 closed for Labor Day)")
+    A(""); A("US MARKET")
     for n, c, p1, v1, p7, v7, py, vy in MKT_ROWS:
         A(f"  {n}: {c} | 1D {p1} pts, {pct_str(v1)} {'Up' if v1>=0 else 'Down'}"
           f" | 1W {p7} pts, {pct_str(v7)} {'Up' if v7>=0 else 'Down'}"
@@ -1006,7 +1017,7 @@ def plain_text():
     A(""); A("LARGE CAPS")
     for tk, pr, a1, v1, a7, v7, ay, vy in STOCKS:
         A(f"  {tk}: {pr} | 1D {a1}, {pct_str(v1)} | 1W {a7}, {pct_str(v7)} | YTD {ay}, {pct_str(vy)}")
-    A(""); A("FED & LABOUR MARKET")
+    A(""); A("FED & LABOR MARKET")
     for n, v, c, a in MACRO_ROWS:
         A(f"  {n}: {v} — {c} ({a})")
     A("  Jobs by sector:")
@@ -1019,16 +1030,15 @@ def plain_text():
           f" | YTD {pct_str(vy)} ({ay})")
     A("  " + "1D = rolling 24 h; 1W = rolling 7 days — crypto trades continuously, so there is no daily close and both windows are measured back from the quote time.")
     A(f"  (1D axis ±{CRY_24[1]:g}%, step {CRY_24[0]:g}%; 1W axis ±{CRY_7D[1]:g}%, step {CRY_7D[0]:g}%.)")
-    A("  (24 h and 7 d changes each as % and $.)")
     A("  " + CRYPTO_NOTE)
     for b in CRYPTO_BULLETS: A(f"  - {b}")
     A(""); A("AI & PROGRAMMING")
     for t, d, l in AI_ITEMS: A(f"  - {t} — {d}\n    {l}")
     A(""); A("RESEARCH & PUBLICATIONS (" + JOURNALS + ")")
     for j, t, au, d, tk, l in JOURNAL_ITEMS: A(f"  - {j}: {t} ({au}, {d}) — {tk}\n    {l}")
-    A(""); A("8. RETAIL SALES (lowest priority — configured retailers)")
+    A(""); A(f"{tnum()}. RETAIL SALES (lowest priority — configured retailers)")
     A("  - " + RETAIL["rewards"])
-    for x in RETAIL["sales"]: A("  - " + x)
+    for store, offer, det in RETAIL["items"]: A(f"  - {store}: {offer} — {det}")
     A(""); A("DOMAIN ALLOWLIST")
     for k, v in ALLOWLIST.items(): A(f"  {k}: {v}")
     A(""); A("SOURCES")

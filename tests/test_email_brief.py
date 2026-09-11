@@ -8,7 +8,7 @@ Covers four things:
   1. The reference generator (build_brief.py) renders all three outputs and
      they respect the structural rules the template promises (section order,
      USPS recipient-only detail, email sanitizer survival, size budget).
-  2. The AESTHETIC PIN — exact colour tokens, fonts and theme mechanics.
+  2. The AESTHETIC PIN — exact color tokens, fonts and theme mechanics.
      If this fails, a change altered the visual design; that is only
      acceptable in a PR whose stated purpose is a design change (and which
      regenerates the README screenshots).
@@ -109,18 +109,18 @@ class TestGeneratorOutputs(unittest.TestCase):
 
     def test_direction_shown_as_arrows_in_html_words_in_plain_text(self):
         """Finance figures use arrows to save width. Shape carries the meaning,
-        so colour is never the only channel; the plain-text fallback has no
-        colour at all, so it keeps the words."""
+        so color is never the only channel; the plain-text fallback has no
+        color at all, so it keeps the words."""
         page, em, tx = self.r["page"], self.r["email"], self.r["text"]
         for out, name in ((page, "file"), (em, "email")):
             self.assertGreaterEqual(out.count("\u25b2"), 10, f"{name} missing up arrows")
             self.assertGreaterEqual(out.count("\u25bc"), 4, f"{name} missing down arrows")
             for word in (" Up<", " Down<", " Up ", " Down "):
                 self.assertNotIn(word, out, f"{name} still spells out {word.strip()!r}")
-        self.assertNotIn("\u25b2", tx, "plain text has no colour, so it keeps words")
+        self.assertNotIn("\u25b2", tx, "plain text has no color, so it keeps words")
         self.assertIn("Up", tx); self.assertIn("Down", tx)
         # the sign still accompanies every figure, so direction survives without
-        # colour or glyph rendering
+        # color or glyph rendering
         self.assertRegex(page, r"\+\d+\.\d{2}% \u25b2")
         self.assertRegex(page, r"\u2212\d+\.\d{2}% \u25bc")
 
@@ -169,8 +169,8 @@ class TestGeneratorOutputs(unittest.TestCase):
             self.assertIn(probe, em, f"email missing horizon label {probe}")
             self.assertIn(probe, tx, f"text missing horizon label {probe}")
         # separate even axes per horizon (7-day spread is wider than 1-day)
-        # the email axis is three equal cells, so the centre label sits over the
-        # track's centre instead of flowing from the left edge as a text run
+        # the email axis is three equal cells, so the center label sits over the
+        # track's center instead of flowing from the left edge as a text run
         for lo, hi in (("\u22121%", "+1%"), ("\u22123%", "+3%"),
                        ("\u22122%", "+2%"), ("\u22126%", "+6%")):
             self.assertIn(f'align="left" style="{"{"}cell{"}"}">{lo}'.replace("{cell}", ""), em) \
@@ -190,7 +190,7 @@ class TestGeneratorOutputs(unittest.TestCase):
         self.assertIn("Journal of Phycology", page)
 
     def test_money_bars_diverge_from_zero_with_even_axis_breaks(self):
-        """Money movements are a DIVERGING chart: 0 at centre, money out to the
+        """Money movements are a DIVERGING chart: 0 at center, money out to the
         left in red, money in to the right in green, internal transfers neutral.
         Axis breaks are even round numbers, never raw data values."""
         page, em = self.r["page"], self.r["email"]
@@ -290,8 +290,8 @@ class TestGeneratorOutputs(unittest.TestCase):
         self.assertEqual(unbadged, [], f"ranked leads with no fit badge: {unbadged}")
 
     def test_fit_badges_are_bordered_chips_labelled_strong_fit_and_related(self):
-        """Fit badges are chips with a thin border in their own colour — never
-        bare coloured text — and the near-miss label is RELATED, not ADJACENT."""
+        """Fit badges are chips with a thin border in their own color — never
+        bare colored text — and the near-miss label is RELATED, not ADJACENT."""
         page, em, tx = self.r["page"], self.r["email"], self.r["text"]
         for out, name in ((page, "file"), (em, "email"), (tx, "text")):
             self.assertNotIn(">ADJACENT<", out, f"{name} still uses the old ADJACENT badge")
@@ -302,13 +302,13 @@ class TestGeneratorOutputs(unittest.TestCase):
         self.assertIn("border:1px solid currentColor", badge,
                       "file badge must be a bordered chip")
         self.assertIn("border-radius:4px", badge)
-        # email: the colour written literally (currentColor is unreliable there)
+        # email: the color written literally (currentColor is unreliable there)
         chips = re.findall(r'<span style="[^"]*border:1px solid (#[0-9A-Fa-f]{6})[^"]*">'
                            r'(STRONG FIT|RELATED)</span>', em)
-        self.assertTrue(chips, "email fit badges must be bordered chips with a literal colour")
-        for colour, label in chips:
+        self.assertTrue(chips, "email fit badges must be bordered chips with a literal color")
+        for color, label in chips:
             expect = self.LIGHT_POS if label == "STRONG FIT" else self.LIGHT_ACCENT
-            self.assertEqual(colour, expect, f"{label} chip border must be its own token")
+            self.assertEqual(color, expect, f"{label} chip border must be its own token")
 
     LIGHT_POS = "#1B7F4B"
     LIGHT_ACCENT = "#0B7285"
@@ -373,11 +373,11 @@ class TestAestheticPin(unittest.TestCase):
         self.assertIn("family=Source+Sans+3:wght@400;600", page)
 
     def test_aesthetic_pin_is_centralised(self):
-        """Every colour lives in theme.py, so a drift is a one-file diff."""
+        """Every color lives in theme.py, so a drift is a one-file diff."""
         self.assertIn("AESTHETIC PIN", THEME)
-        # no renderer may hardcode a hex colour behind the theme's back
+        # no renderer may hardcode a hex color behind the theme's back
         stray = [h for h in re.findall(r"#[0-9A-Fa-f]{6}", RENDER)]
-        self.assertEqual(stray, [], f"render.py hardcodes colours instead of using theme: {stray}")
+        self.assertEqual(stray, [], f"render.py hardcodes colors instead of using theme: {stray}")
 
 
 class TestTemplate(unittest.TestCase):
@@ -413,7 +413,7 @@ class TestTemplate(unittest.TestCase):
             "THIS SECTION PERSISTS",              # flights
             "LOCAL TIME AT THAT AIRPORT",
             "LINK EVERY FLIGHT NUMBER TO FLIGHTAWARE",
-            'OMIT the leg\'s "stats" field',       # drop the column, do not apologise
+            'OMIT the leg\'s "stats" field',       # drop the column, do not apologize
             "WORK DOWN THIS CHAIN",               # fund NAV fallback sources
             "QUOTE THAT MARKER",                  # proof the renderer ran
             "MAY LIST SEVERAL MAILBOXES",         # one address or many

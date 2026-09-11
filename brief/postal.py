@@ -14,7 +14,7 @@ Deciding what a scan says still needs vision. Deciding what the printed name
 MEANS is a pure function, and this is it.
 
 Erring toward exclusion is deliberate: a piece wrongly excluded costs the owner
-one line of detail, while a piece wrongly included publishes a neighbour's mail.
+one line of detail, while a piece wrongly included publishes a neighbor's mail.
 """
 import re
 import unicodedata
@@ -24,7 +24,7 @@ import unicodedata
 GENERIC_ADDRESSEES = (
     "current resident", "resident", "current occupant", "occupant",
     "homeowner", "home owner", "householder", "postal customer",
-    "our neighbors", "our neighbours", "neighbor", "neighbour",
+    "our neighbors", "our neighbors", "neighbor", "neighbor",
     "current owner", "or current resident", "local postal customer",
     "friends and neighbors", "residential customer",
 )
