@@ -1,5 +1,5 @@
 """Unit tests for the renderer itself: escaping, link safety, direction
-colouring, empty sections, determinism, and the paths the sample payload
+coloring, empty sections, determinism, and the paths the sample payload
 never exercises (log money axis, unrecognised direction words).
 
 The brief renders content that arrived by email. That content is DATA — the
@@ -116,7 +116,7 @@ class TestMoneyDirection(unittest.TestCase):
         support — the chart must not claim more than the payload does."""
         for unknown in ("Unclassified", "Refund", "", None, "in", "IN"):
             side, cls = money_side(unknown)
-            self.assertEqual(cls, "neu", f"{unknown!r} must not be coloured as income")
+            self.assertEqual(cls, "neu", f"{unknown!r} must not be colored as income")
 
     def test_unclassified_renders_with_the_neutral_fill(self):
         p = payload()
@@ -532,13 +532,14 @@ class TestSectionsAsTables(unittest.TestCase):
                 self.assertIn("<table", block, f"{name}: {heading} is not a table")
                 self.assertIn(col, block, f"{name}: {heading} missing column {col!r}")
 
-    def test_high_priority_rows_are_colour_coded_by_severity(self):
+    def test_high_priority_rows_are_color_coded_by_severity(self):
         f, em, _ = render_all(payload())
         hp = f.split("High priority")[1][:3000]
         self.assertRegex(hp, r'class="badge c-(warn|neg|info|ok)"')
         self.assertRegex(hp, r'class="c-(warn|neg|info|ok)"')
-        # the email has no classes, so severity rides on an inline colour
+        # the email has no classes, so severity rides on an inline color
         ehp = em.split("High priority")[1][:3000]
+
         self.assertRegex(ehp, r"border:1px solid #[0-9A-F]{6};color:#[0-9A-F]{6}")
 
     def test_email_tables_stay_within_three_columns(self):
@@ -667,7 +668,7 @@ class TestEmailBudgetShedding(unittest.TestCase):
     """
 
     PROBES = {"US market": "Russell 2000", "Large caps": "AAPL",
-              "Fed & labour market": "Nonfarm payrolls", "Cryptocurrency": "DOGE",
+              "Fed & labor market": "Nonfarm payrolls", "Cryptocurrency": "DOGE",
               "AI & programming": "Cascade-2", "Research & publications": "diatom",
               "Retail sales": "Northwind rewards"}
 
@@ -727,3 +728,46 @@ class TestEmailBudgetShedding(unittest.TestCase):
         _f, em, _t = self._render_at(50 * 1024)
         for probe in ("High priority", "Deposits &amp; finances", "Upcoming flights"):
             self.assertIn(probe, em, f"{probe} must never be shed")
+
+
+class TestSeverityChipDoesNotWrap(unittest.TestCase):
+    """In mobile mail the priority column was ~70px and broke "CHECK" across two
+    lines as "CHEC / K". Two fixes, together: the chip rides in the same column
+    as the title instead of a column of its own, and it carries nowrap."""
+
+    def test_chip_shares_the_title_column(self):
+        f, em, _ = render_all(payload())
+        for doc, name in ((f, "file"), (em, "email")):
+            block = doc.split("High priority")[1][:2500]
+            self.assertNotIn(">Priority<", block, f"{name}: chip still has its own column")
+            self.assertIn("What needs attention", block)
+
+    def test_file_chip_cannot_wrap(self):
+        """The file has no sanitizer constraint, so it pins the chip outright.
+        The email cannot use nowrap — see test_email_survives_the_sanitizer —
+        and relies on the wider column instead, measured in test_rendering.py."""
+        f, _, _ = render_all(payload())
+        self.assertIn("white-space:nowrap", f.split("High priority")[1][:2500])
+
+    def test_email_high_priority_is_two_columns(self):
+        _, em, _ = render_all(payload())
+        block = em.split("High priority")[1][:1500]
+        self.assertEqual(block.count("<th"), 2, "a third narrow column is what broke the chip")
+
+
+class TestRangeDashSpacing(unittest.TestCase):
+    """"4.25–4.50%" reads as one figure; "4.25 – 4.50%" reads as a range."""
+
+    def test_payload_ranges_are_spaced_in_every_output(self):
+        f, em, tx = render_all(payload())
+        for out in (f, em, tx):
+            self.assertNotRegex(out, r"[\w%]–[\w$]", "an unspaced range dash survived")
+
+    def test_hyphens_in_words_are_left_alone(self):
+        from brief.theme import space_ranges
+        for text in ("non-refundable", "close-to-close", "e-mail", "co-founder"):
+            self.assertEqual(space_ranges(text), text)
+
+    def test_arrows_are_not_touched(self):
+        from brief.theme import space_ranges
+        self.assertEqual(space_ranges("close → close"), "close → close")

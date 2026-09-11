@@ -124,7 +124,7 @@ class TestAddresseeMatching(unittest.TestCase):
             self.assertTrue(addressee_matches(printed, OWNER), printed)
 
     def test_refuses_the_ambiguous_cases(self):
-        """These are the ways a neighbour's or relative's mail gets published."""
+        """These are the ways a neighbor's or relative's mail gets published."""
         for printed in ("Alex", "Sample", "Jordan Sample", "Alex Jordan",
                         "Dana Liu", "Q. Sample", "", "The Sample Family"):
             self.assertFalse(addressee_matches(printed, OWNER), printed)
@@ -184,7 +184,7 @@ class TestMultipleNameForms(unittest.TestCase):
         self.assertTrue(addressee_matches("Alex Q Sample", "Sample, Alex Q"))
         self.assertFalse(addressee_matches("Alex Johnson", "Sample, Alex Q"))
 
-    def test_single_form_behaviour_is_unchanged(self):
+    def test_single_form_behavior_is_unchanged(self):
         self.assertTrue(addressee_matches("ALEX SAMPLE", "Alex Q. Sample"))
         self.assertFalse(addressee_matches("Jordan Sample", "Alex Q. Sample"))
 

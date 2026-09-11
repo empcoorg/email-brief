@@ -16,11 +16,11 @@ All content below is **mock data** for a fictional "Alex Sample" — nothing rea
 
 ![Mock brief — masthead and action bar](docs/mock-brief-top.png)
 
-Section 2, Relevant job posts — application-status lead-ins, the ranked-leads table with bordered fit badges (STRONG FIT / RELATED) and the colour-code legend:
+Section 2, Relevant job posts — application-status lead-ins, the ranked-leads table with bordered fit badges (STRONG FIT / RELATED) and the color-code legend:
 
 ![Mock brief — relevant job posts section](docs/mock-brief-jobs.png)
 
-Section 3, Deposits & finances — summary tiles, and the money-movements table: bars diverge from a centred zero on one **USD** axis with even round breaks, so a foreign-currency charge is plotted at its converted value rather than its face number. External money stays separate from internal transfers.
+Section 3, Deposits & finances — summary tiles, and the money-movements table: bars diverge from a centered zero on one **USD** axis with even round breaks, so a foreign-currency charge is plotted at its converted value rather than its face number. External money stays separate from internal transfers.
 
 ![Mock brief — deposits and finances section](docs/mock-brief-sections.png)
 
@@ -32,13 +32,13 @@ Package tracking — carrier, tracking number (or the link/order reference to qu
 
 ![Mock brief — package tracking section](docs/mock-brief-packages.png)
 
-The researched cards — US indexes, your fund tickers and crypto, each carrying **1D** and **1W** columns on their own even axes, with the figure centred over the zero the bar grows from:
+The researched cards — US indexes, your fund tickers and crypto, each carrying **1D** and **1W** columns on their own even axes, with the figure centered over the zero the bar grows from:
 
 ![Mock brief — US market and cryptocurrency sections](docs/mock-brief-markets.png)
 
 > **Maintenance rule:** these screenshots are generated from [`sample_payload.json`](sample_payload.json) by [`docs/render_screenshots.py`](docs/render_screenshots.py). Whenever a PR changes anything the brief renders, regenerate them (`python3 docs/render_screenshots.py`; captures in dark mode) and commit the updated PNGs. **This is enforced, not a convention:** the script records a fingerprint of the rendered HTML in `docs/screenshots.lock`, and a test fails CI if the current render no longer matches it — so a UI change cannot merge while the README still shows the old one. It fingerprints the HTML rather than the pixels because font rasterisation differs between macOS and the Linux CI runner.
 >
-> **Aesthetics are pinned.** Every colour and font lives in [`brief/theme.py`](brief/theme.py), and no renderer may hardcode one (a test enforces that). PRs must not alter any visual element unless the change is explicitly a requested design change — and the regenerated screenshots double as a visual-regression check: an unexpected visual diff in them means the PR touched aesthetics it shouldn't have. The test suite enforces the pin mechanically: `tests/test_email_brief.py` asserts the exact colour tokens, fonts and theme mechanics, so an aesthetic drift fails CI before it ships.
+> **Aesthetics are pinned.** Every color and font lives in [`brief/theme.py`](brief/theme.py), and no renderer may hardcode one (a test enforces that). PRs must not alter any visual element unless the change is explicitly a requested design change — and the regenerated screenshots double as a visual-regression check: an unexpected visual diff in them means the PR touched aesthetics it shouldn't have. The test suite enforces the pin mechanically: `tests/test_email_brief.py` asserts the exact color tokens, fonts and theme mechanics, so an aesthetic drift fails CI before it ships.
 
 ## Quick start — ask Claude to set it up for you
 
@@ -53,8 +53,8 @@ That's the whole setup. The rest of this README explains what you get and how to
 - **A "needs you today" action bar** — severity-striped items ranked by urgency.
 - **Standing sections, numbered in this order:** high priority (first, so it sits directly under the action bar), relevant job posts (exact-posting links, never tracking redirects), deposits & finances (external money separate from transfers between your own accounts), upcoming flights (carried forward until the trip date passes, with FlightAware links and each flight's recent on-time record), VoIP voicemails & texts, a US postal-mail digest via USPS Informed Delivery that details only your own mail and reduces everyone else's to a count, package tracking (kept until delivered, omitted entirely when nothing is in flight), and retail sales — always last, because it is the lowest-priority thing in the brief.
   Numbering is computed, so a section with nothing to show is omitted and the rest renumber rather than leaving a gap.
-- **Researched cards** when there's news: US markets (indexes and large caps), your fund tickers, crypto, the Fed & labour market, AI & programming, and research & publications from journals you pick. Market, fund and crypto tables carry labelled even axes, an explicit horizon on every figure (1D and 1W, plus YTD on funds, with as-of stamps), and absolute magnitudes ($ / index points) beside every percentage.
-- A fixed visual identity, rendered by code — light/dark themed HTML file, a fluid email layout that survives email-provider HTML sanitizers, colour-coded lead-ins, diverging bars on even axes, and mailpiece scans attached as JPGs.
+- **Researched cards** when there's news: US markets (indexes and large caps), your fund tickers, crypto, the Fed & labor market, AI & programming, and research & publications from journals you pick. Market, fund and crypto tables carry labelled even axes, an explicit horizon on every figure (1D and 1W, plus YTD on funds, with as-of stamps), and absolute magnitudes ($ / index points) beside every percentage.
+- A fixed visual identity, rendered by code — light/dark themed HTML file, a fluid email layout that survives email-provider HTML sanitizers, color-coded lead-ins, diverging bars on even axes, and mailpiece scans attached as JPGs.
 
 ## Manual Setup
 
@@ -79,12 +79,12 @@ On Outlook or others: send yourself one three-way test (data:-URI image, inline 
 | File | Purpose |
 |---|---|
 | `ROUTINE_PROMPT.template.md` | The prompt template — placeholders + optional sections. Says what to gather and how to hand it over; carries no design spec. |
-| `brief/` | The renderer and the logic the run calls into. `theme.py` holds every colour and font (the aesthetic pin) plus the escaping and link-safety helpers, `axes.py` the bar/axis arithmetic, `links.py` recovers real posting URLs from LinkedIn and Indeed tracking links and builds FlightAware idents, `postal.py` decides whether a printed mailpiece addressee is the owner, `significance.py` decides whether an extra send is warranted, `attachments.py` catches an attachment the send path would silently truncate, `model.py` the payload contract and its validation, `render.py` the three outputs, `__main__.py` the CLI. Pure standard library. |
+| `brief/` | The renderer and the logic the run calls into. `theme.py` holds every color and font (the aesthetic pin) plus the escaping and link-safety helpers, `axes.py` the bar/axis arithmetic, `links.py` recovers real posting URLs from LinkedIn and Indeed tracking links and builds FlightAware idents, `postal.py` decides whether a printed mailpiece addressee is the owner, `significance.py` decides whether an extra send is warranted, `attachments.py` catches an attachment the send path would silently truncate, `model.py` the payload contract and its validation, `render.py` the three outputs, `__main__.py` the CLI. Pure standard library. |
 | `sample_payload.json` | A complete worked example of the payload, with mock "Alex Sample" data. Doubles as the fixture for the tests and the README screenshots. |
 | `build_brief.py` | Thin wrapper that renders `sample_payload.json` — kept so `python3 build_brief.py` still works. |
 | `docs/render_screenshots.py` | Regenerates the README screenshots (run after design changes). Fails loudly if a selector goes stale. |
-| `tests/` | `test_links_postal.py` — link recovery and addressee classification. `test_units.py` — axis arithmetic, payload validation, CLI. `test_render_units.py` — escaping and link safety (payload text is email content), direction colouring, empty sections, determinism, and the log-axis path the sample payload doesn't reach. `test_email_brief.py` — rendered output, the aesthetic pin, prompt invariants, privacy. `test_rendering.py` — Chromium: layout, theming, bar geometry, axis alignment. |
-| Email budget | Gmail clips past ~102 KB, so the email body is budgeted at 85 KB. When the brief outgrows it the **email sheds whole research cards** in a fixed order — least actionable first — and says which ones and where to find them. The standalone file always carries everything; nothing is ever shortened or summarised, because a half-rendered table is worse than an absent one. |
+| `tests/` | `test_links_postal.py` — link recovery and addressee classification. `test_units.py` — axis arithmetic, payload validation, CLI. `test_render_units.py` — escaping and link safety (payload text is email content), direction coloring, empty sections, determinism, and the log-axis path the sample payload doesn't reach. `test_email_brief.py` — rendered output, the aesthetic pin, prompt invariants, privacy. `test_rendering.py` — Chromium: layout, theming, bar geometry, axis alignment. |
+| Email budget | Gmail clips past ~102 KB, so the email body is budgeted at 85 KB. When the brief outgrows it the **email sheds whole research cards** in a fixed order — least actionable first — and says which ones and where to find them. The standalone file always carries everything; nothing is ever shortened or summarized, because a half-rendered table is worse than an absent one. |
 | `.github/workflows/tests.yml` | CI — full suite on every push to `main` and every PR. |
 | `LICENSE` | MIT. |
 

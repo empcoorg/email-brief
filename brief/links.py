@@ -51,7 +51,7 @@ def indeed_job_url(tracking_url):
     True
     """
     if not tracking_url or "cts.indeed.com" not in tracking_url:
-        # already a direct link? then just normalise it
+        # already a direct link? then just normalize it
         return _jk_url(tracking_url)
     parts = [p for p in urlparse(tracking_url).path.split("/") if p]
     for token in parts:

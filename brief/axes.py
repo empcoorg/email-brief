@@ -58,7 +58,7 @@ def money_axis(amounts, target=3):
 
 
 def steps_per_side(axis):
-    """How many even steps sit between the centre line and either end."""
+    """How many even steps sit between the center line and either end."""
     mode, a, b = axis if len(axis) == 3 else ("linear",) + axis
     return int(round(b / a)) if mode == "linear" else int(round(math.log10(b / a)))
 
