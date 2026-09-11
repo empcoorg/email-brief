@@ -434,14 +434,29 @@ class TestSectionOrderAndOmission(unittest.TestCase):
              "Package tracking", "US market", "Cryptocurrency",
              "AI &amp; programming", "Research &amp; publications", "Retail sales"]
 
+    @staticmethod
+    def shed_from(email):
+        """Names the email says it dropped, read from its own trim note."""
+        m = re.search(r"Trimmed to fit the inbox</span> — ([^<]*?) (?:is|are) in the attached",
+                      email)
+        return [n.strip().replace("&amp;", "&") for n in m.group(1).split(",")] if m else []
+
+    @staticmethod
+    def without_note(email):
+        return re.sub(r"<table[^>]*>(?:(?!</table>).)*?Trimmed to fit the inbox.*?</table>", "",
+                      email, flags=re.S)
+
     def _positions(self, doc, names):
         return [n for _, n in sorted((doc.index(n), n) for n in names if n in doc)]
 
-    def test_file_and_email_order(self):
+    def test_file_order(self):
         f, em, _ = render_all(payload())
-        for doc, name in ((f, "file"), (em, "email")):
-            self.assertEqual(self._positions(doc, self.ORDER), self.ORDER,
-                             f"{name} section order drifted")
+        self.assertEqual(self._positions(f, self.ORDER), self.ORDER, "file section order drifted")
+        # the email may have shed research cards to fit the budget, but whatever
+        # survives must still be in the same relative order
+        body = self.without_note(em)
+        present = [n for n in self.ORDER if n in body]
+        self.assertEqual(self._positions(body, present), present, "email section order drifted")
 
     def test_high_priority_immediately_follows_the_action_bar(self):
         f, em, tx = render_all(payload())
@@ -508,7 +523,11 @@ class TestSectionsAsTables(unittest.TestCase):
                              ("AI &amp; programming", "What it means"),
                              ("Research &amp; publications", "Takeaway"),
                              ("Retail sales", "Dates")):
+            shed = [h.replace("&", "&amp;") for h in
+                    TestSectionOrderAndOmission.shed_from(em)]
             for doc, name in ((f, "file"), (em, "email")):
+                if name == "email" and heading in shed:
+                    continue      # shed to fit the budget; the file still has it
                 block = doc.split(heading)[1][:4000]
                 self.assertIn("<table", block, f"{name}: {heading} is not a table")
                 self.assertIn(col, block, f"{name}: {heading} missing column {col!r}")
@@ -636,3 +655,75 @@ class TestThreeHorizons(unittest.TestCase):
         f, em, tx = render_all(payload())
         for out in (f, em, tx):
             self.assertNotRegex(out, r"[^\s>]→[^\s<]", "an arrow is missing its spaces")
+
+
+class TestEmailBudgetShedding(unittest.TestCase):
+    """The email is a constrained medium and the brief outgrew it.
+
+    Gmail clips past ~102 KB. Rather than let it truncate mid-table, or make a
+    person decide at 6am which section to cut, the email sheds WHOLE cards in a
+    fixed order — least actionable first — and says which ones and where to find
+    them. The standalone file always carries everything.
+    """
+
+    PROBES = {"US market": "Russell 2000", "Large caps": "AAPL",
+              "Fed & labour market": "Nonfarm payrolls", "Cryptocurrency": "DOGE",
+              "AI & programming": "Cascade-2", "Research & publications": "diatom",
+              "Retail sales": "Northwind rewards"}
+
+    def _render_at(self, budget):
+        import brief.render as R
+        original = R.EMAIL_BUDGET_BYTES
+        try:
+            R.EMAIL_BUDGET_BYTES = budget
+            f, em, tx = R.render_all(payload())
+        finally:
+            R.EMAIL_BUDGET_BYTES = original
+        return f, em, tx
+
+    def _shed(self, em):
+        return [n for n, probe in self.PROBES.items() if probe not in em]
+
+    def test_email_always_fits_the_budget(self):
+        for budget in (85 * 1024, 70 * 1024, 50 * 1024):
+            _f, em, _t = self._render_at(budget)
+            self.assertLessEqual(len(em.encode("utf-8")), budget,
+                                 f"email exceeds a {budget // 1024} KB budget")
+
+    def test_shedding_follows_the_fixed_order(self):
+        from brief.render import SHED_ORDER
+        for budget in (85 * 1024, 70 * 1024, 50 * 1024):
+            _f, em, _t = self._render_at(budget)
+            shed = self._shed(em)
+            expected_prefix = list(SHED_ORDER)[:len(shed)]
+            self.assertEqual(sorted(shed), sorted(expected_prefix),
+                             f"at {budget // 1024} KB, shed {shed} not {expected_prefix}")
+
+    def test_a_tighter_budget_never_sheds_less(self):
+        counts = [len(self._shed(self._render_at(b)[1]))
+                  for b in (85 * 1024, 70 * 1024, 50 * 1024)]
+        self.assertEqual(counts, sorted(counts), f"shedding is not monotonic: {counts}")
+
+    def test_the_file_keeps_everything_that_the_email_sheds(self):
+        f, em, _t = self._render_at(50 * 1024)
+        shed = self._shed(em)
+        self.assertTrue(shed, "a 50 KB budget should force shedding")
+        for name in shed:
+            self.assertIn(self.PROBES[name], f, f"{name} must survive in the file")
+
+    def test_the_reader_is_told_what_was_dropped(self):
+        _f, em, _t = self._render_at(70 * 1024)
+        self.assertIn("Trimmed to fit the inbox", em)
+        for name in self._shed(em):
+            self.assertIn(name.replace("&", "&amp;"), em, f"{name} not named in the note")
+
+    def test_no_note_when_everything_fits(self):
+        _f, em, _t = self._render_at(10_000 * 1024)
+        self.assertNotIn("Trimmed to fit the inbox", em)
+        self.assertEqual(self._shed(em), [], "nothing should be shed under a huge budget")
+
+    def test_standing_sections_are_never_shed(self):
+        """Only research cards may go. What needs action always ships."""
+        _f, em, _t = self._render_at(50 * 1024)
+        for probe in ("High priority", "Deposits &amp; finances", "Upcoming flights"):
+            self.assertIn(probe, em, f"{probe} must never be shed")

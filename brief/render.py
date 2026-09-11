@@ -67,6 +67,9 @@ def _derive():
     g["FUND_1D"] = pct_axis([r[4] for r in FUNDS])
     g["FUND_1W"] = pct_axis([r[6] for r in FUNDS])
     g["FUND_YTD"] = pct_axis([r[8] for r in FUNDS])
+    g["STK_1D"] = pct_axis([r[3] for r in STOCKS])
+    g["STK_1W"] = pct_axis([r[5] for r in STOCKS])
+    g["STK_YTD"] = pct_axis([r[7] for r in STOCKS])
 
 
 def render_all(payload):
@@ -526,6 +529,13 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
                  + tdl("YTD", horizon_cell_file(ay, vy, FUND_YTD))
                  + tdl("As of", f'<span class="meta">{e(asof)}</span>') + '</tr>')
     o.append(f'</tbody></table></div>{axis_foot(FUND_1D, "1D NAV change, %")}{axis_foot(FUND_1W, "1W NAV change, %")}{axis_foot(FUND_YTD, "YTD NAV change, %")}<div class="cap">Change from the prior published NAV (1D), over one trading week (1W), and since the previous year-end (YTD) - each in $ and %. {axis_note(FUND_1D, "1D axis")}; {axis_note(FUND_1W, "1W axis")}; {axis_note(FUND_YTD, "YTD axis")}. ' + e(" ".join(f"{tk}: {note}" for tk, nm, nav, a1, v1, a7, v7, ay, vy, asof, note in FUNDS)) + '</div>')
+    o.append(f'<h3>Large caps</h3><div class="tbl-wrap"><table><thead><tr><th>Ticker</th><th style="text-align:right">Price</th><th>1D{axis_div(STK_1D)}</th><th>1W{axis_div(STK_1W)}</th><th>YTD{axis_div(STK_YTD)}</th></tr></thead><tbody>')
+    for tk, pr, a1, v1, a7, v7, ay, vy in STOCKS:
+        o.append('<tr>' + tdl("Ticker", f'<span class="lead">{e(tk)}</span>', "mono") + tdl("Price", e(pr), "num mono")
+                 + tdl("1D", horizon_cell_file(a1, v1, STK_1D))
+                 + tdl("1W", horizon_cell_file(a7, v7, STK_1W))
+                 + tdl("YTD", horizon_cell_file(ay, vy, STK_YTD)) + '</tr>')
+    o.append(f'</tbody></table></div>{axis_foot(STK_1D, "1D move, %")}{axis_foot(STK_1W, "1W move, %")}{axis_foot(STK_YTD, "YTD move, %")}<div class="cap">Same horizons as the indexes, each in $ per share and %. {axis_note(STK_1D, "1D axis")}; {axis_note(STK_1W, "1W axis")}; {axis_note(STK_YTD, "YTD axis")}.</div>')
     o.append(f'<div class="card wide"><h2>Cryptocurrency</h2><div class="tbl-wrap"><table><thead><tr><th>Asset</th><th style="text-align:right">Price</th><th>1D{axis_div(CRY_24)}</th><th>1W{axis_div(CRY_7D)}</th><th>YTD{axis_div(CRY_YTD)}</th></tr></thead><tbody>')
     for n, pr, v1, a1, v7, a7, vy, ay in CRYPTO_ROWS:
         o.append('<tr>' + tdl("Asset", f'<span class="lead">{e(n)}</span>', "mono") + tdl("Price", e(pr), "num mono")
@@ -535,6 +545,21 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
     o.append(f'</tbody></table></div>{axis_foot(CRY_24, "1D change, %")}{axis_foot(CRY_7D, "1W change, %")}{axis_foot(CRY_YTD, "YTD change, %")}<div class="cap">1D = rolling 24 h; 1W = rolling 7 days; YTD = since the last price of the previous year - crypto trades continuously, so there is no daily close and every window is measured back from the quote time. Each given as % and $. {axis_note(CRY_24, "1D axis")}; {axis_note(CRY_7D, "1W axis")}; {axis_note(CRY_YTD, "YTD axis")}. {e(CRYPTO_NOTE)}</div><ul>')
     for b in CRYPTO_BULLETS: o.append(li_lead(b))
     o.append('</ul></div>')
+    o.append('<div class="card wide"><h2>Fed &amp; labour market</h2><div class="tbl-wrap"><table><thead><tr><th>Indicator</th><th>Latest</th><th>Change · context</th><th>As of</th></tr></thead><tbody>')
+    for name, latest, context, asof in MACRO_ROWS:
+        o.append('<tr>' + tdl("Indicator", f'<span class="lead">{e(name)}</span>')
+                 + tdl("Latest", f'<b class="mono">{e(latest)}</b>')
+                 + tdl("Change · context", e(context))
+                 + tdl("As of", f'<span class="meta">{e(asof)}</span>') + '</tr>')
+    o.append('</tbody></table></div>')
+    o.append('<h3>Jobs by sector</h3><div class="tbl-wrap"><table><thead><tr><th>Sector</th><th style="text-align:right">Payrolls</th><th>Context</th><th>As of</th></tr></thead><tbody>')
+    for sector, change, context, asof in JOBS_SECTORS:
+        cls = "dir-pos" if not str(change).lstrip().startswith(("\u2212", "-")) else "dir-neg"
+        o.append('<tr>' + tdl("Sector", e(sector))
+                 + tdl("Payrolls", f'<span class="{cls} mono">{e(change)}</span>', "num")
+                 + tdl("Context", e(context))
+                 + tdl("As of", f'<span class="meta">{e(asof)}</span>') + '</tr>')
+    o.append(f'</tbody></table></div><div class="cap">{e(MACRO_NOTE)}</div></div>')
     o.append('<div class="card"><h2>AI &amp; programming</h2><div class="tbl-wrap"><table><thead><tr><th>Item</th><th>What it means</th><th>Source</th></tr></thead><tbody>')
     for t, d, link in AI_ITEMS:
         o.append('<tr>' + tdl("Item", f'<span class="lead">{e(t)}</span>')
@@ -642,21 +667,33 @@ def _seg(w, col): return f'<span style="display:inline-block;width:0;height:0;bo
 def _em_cell(pct, style):
     # font-size / line-height are inherited from the track table
     return f'<td width="{pct:.1f}%" style="{style}"></td>'
-def _em_half(cells, centre=False):
-    edge = f'border-right:1px solid {L["lineS"]};' if centre else ""
-    return (f'<td width="50%" valign="middle" style="{edge}">'
-            f'<table width="100%" cellpadding="0" cellspacing="0" style="table-layout:fixed;border-collapse:collapse">'
-            f'<tr>{cells}</tr></table></td>')
-def _em_track(left_cells, right_cells):
-    return ('<table width="100%" cellpadding="0" cellspacing="0" style="table-layout:fixed;border-collapse:collapse;margin-top:4px">'
-            f'<tr>{_em_half(left_cells, centre=True)}{_em_half(right_cells)}</tr></table>')
+
+
 def _em_bar(frac, col, right):
-    """frac 0..1 of one half-track; `right` puts the fill on the positive side."""
-    p = max(frac * 100, 3.0)
-    fill = _em_cell(p, f"border-top:5px solid {col};border-bottom:5px solid {col}")
-    pad = _em_cell(100 - p, f'border-bottom:1px solid {L["line"]}')
-    empty = _em_cell(100, f'border-bottom:1px solid {L["line"]}')
-    return _em_track(empty, fill + pad) if right else _em_track(pad + fill, empty)
+    """Fluid diverging bar for the email: ONE table row, four cells at most.
+
+    Percentage widths, so the track fills whatever width the column has; the
+    fill is drawn with border-top/border-bottom because backgrounds never
+    survive the sanitizer; the centre line is a border on the cell that ends at
+    zero. An earlier version nested a table inside each half, which read the
+    same and cost twice the bytes - and the email has a hard 85 KB budget, so
+    markup weight is a feature constraint, not a detail.
+    """
+    p = max(frac * 100, 3.0) / 2          # percent of the FULL track
+    fill = f"border-top:5px solid {col};border-bottom:5px solid {col}"
+    line = f'border-bottom:1px solid {L["line"]}'
+    centre = f';border-right:1px solid {L["lineS"]}'
+    if right:
+        cells = (_em_cell(50, line + centre)
+                 + _em_cell(p, fill) + _em_cell(50 - p, line))
+    else:
+        cells = (_em_cell(50 - p, line) + _em_cell(p, fill + centre)
+                 + _em_cell(50, line))
+    return ('<table width="100%" cellpadding="0" cellspacing="0" style="table-layout:fixed;'
+            'border-collapse:collapse;margin-top:4px;font-size:0;line-height:0">'
+            f'<tr>{cells}</tr></table>')
+
+
 def em_bar_div(pct, ax):
     return _em_bar(min(abs(pct) / ax[1], 1.0), L["pos"] if pct >= 0 else L["neg"], pct >= 0)
 def em_bar_money(amt, dirw):
@@ -671,7 +708,51 @@ LAYOUT_NOTE = ("Layout: one fluid layout for phone and desktop (the mail path st
                "The standalone file <b>morning-brief-2026-09-07.html</b> — full desktop tables, mobile cards, dark mode, collapsible sources, "
                "and embedded USPS scans — is delivered in the Claude session alongside this email.")
 
+# Gmail clips a message past ~102 KB and its sanitizer inflates the HTML ~12%,
+# so the body is budgeted at 85 KB. When the brief outgrows that, the EMAIL sheds
+# its least actionable cards in this order and says so; the standalone file
+# always carries everything. Shedding in a fixed order beats a human guessing
+# which section to cut at 6am, and beats Gmail truncating mid-table.
+EMAIL_BUDGET_BYTES = 85 * 1024
+SHED_ORDER = ("Retail sales", "Research & publications", "AI & programming",
+              "Fed & labour market", "Large caps", "Cryptocurrency", "US market")
+
+
+def _assemble_email(parts, droppable):
+    """Join the email, shedding whole cards until it fits the send budget.
+
+    `droppable` maps a card name to its index in `parts`. Cards are shed in
+    SHED_ORDER - least actionable first - and the reader is told which ones and
+    where to find them. Nothing is shortened or summarised: a half-rendered
+    table is worse than an absent one.
+    """
+    dropped = []
+    while len(("\n".join(parts)).encode("utf-8")) > EMAIL_BUDGET_BYTES:
+        nxt = next((n for n in SHED_ORDER if n in droppable and parts[droppable[n]]), None)
+        if nxt is None:
+            break                      # nothing left that may be shed
+        parts[droppable[nxt]] = ""
+        dropped.append(nxt)
+    if dropped:
+        note = ('<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid '
+                f'{L["line"]};border-left:4px solid {L["warn"]};border-radius:12px;margin-top:18px">'
+                f'<tr><td style="padding:12px 14px;font-family:{F_B};font-size:{BODY_FS};color:{L["ink"]}">'
+                f'{sp("Trimmed to fit the inbox", L["warn"])} — '
+                f'{e(", ".join(dropped))} '
+                f'{"is" if len(dropped) == 1 else "are"} in the attached brief file but not in this '
+                'email, which Gmail clips past ~102 KB. Nothing was shortened; whole cards were '
+                'dropped, least actionable first.</td></tr></table>')
+        parts.insert(-1, note)
+    return "\n".join(parts)
+
+
 def email_html():
+    droppable = {}
+
+    def mark(name):
+        """Record that the card just appended may be shed to fit the budget."""
+        droppable[name] = len(o) - 1
+
     o = [f'<div style="padding:12px 6px;font-family:{F_B};color:{L["ink"]}"><table width="100%" cellpadding="0" cellspacing="0" style="max-width:860px;margin:0 auto"><tr><td>']
     stamps = "".join(f'<div style="margin-top:8px">{lbl(k)}<div style="font-family:{F_M};font-size:14px">{e(v)}</div></div>' for k, v in [("Timezone", MAST["tz"]), ("Scheduled slot", MAST["slot"]), ("Window covered", MAST["window"]), ("Run stamp", MAST["run"])])
     o.append(f'<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid {L["line"]};border-radius:14px"><tr><td style="padding:18px 16px">'
@@ -788,7 +869,33 @@ def email_html():
     inner += tbl(["Fund · NAV · YTD", th_axis("1D", pct_labels(FUND_1D)), th_axis("1W", pct_labels(FUND_1W))], rws, ["30%", "35%", "35%"]) + cap("Change from the prior published NAV (1D), over one trading week (1W), and since the previous year-end (YTD). " + " ".join(f"{tk}: {note}" for tk, nm, nav, a1, v1, a7, v7, ay, vy, asof, note in FUNDS))
     inner += '<ul style="margin:8px 0 0;padding-left:20px">' + "".join(em_li(b) for b in MKT_BULLETS) + "</ul>"
     o.append(card(inner))
-    # crypto
+    mark("US market")
+    # large caps — its own card; appending to `inner` here re-emitted the whole
+    # market card, silently doubling ~25 KB of the email
+    inner = h2("Large caps")
+    rws = []
+    for tk, pr, a1, v1, a7, v7, ay, vy in STOCKS:
+        ky = L["pos"] if vy >= 0 else L["neg"]
+        rws.append([td(f'{lead(tk)}<br>{small(e(pr))}<br>{sp(f"YTD {pct_str(vy)} {arrow(vy)}", ky)}', mono=True),
+                    td(f'<div style="text-align:center">{sp(f"{e(a1)} · {pct_str(v1)} {arrow(v1)}", L["pos"] if v1 >= 0 else L["neg"])}</div>{em_bar_div(v1, STK_1D)}', mono=True),
+                    td(f'<div style="text-align:center">{sp(f"{e(a7)} · {pct_str(v7)} {arrow(v7)}", L["pos"] if v7 >= 0 else L["neg"])}</div>{em_bar_div(v7, STK_1W)}', mono=True)])
+    inner += tbl(["Ticker · price · YTD", th_axis("1D", pct_labels(STK_1D)), th_axis("1W", pct_labels(STK_1W))], rws, ["30%", "35%", "35%"])
+    o.append(card(inner))
+    mark("Large caps")
+    # Fed and labour market
+    inner = h2("Fed &amp; labour market")
+    inner += tbl(["Indicator", "Latest", "Change · context"],
+                 [[td(lead(n)), td(f"<b>{e(v)}</b>", mono=True), td(f"{e(c)}<br>{small(e(a))}")]
+                  for n, v, c, a in MACRO_ROWS], ["28%", "22%", "50%"])
+    inner += h3("Jobs by sector")
+    inner += tbl(["Sector", "Payrolls", "Context"],
+                 [[td(e(sec)),
+                   td(sp(e(ch), L["neg"] if str(ch).lstrip().startswith(("\u2212", "-")) else L["pos"]), mono=True),
+                   td(f"{e(ctx)}<br>{small(e(a))}")]
+                  for sec, ch, ctx, a in JOBS_SECTORS], ["30%", "18%", "52%"])
+    inner += cap(MACRO_NOTE)
+    o.append(card(inner))
+    mark("Fed & labour market")
     inner = h2("Cryptocurrency")
     rws = []
     for n, pr, v1, a1, v7, a7, vy, ay in CRYPTO_ROWS:
@@ -799,6 +906,7 @@ def email_html():
     inner += tbl(["Asset · price · YTD", th_axis("1D", pct_labels(CRY_24)), th_axis("1W", pct_labels(CRY_7D))], rws, ["30%", "35%", "35%"]) + cap(f"1D = rolling 24 h; 1W = rolling 7 days; YTD = since the previous year-end — crypto trades continuously, so every window runs back from the quote time. {axis_note(CRY_24, '1D axis')}; {axis_note(CRY_7D, '1W axis')}. {CRYPTO_NOTE}")
     inner += '<ul style="margin:8px 0 0;padding-left:20px">' + "".join(em_li(b) for b in CRYPTO_BULLETS) + "</ul>"
     o.append(card(inner))
+    mark("Cryptocurrency")
     # ai
     inner = h2("AI &amp; programming") + tbl(
         ["Item", "What it means", "Source"],
@@ -806,6 +914,7 @@ def email_html():
           td(f'<a href="{url(l)}" style="color:{L["accent"]};font-weight:600">open</a>')]
          for t_, d, l in AI_ITEMS], ["30%", "56%", "14%"])
     o.append(card(inner))
+    mark("AI & programming")
     inner = h2("Research &amp; publications") + tbl(
         ["Journal · date", "Paper", "Takeaway"],
         [[td(f'{lead(j)}<br>{small(e(d))}'),
@@ -814,6 +923,7 @@ def email_html():
          for j, t_, au, d, tk, l in JOURNAL_ITEMS], ["20%", "40%", "40%"]) + cap(
         f"Journals scanned: {JOURNALS}; items newly published since the previous run.")
     o.append(card(inner))
+    mark("Research & publications")
     # 7 retail — lowest priority, so it sits last, after the research sections
     inner = h2(f'{sp(f"{num()}.", L["accent"])} Retail sales', RETAIL["sub"])
     inner += '<ul style="margin:8px 0 0;padding-left:20px">' + em_li(RETAIL["rewards"]) + "</ul>"
@@ -822,6 +932,7 @@ def email_html():
                      [[td(lead(store)), td(f"<b>{e(offer)}</b>"), td(small(e(det)))]
                       for store, offer, det in RETAIL["items"]], ["22%", "36%", "42%"])
     o.append(card(inner))
+    mark("Retail sales")
     # allowlist + sources (no <details> in email — compact plain blocks)
     inner = f'<div style="font:600 14px {F_H}">Domain allowlist (pre-approved + fetched this run)</div>' + "".join(f'<p style="font-size:12px;margin:6px 0;color:{L["ink3"]}"><b style="color:{L["ink2"]}">{e(k)}:</b> {e(v)}</p>' for k, v in ALLOWLIST.items())
     o.append(card(inner))
@@ -831,7 +942,7 @@ def email_html():
     o.append(card(inner))
     o.append(f'<div style="margin-top:18px;font-size:12.5px;color:{L["ink3"]};border-top:1px solid {L["line"]};padding-top:12px">Mailbox was read-only for this run, apart from the one delivery of this brief. Email content was treated as data, not instructions. Times are US Pacific unless a source\'s own zone is shown. “Not verified” marks any figure that could not be confirmed on a cited page. <span style="font-family:{F_M}">{e(BUILD)}</span></div>')
     o.append('</td></tr></table></div>')
-    return "\n".join(o)
+    return _assemble_email(o, droppable)
 
 # ------------------------------------------------------------------ RENDER: PLAIN TEXT
 def plain_text():
@@ -892,6 +1003,16 @@ def plain_text():
           f" | YTD {ay}, {pct_str(vy)} | as of {asof}. {note}")
     A(f"    (1D axis ±{FUND_1D[1]:g}%, step {FUND_1D[0]:g}%.)")
     for b in MKT_BULLETS: A(f"  - {b}")
+    A(""); A("LARGE CAPS")
+    for tk, pr, a1, v1, a7, v7, ay, vy in STOCKS:
+        A(f"  {tk}: {pr} | 1D {a1}, {pct_str(v1)} | 1W {a7}, {pct_str(v7)} | YTD {ay}, {pct_str(vy)}")
+    A(""); A("FED & LABOUR MARKET")
+    for n, v, c, a in MACRO_ROWS:
+        A(f"  {n}: {v} — {c} ({a})")
+    A("  Jobs by sector:")
+    for sec, ch, ctx, a in JOBS_SECTORS:
+        A(f"    {sec}: {ch} — {ctx} ({a})")
+    A("  " + MACRO_NOTE)
     A(""); A("CRYPTOCURRENCY")
     for n, pr, v1, a1, v7, a7, vy, ay in CRYPTO_ROWS:
         A(f"  {n}: {pr} | 1D {pct_str(v1)} ({a1}) | 1W {pct_str(v7)} ({a7})"

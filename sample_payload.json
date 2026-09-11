@@ -537,5 +537,124 @@
   "Mailbox items referenced": [
    "https://example.com/mailbox-item-1"
   ]
- }
+ },
+ "STOCKS": [
+  [
+   "AAPL",
+   "$241.86",
+   "+2.14",
+   0.89,
+   "+5.02",
+   2.12,
+   "+38.40",
+   18.9
+  ],
+  [
+   "MSFT",
+   "$498.20",
+   "−3.35",
+   -0.67,
+   "+11.80",
+   2.42,
+   "+72.10",
+   16.9
+  ],
+  [
+   "GOOG",
+   "$212.55",
+   "+1.98",
+   0.94,
+   "+3.44",
+   1.65,
+   "+45.20",
+   27.0
+  ],
+  [
+   "TSLA",
+   "$364.10",
+   "−8.72",
+   -2.34,
+   "−15.40",
+   -4.06,
+   "+52.60",
+   16.9
+  ]
+ ],
+ "MACRO_ROWS": [
+  [
+   "Fed funds target",
+   "4.25–4.50%",
+   "unchanged at the January meeting",
+   "as of Mar 2"
+  ],
+  [
+   "Next FOMC",
+   "Mar 17–18",
+   "futures price a hold; a cut is priced for June",
+   "as of Mar 2"
+  ],
+  [
+   "10-yr Treasury",
+   "4.31%",
+   "+6 bp on the day",
+   "Mar 2 close"
+  ],
+  [
+   "CPI (headline, y/y)",
+   "2.6%",
+   "down from 2.9% in January",
+   "Feb data, released Mar 12"
+  ],
+  [
+   "Unemployment rate",
+   "4.1%",
+   "unchanged",
+   "Feb data"
+  ],
+  [
+   "Nonfarm payrolls",
+   "+151,000",
+   "below the +170,000 consensus",
+   "Feb data"
+  ]
+ ],
+ "JOBS_SECTORS": [
+  [
+   "Information / tech",
+   "−12,000",
+   "third consecutive monthly decline",
+   "Feb data"
+  ],
+  [
+   "Professional & business services",
+   "+21,000",
+   "staffing flat, consulting up",
+   "Feb data"
+  ],
+  [
+   "Biotech & pharma R&D",
+   "+4,300",
+   "hiring steady; layoffs concentrated in small caps",
+   "Feb data"
+  ],
+  [
+   "Health care & social assistance",
+   "+52,000",
+   "largest single contributor",
+   "Feb data"
+  ],
+  [
+   "Construction",
+   "+19,000",
+   "residential up, non-residential flat",
+   "Feb data"
+  ],
+  [
+   "Manufacturing",
+   "−9,000",
+   "durable goods led the decline",
+   "Feb data"
+  ]
+ ],
+ "MACRO_NOTE": "Fed and rate figures from federalreserve.gov and investing.com's rate monitor; labour figures from bls.gov. Sector figures are seasonally adjusted month-over-month change in payrolls."
 }

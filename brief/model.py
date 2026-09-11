@@ -42,6 +42,10 @@ SPEC = {
     "RETAIL":     ("obj", ("sub", "rewards", "items"), "retail: subtitle, rewards line, offer rows"),
     "MKT_ROWS":   ("rows", 8, "indexes: (name, close, pts1d, pct1d, pts1w, pct1w, pts_ytd, pct_ytd)"),
     "FUNDS":      ("rows", 11, "funds: (ticker, name, nav, amt1d, pct1d, amt1w, pct1w, amt_ytd, pct_ytd, asof, note)"),
+    "STOCKS":     ("rows", 8, "large caps: (ticker, price, amt1d, pct1d, amt1w, pct1w, amt_ytd, pct_ytd)"),
+    "MACRO_ROWS": ("rows", 4, "macro indicators: (indicator, latest, change/context, as-of)"),
+    "JOBS_SECTORS": ("rows", 4, "labour market by sector: (sector, change, context, as-of)"),
+    "MACRO_NOTE": ("str", None, "sourcing note for the macro and labour figures"),
     "MKT_BULLETS": ("list", None, "market bullets"),
     "CRYPTO_ROWS": ("rows", 8, "coins: (name, price, pct1d, amt1d, pct1w, amt1w, pct_ytd, amt_ytd)"),
     "CRYPTO_NOTE": ("str", None, "crypto sourcing note"),
@@ -168,7 +172,7 @@ def validate(payload):
                               "interests, so the run must decide it; the renderer cannot")
 
     for key, idx in (("MKT_ROWS", (3, 5, 7)), ("CRYPTO_ROWS", (2, 4, 6)),
-                     ("FUNDS", (4, 6, 8))):
+                     ("FUNDS", (4, 6, 8)), ("STOCKS", (3, 5, 7))):
         for n, row in enumerate(payload[key]):
             for i in idx:
                 if not isinstance(row[i], (int, float)):
