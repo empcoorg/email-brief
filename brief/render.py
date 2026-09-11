@@ -282,10 +282,16 @@ def bar_div(pct, ax):
                     for sgn in (-1, 1) for k in range(1, n + 1))
     return f'<div class="dbar" aria-hidden="true">{ticks}<div class="fill {cls} {side}" style="width:{max(w, 1.5):.1f}%"></div></div>'
 
-def li_lead(text):
+def lead_inner(text):
+    """Lead-in formatted for the FILE, without a list wrapper."""
     a, sep, b = lead_split(text)
-    if a: return f'<li><span class="lead">{e(a)}</span>{e(sep.rstrip()) if sep.strip()==":" else " —"} {e(b)}</li>'
-    return f'<li>{e(text)}</li>'
+    if a:
+        return f'<span class="lead">{e(a)}</span>{e(sep.rstrip()) if sep.strip() == ":" else " —"} {e(b)}'
+    return e(text)
+
+
+def li_lead(text):
+    return f"<li>{lead_inner(text)}</li>"
 
 def tdl(label, inner, cls=""):
     return f'<td class="{cls}" data-l="{attr(label)}">{inner}</td>'
@@ -399,7 +405,7 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
     num = SectionNumber()
     o.append(f'<section><h2><span class="num">{num()}.</span> High priority <span class="sub">ranked by severity \u00b7 act on these first</span></h2><div class="card"><div class="tbl-wrap"><table><thead><tr><th>Priority</th><th>What needs attention</th><th>Detail</th></tr></thead><tbody>')
     for sev, t, items in HIPRI:
-        detail = "<br>".join(li_lead(i)[4:-5] for i in items)
+        detail = "<br>".join(lead_inner(i) for i in items)
         o.append('<tr>' + tdl("Priority", sev_chip(sev))
                  + tdl("What needs attention", f'<b class="c-{sev}">{e(t)}</b>')
                  + tdl("Detail", detail) + '</tr>')
@@ -600,10 +606,16 @@ def sp(t, color, bold=True): return f'<span style="color:{color};{"font-weight:6
 def lead(t): return sp(e(t), L["accent"])
 def muted(t): return f'<span style="color:{L["ink3"]}">{t}</span>'
 def small(t): return f'<span style="color:{L["ink3"]};font-size:12.5px">{t}</span>'
-def em_li(text):
+def em_lead_inner(text):
+    """Lead-in formatted for the EMAIL, without a list wrapper."""
     a, sep, b = lead_split(text)
-    if a: return f'<li style="margin:9px 0">{lead(a)}{":" if sep.strip()==":" else " —"} {e(b)}</li>'
-    return f'<li style="margin:9px 0">{e(text)}</li>'
+    if a:
+        return f'{lead(a)}{":" if sep.strip() == ":" else " —"} {e(b)}'
+    return e(text)
+
+
+def em_li(text):
+    return f'<li style="margin:9px 0">{em_lead_inner(text)}</li>'
 def ul(items): return '<ul style="margin:8px 0 0;padding-left:20px">' + "".join(f'<li style="margin:9px 0">{i}</li>' for i in items) + "</ul>"
 def _seg(w, col): return f'<span style="display:inline-block;width:0;height:0;border-left:{w}px solid {col};border-top:5px solid {col};border-bottom:5px solid {col}"></span>'
 # FLUID DIVERGING BAR for the email. Percentage table cells, so the track fills
@@ -664,7 +676,7 @@ def email_html():
                 f'{sevcol[sev]};color:{sevcol[sev]};padding:1px 5px;border-radius:4px">'
                 f'{SEV_WORD.get(sev, sev.upper())}</span>')
         rws.append([td(chip), td(sp(e(t_), sevcol[sev])),
-                    td("<br>".join(em_li(i)[4:-5] for i in items))])
+                    td("<br>".join(em_lead_inner(i) for i in items))])
     inner += tbl(["Priority", "What needs attention", "Detail"], rws, ["16%", "30%", "54%"])
     o.append(card(inner))
     # 1 jobs — 3 columns
