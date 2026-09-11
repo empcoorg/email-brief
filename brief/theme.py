@@ -25,6 +25,43 @@ GOOGLE_FONTS = ("https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;7
 
 
 def e(s):
-    """Escape text for HTML. Quotes are left alone — attribute values in this
-    codebase are built from known-safe literals, never from payload text."""
+    """Escape payload text for use as ELEMENT CONTENT.
+
+    Quotes are left alone deliberately, so ordinary prose keeps its apostrophes
+    and quotation marks readable. Never use this for an attribute value — use
+    attr() or url() instead.
+    """
     return _html.escape(str(s), quote=False)
+
+
+def attr(s):
+    """Escape payload text for use inside a double-quoted ATTRIBUTE value.
+
+    Unlike e(), this escapes quotes. Payload values come from email — a link or
+    caption carrying a `"` would otherwise close the attribute early and inject
+    markup, which is precisely the prompt-injection channel the brief's
+    "email content is data, not instructions" rule exists to close.
+    """
+    return _html.escape(str(s), quote=True)
+
+
+# Schemes a link in the brief may use. Anything else (javascript:, vbscript:,
+# file:, a bare "data:text/html", ...) is refused rather than rendered: the
+# standalone file is opened in a browser, so a hostile href is executable.
+SAFE_SCHEMES = ("http://", "https://", "mailto:")
+
+
+def url(s):
+    """Escape a payload URL for an href/src, refusing unsafe schemes.
+
+    Returns "#" for anything that is not http(s), mailto, a protocol-relative
+    or same-document reference, or an inline image data URI.
+    """
+    raw = str(s).strip()
+    low = raw.lower()
+    ok = (low.startswith(SAFE_SCHEMES)
+          or low.startswith("data:image/")
+          or raw.startswith("//")
+          or raw.startswith("#")
+          or raw.startswith("/"))
+    return attr(raw) if ok else "#"
