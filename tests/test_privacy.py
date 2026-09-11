@@ -135,7 +135,7 @@ class TestCommitMetadata(unittest.TestCase):
         self.assertEqual(bad, [], f"commit author outside {sorted(self.APPROVED_AUTHORS)}: {bad}")
 
     def test_author_emails_leak_no_hostname(self):
-"""A default git identity ending in .local publishes the machine name."""
+        """A default git identity ending in .local publishes the machine name."""
         entries = self._authors()
         if len(entries) <= 1:
             self.skipTest("shallow checkout — no history to inspect")
