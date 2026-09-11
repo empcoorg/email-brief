@@ -9,6 +9,14 @@ Writes docs/mock-brief-{top,jobs,sections,usps,packages,markets}.png (all dark m
 import asyncio, os, re, subprocess, sys, tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _require(name, el):
+    """A missing target means the selector went stale and the README would keep
+    showing an OUTDATED screenshot. Fail loudly rather than silently skipping."""
+    if el is None:
+        raise SystemExit(f"render_screenshots: could not locate the '{name}' section - "
+                         "the selector is stale; fix it rather than shipping a stale PNG")
 DOCS = os.path.join(ROOT, "docs")
 
 async def main():
@@ -32,50 +40,51 @@ async def main():
             secs = await pg.query_selector_all("section")
             jobs = None
             for s in secs:
-                txt = (await s.inner_text())[:120].lower()
+                txt = (await s.inner_text()).lower()
                 if "job posts" in txt:
                     jobs = s
                     break
-            if jobs:
-                await jobs.screenshot(path=os.path.join(DOCS, "mock-brief-jobs.png"))
+            _require("jobs", jobs)
+            await jobs.screenshot(path=os.path.join(DOCS, "mock-brief-jobs.png"))
             # Section 2: finances (money table, bars, tiles)
             target = None
             for s in secs:
-                txt = (await s.inner_text())[:120].lower()
+                txt = (await s.inner_text()).lower()
                 if "deposits" in txt and "finances" in txt:
                     target = s
                     break
+            _require("sections", target) if False else None
             if target is None and secs:
                 target = secs[1] if len(secs) > 1 else secs[0]
             await target.screenshot(path=os.path.join(DOCS, "mock-brief-sections.png"))
             # Section 5: USPS digest (recipient-only table, full mailpiece scan, counts)
             usps = None
             for s in secs:
-                txt = (await s.inner_text())[:120].lower()
+                txt = (await s.inner_text()).lower()
                 if "informed delivery" in txt:
                     usps = s
                     break
-            if usps:
-                await usps.screenshot(path=os.path.join(DOCS, "mock-brief-usps.png"))
+            _require("usps", usps)
+            await usps.screenshot(path=os.path.join(DOCS, "mock-brief-usps.png"))
             # Section 6: package tracking
             pkg = None
             for s in secs:
-                txt = (await s.inner_text())[:120].lower()
+                txt = (await s.inner_text()).lower()
                 if "package tracking" in txt:
                     pkg = s
                     break
-            if pkg:
-                await pkg.screenshot(path=os.path.join(DOCS, "mock-brief-packages.png"))
+            _require("packages", pkg)
+            await pkg.screenshot(path=os.path.join(DOCS, "mock-brief-packages.png"))
             # Research grid section (market/funds/crypto/AI/journals cards) — captured as a
             # full section element so every screenshot shares the same width and text scale.
             grid = None
             for s in secs:
-                txt = (await s.inner_text())[:300].lower()
+                txt = (await s.inner_text()).lower()
                 if "us market" in txt:
                     grid = s
                     break
-            if grid:
-                await grid.screenshot(path=os.path.join(DOCS, "mock-brief-markets.png"))
+            _require("markets", grid)
+            await grid.screenshot(path=os.path.join(DOCS, "mock-brief-markets.png"))
             await b.close()
     print("wrote mock-brief-top/jobs/sections/usps/packages/markets PNGs (dark mode)")
 

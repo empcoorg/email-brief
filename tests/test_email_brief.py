@@ -97,7 +97,7 @@ class TestGeneratorOutputs(unittest.TestCase):
         self.assertGreaterEqual(page.count('class="dbar"'), 20,
                                 "file page lost its .dbar diverging tracks")
         # both horizons labelled identically in both tables
-        for probe in ("24H", "7D"):
+        for probe in ("1D", "1W"):
             self.assertIn(probe, page, f"file missing horizon label {probe}")
             self.assertIn(probe, em, f"email missing horizon label {probe}")
             self.assertIn(probe, tx, f"text missing horizon label {probe}")
@@ -152,15 +152,24 @@ class TestGeneratorOutputs(unittest.TestCase):
         self.assertLess(tx.index("NEEDS YOU TODAY"), tx.index("1. HIGH PRIORITY"))
         self.assertLess(tx.index("1. HIGH PRIORITY"), tx.index("2. RELEVANT JOB POSTS"))
 
-    def test_market_and_crypto_carry_24h_and_7d_bars(self):
-        """Both tables, both horizons, same bar scheme, separate even axes."""
+    def test_market_and_crypto_carry_1d_and_1w_bars(self):
+        """Both tables, both horizons, same bar scheme, separate even axes, and
+        labels that are true of BOTH asset classes — an equity move is never
+        '24H' (Fri->Mon close is ~65 hours)."""
         page, em, tx = self.r["page"], self.r["email"], self.r["text"]
         for out in (page, em):
             for sec in ("US market", "Cryptocurrency"):
                 block = out.split(sec)[1][:6000]
-                self.assertIn("24H", block, f"{sec} missing the 24H column")
-                self.assertIn("7D", block, f"{sec} missing the 7D column")
-        self.assertIn("24H", tx); self.assertIn("7D", tx)
+                self.assertIn("1D", block, f"{sec} missing the 1D column")
+                self.assertIn("1W", block, f"{sec} missing the 1W column")
+        # the precise mechanics live in each table's own caption
+        self.assertIn("close→close vs the prior session", page)
+        self.assertIn("trailing 5 sessions", page)
+        self.assertIn("rolling 24 h", page)
+        self.assertIn("no daily close", page)
+        for out in (page, em, tx):
+            self.assertNotIn("24H", out, "an equity move must never be labelled 24H")
+        self.assertIn("1D", tx); self.assertIn("1W", tx)
         self.assertNotIn(">MOVE<", page, "no per-table label variants")
 
     def test_flights_persist_and_state_airport_local_time(self):
@@ -310,7 +319,9 @@ class TestTemplate(unittest.TestCase):
             "LOWEST PRIORITY",                      # retail sales sits last
             "TWO INDEPENDENT SIGNALS",              # colour vs fit badge
             "THE AXIS MUST LINE UP WITH THE BARS",
-            "TWO CHART COLUMNS",                    # 24H + 7D
+            "TWO CHART COLUMNS",                    # 1D + 1W
+            "Never call an equity move \"24H\"",
+            "there is no daily close",              # crypto trades 24/7
             "THIS SECTION PERSISTS",                # flights
             "LOCAL TIME AT THAT AIRPORT",
             "THIS SPEC ALWAYS OUTRANKS THE PREVIOUS BRIEF",  # design changes must stick
