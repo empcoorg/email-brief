@@ -6,7 +6,7 @@ Run from the repo root after any design-affecting change (see README):
     python3 docs/render_screenshots.py
 Writes docs/mock-brief-{top,jobs,sections,usps,packages,markets}.png (all dark mode).
 """
-import asyncio, os, re, subprocess, sys, tempfile
+import asyncio, hashlib, os, re, subprocess, sys, tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -18,6 +18,33 @@ def _require(name, el):
         raise SystemExit(f"render_screenshots: could not locate the '{name}' section - "
                          "the selector is stale; fix it rather than shipping a stale PNG")
 DOCS = os.path.join(ROOT, "docs")
+
+LOCK = os.path.join(DOCS, "screenshots.lock")
+
+LOCK_HEADER = """\
+# Fingerprint of the rendered brief that the committed README screenshots show.
+#
+# Written by docs/render_screenshots.py, and checked by
+# tests/test_email_brief.py::TestScreenshotsAreCurrent. If that test fails, the
+# rendered UI changed but the screenshots were not regenerated: run
+#
+#     python3 docs/render_screenshots.py
+#
+# and commit the updated PNGs together with this file.
+#
+# This hashes the rendered HTML, not the pixels, because font rasterisation
+# differs between macOS and the Linux CI runner - a pixel comparison would fail
+# on every run regardless of whether anything actually changed.
+"""
+
+
+def _write_lock(page_path):
+    """Record what the screenshots were generated from."""
+    body = open(page_path, encoding="utf-8").read()
+    digest = hashlib.sha256(body.encode("utf-8")).hexdigest()
+    with open(LOCK, "w", encoding="utf-8") as fh:
+        fh.write(LOCK_HEADER + f"sha256 = {digest}\n")
+
 
 async def main():
     from playwright.async_api import async_playwright
@@ -85,6 +112,9 @@ async def main():
             _require("markets", grid)
             await grid.screenshot(path=os.path.join(DOCS, "mock-brief-markets.png"))
             await b.close()
+        # inside the temp dir, which is removed on exit from this block
+        _write_lock(page_html)
     print("wrote mock-brief-top/jobs/sections/usps/packages/markets PNGs (dark mode)")
+    print(f"wrote {LOCK} — CI fails if the UI changes without regenerating these")
 
 asyncio.run(main())

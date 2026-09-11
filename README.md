@@ -36,7 +36,7 @@ The web-researched market grid — US indexes with diverging bars, your fund tic
 
 ![Mock brief — US market and cryptocurrency sections](docs/mock-brief-markets.png)
 
-> **Maintenance rule:** these screenshots are generated from [`sample_payload.json`](sample_payload.json) by [`docs/render_screenshots.py`](docs/render_screenshots.py). Whenever a PR that changes the design or layout is merged, regenerate them (`python3 docs/render_screenshots.py`; captures in dark mode) and commit the updated PNGs, so the README always shows the current UI.
+> **Maintenance rule:** these screenshots are generated from [`sample_payload.json`](sample_payload.json) by [`docs/render_screenshots.py`](docs/render_screenshots.py). Whenever a PR changes anything the brief renders, regenerate them (`python3 docs/render_screenshots.py`; captures in dark mode) and commit the updated PNGs. **This is enforced, not a convention:** the script records a fingerprint of the rendered HTML in `docs/screenshots.lock`, and a test fails CI if the current render no longer matches it — so a UI change cannot merge while the README still shows the old one. It fingerprints the HTML rather than the pixels because font rasterisation differs between macOS and the Linux CI runner.
 >
 > **Aesthetics are pinned.** Every colour and font lives in [`brief/theme.py`](brief/theme.py), and no renderer may hardcode one (a test enforces that). PRs must not alter any visual element unless the change is explicitly a requested design change — and the regenerated screenshots double as a visual-regression check: an unexpected visual diff in them means the PR touched aesthetics it shouldn't have. The test suite enforces the pin mechanically: `tests/test_email_brief.py` asserts the exact colour tokens, fonts and theme mechanics, so an aesthetic drift fails CI before it ships.
 
@@ -78,11 +78,11 @@ On Outlook or others: send yourself one three-way test (data:-URI image, inline 
 | File | Purpose |
 |---|---|
 | `ROUTINE_PROMPT.template.md` | The prompt template — placeholders + optional sections. Says what to gather and how to hand it over; carries no design spec. |
-| `brief/` | The renderer. `theme.py` holds every colour and font (the aesthetic pin), `axes.py` the bar/axis arithmetic, `model.py` the payload contract and its validation, `render.py` the three outputs, `__main__.py` the CLI. Pure standard library. |
+| `brief/` | The renderer and the logic the run calls into. `theme.py` holds every colour and font (the aesthetic pin) plus the escaping and link-safety helpers, `axes.py` the bar/axis arithmetic, `links.py` recovers real posting URLs from LinkedIn and Indeed tracking links and builds FlightAware idents, `postal.py` decides whether a printed mailpiece addressee is the owner, `model.py` the payload contract and its validation, `render.py` the three outputs, `__main__.py` the CLI. Pure standard library. |
 | `sample_payload.json` | A complete worked example of the payload, with mock "Alex Sample" data. Doubles as the fixture for the tests and the README screenshots. |
 | `build_brief.py` | Thin wrapper that renders `sample_payload.json` — kept so `python3 build_brief.py` still works. |
 | `docs/render_screenshots.py` | Regenerates the README screenshots (run after design changes). Fails loudly if a selector goes stale. |
-| `tests/` | `test_units.py` — axis arithmetic, payload validation, CLI. `test_render_units.py` — escaping and link safety (payload text is email content), direction colouring, empty sections, determinism, and the log-axis path the sample payload doesn't reach. `test_email_brief.py` — rendered output, the aesthetic pin, prompt invariants, privacy. `test_rendering.py` — Chromium: layout, theming, bar geometry, axis alignment. |
+| `tests/` | `test_links_postal.py` — link recovery and addressee classification. `test_units.py` — axis arithmetic, payload validation, CLI. `test_render_units.py` — escaping and link safety (payload text is email content), direction colouring, empty sections, determinism, and the log-axis path the sample payload doesn't reach. `test_email_brief.py` — rendered output, the aesthetic pin, prompt invariants, privacy. `test_rendering.py` — Chromium: layout, theming, bar geometry, axis alignment. |
 | `.github/workflows/tests.yml` | CI — full suite on every push to `main` and every PR. |
 | `LICENSE` | MIT. |
 
@@ -91,7 +91,7 @@ On Outlook or others: send yourself one three-way test (data:-URI image, inline 
 The split is deliberate: **Claude decides what is true, the code decides what it looks like.**
 
 1. Claude reads your mailboxes and researches the web — judgement work: what matters, what ranks, what a scan says.
-2. It writes one `payload.json` — facts only, amounts and percentages as numbers.
+2. It writes one `payload.json` — facts only, amounts and percentages as numbers, and its own judgement calls (a job's fit tier, a movement's direction) as explicit values rather than something the renderer guesses.
 3. It runs `python3 -m brief render payload.json --out-dir …`, which validates the payload and renders the themed HTML file, the sanitizer-safe email and the plain-text fallback.
 4. It delivers the file in the session and emails the brief, verbatim as rendered.
 

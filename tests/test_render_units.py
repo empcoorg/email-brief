@@ -56,7 +56,7 @@ class TestEscaping(unittest.TestCase):
         """A job link arrives from an email. Before this was fixed, a crafted
         link closed the href and injected an event handler into the brief."""
         p = payload()
-        p["JOBS_TOP"][0][5] = 'https://x.test/" onmouseover="alert(1)'
+        p["JOBS_TOP"][0][6] = 'https://x.test/" onmouseover="alert(1)'   # [6] is the link
         p["USPS_SCANS"][0][0] = 'data:image/jpeg;base64,AAA" onload="alert(1)'
         f, em, _ = render_all(p)
         for out in (f, em):
@@ -65,6 +65,16 @@ class TestEscaping(unittest.TestCase):
             # the quote must survive as an escaped entity inside the href, not
             # as a real quote that ends the attribute
             self.assertIn("&quot;", out)
+
+
+class TestPayloadRowShape(unittest.TestCase):
+    """Row indices are part of the payload contract. When one shifts, a test
+    that pokes the wrong field fails somewhere unrelated and misleads."""
+
+    def test_jobs_top_row_layout(self):
+        role, company, comp, loc, src, fit, link = payload()["JOBS_TOP"][0]
+        self.assertIn(fit, ("strong", "related", ""))
+        self.assertTrue(link.startswith("http"), f"[6] should be the link, got {link!r}")
 
 
 class TestLinkSafety(unittest.TestCase):
