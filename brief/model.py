@@ -21,7 +21,7 @@ SPEC = {
     "MAST":       ("obj", ("title", "dateline", "tz", "window", "slot", "run", "note"), "masthead stamps"),
     "ACTIONS":    ("rows", 3, "action-bar rows: (severity, title, detail)"),
     "HIPRI":      ("rows", 3, "high-priority blocks: (severity, title, [items])"),
-    "JOBS_TOP":   ("rows", 6, "ranked job leads: (role, company, comp, location, source, link)"),
+    "JOBS_TOP":   ("rows", 7, "ranked job leads: (role, company, comp, location, source, fit, link)"),
     "JOBS_STATUS": ("rows", 3, "application status: (title, meta, detail)"),
     "JOBS_OTHER": ("rows", 4, "lower-fit leads: (role, company, location, link)"),
     "JOBS_RANKED_NOTE": ("str", None, "what the ranking was based on"),
@@ -52,6 +52,8 @@ SPEC = {
     "ALLOWLIST":  ("map", None, "domain allowlist block"),
     "SOURCES":    ("mapl", None, "sources, grouped"),
 }
+
+FIT_TIERS = ("strong", "related", "")
 
 FLIGHT_LEG_KEYS = ("date", "flight", "ident", "frm", "dep", "to", "arr", "fa")
 # "stats" (the flight's recent on-time record) is OPTIONAL: when the source is

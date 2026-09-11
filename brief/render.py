@@ -54,13 +54,18 @@ def lead_split(text):
     if m: return m.group(1), m.group(2), m.group(3)
     return None, "", text
 
-def job_fit(role):
-    r = role.lower()
-    strong = ("scientist", "computational", "genom", "rna", "crispr", "sequenc", "bioinformat", "biolog", "data scien", "postdoc")
-    related = ("ai", "ml", "machine", "engineer", "informatics", "knowledge")
-    if any(k in r for k in strong): return "Strong fit", "pos"
-    if any(k in r for k in related): return "Related", "accent"
-    return "", ""
+FIT_LABEL = {"strong": ("STRONG FIT", "pos"), "related": ("RELATED", "accent")}
+
+
+def job_fit(tier):
+    """Badge text and colour class for a payload fit tier.
+
+    The renderer does NOT decide fit. Which roles are a strong fit depends on
+    the owner's configured interests, which only the run knows; a keyword list
+    living here would silently judge every owner by one persona's vocabulary.
+    The payload carries the tier, this turns it into a badge.
+    """
+    return FIT_LABEL.get(tier or "", ("", ""))
 def loc_tier(loc):
     l = loc.lower()
     if any(k in l for k in ("boston", "denver", "preferred")): return "accent", "Preferred area"
@@ -308,8 +313,8 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
     for t, m, d in JOBS_STATUS:
         o.append(f'<li><span class="lead">{e(t)}</span> <span class="meta">— {e(m)}</span><br>{e(d)}</li>')
     o.append('</ul><h3>Ranked leads</h3><div class="tbl-wrap"><table><thead><tr><th>Role</th><th>Company</th><th>Comp</th><th>Location</th><th>Source · received</th><th>Link</th></tr></thead><tbody>')
-    for r, c, comp, loc, src, link in JOBS_TOP:
-        fit, fcls = job_fit(r); lcls, ltag = loc_tier(loc)
+    for r, c, comp, loc, src, tier, link in JOBS_TOP:
+        fit, fcls = job_fit(tier); lcls, ltag = loc_tier(loc)
         role = f'<b>{e(r)}</b>' + (f'<span class="badge c-{fcls}">{fit}</span>' if fit else "")
         compc = f'<span class="c-pos">{e(comp)}</span>' if comp != "not stated" else f'<span class="muted">{e(comp)}</span>'
         locc = f'<span class="c-accent">{e(loc)}</span>' if lcls else e(loc)
@@ -536,8 +541,8 @@ def email_html():
     inner += h3("Application status") + ul([f'{lead(t)} {small("— " + e(m))}<br>{e(d)}' for t, m, d in JOBS_STATUS])
     inner += h3("Ranked leads")
     rws = []
-    for r, c, comp, loc, src, link in JOBS_TOP:
-        fit, fcls = job_fit(r); lcls, _ = loc_tier(loc); fitc = L["pos"] if fcls == "pos" else L["accent"]
+    for r, c, comp, loc, src, tier, link in JOBS_TOP:
+        fit, fcls = job_fit(tier); lcls, _ = loc_tier(loc); fitc = L["pos"] if fcls == "pos" else L["accent"]
         badge = (f' <span style="font:600 10px {F_H};text-transform:uppercase;border:1px solid {fitc};color:{fitc};padding:0 5px;border-radius:4px">{fit}</span>' if fit else "")
         compc = sp(e(comp), L["pos"]) if comp != "not stated" else muted(e(comp))
         locc = sp(e(loc), L["accent"]) if lcls else e(loc)
@@ -661,8 +666,8 @@ def plain_text():
     A(""); A("2. RELEVANT JOB POSTS"); A("Application status:")
     for t, m, d in JOBS_STATUS: A(f"  - {t} — {m}\n    {d}")
     A("Ranked leads (fit tier in brackets):")
-    for r, c, comp, loc, src, link in JOBS_TOP:
-        fit, _ = job_fit(r); A(f"  - {r}{' ['+fit+']' if fit else ''} — {c} · {comp} · {loc} · {src}\n    {link}")
+    for r, c, comp, loc, src, tier, link in JOBS_TOP:
+        fit, _ = job_fit(tier); A(f"  - {r}{' ['+fit+']' if fit else ''} — {c} · {comp} · {loc} · {src}\n    {link}")
     A("Also seen (lower fit):")
     for r, c, loc, link in JOBS_OTHER: A(f"  - {r} — {c} · {loc} · {link}")
     A(ALIGNERR); A(JOBS_SKIPPED); A("")

@@ -269,13 +269,24 @@ class TestGeneratorOutputs(unittest.TestCase):
         self.assertLess(page.index("Research &amp; publications"), page.index("Retail sales"))
         self.assertLess(tx.index("US MARKET"), tx.index("8. RETAIL SALES"))
 
+    def test_every_ranked_lead_carries_a_fit_tier(self):
+        """A row with no badge is the symptom of the renderer guessing fit from
+        keywords it cannot know. The tier now comes from the payload, so every
+        ranked row is labelled."""
+        page = self.r["page"]
+        rows = re.findall(r'data-l="Role">(.*?)</td>', page)
+        self.assertGreaterEqual(len(rows), 3, "no ranked leads rendered")
+        unbadged = [re.sub("<[^>]+>", "", r)[:40] for r in rows if "badge" not in r]
+        self.assertEqual(unbadged, [], f"ranked leads with no fit badge: {unbadged}")
+
     def test_fit_badges_are_bordered_chips_labelled_strong_fit_and_related(self):
         """Fit badges are chips with a thin border in their own colour — never
         bare coloured text — and the near-miss label is RELATED, not ADJACENT."""
         page, em, tx = self.r["page"], self.r["email"], self.r["text"]
         for out, name in ((page, "file"), (em, "email"), (tx, "text")):
-            self.assertNotIn("Adjacent", out, f"{name} still uses the old ADJACENT label")
-            self.assertIn("Related", out, f"{name} missing the RELATED badge label")
+            self.assertNotIn(">ADJACENT<", out, f"{name} still uses the old ADJACENT badge")
+            self.assertIn("RELATED", out, f"{name} missing the RELATED badge label")
+            self.assertIn("STRONG FIT", out, f"{name} missing the STRONG FIT badge label")
         # file: themed chip via currentColor
         badge = re.search(r"\.badge\{([^}]*)\}", page).group(1)
         self.assertIn("border:1px solid currentColor", badge,
@@ -283,10 +294,10 @@ class TestGeneratorOutputs(unittest.TestCase):
         self.assertIn("border-radius:4px", badge)
         # email: the colour written literally (currentColor is unreliable there)
         chips = re.findall(r'<span style="[^"]*border:1px solid (#[0-9A-Fa-f]{6})[^"]*">'
-                           r'(Strong fit|Related)</span>', em)
+                           r'(STRONG FIT|RELATED)</span>', em)
         self.assertTrue(chips, "email fit badges must be bordered chips with a literal colour")
         for colour, label in chips:
-            expect = self.LIGHT_POS if label == "Strong fit" else self.LIGHT_ACCENT
+            expect = self.LIGHT_POS if label == "STRONG FIT" else self.LIGHT_ACCENT
             self.assertEqual(colour, expect, f"{label} chip border must be its own token")
 
     LIGHT_POS = "#1B7F4B"
@@ -420,6 +431,40 @@ class TestTemplate(unittest.TestCase):
                      "EMAIL VISUAL IDENTITY"):
             self.assertNotIn(gone, self.fence,
                              f"design prose {gone!r} is back in the prompt; it belongs in brief/")
+
+
+class TestScreenshotsAreCurrent(unittest.TestCase):
+    """The README screenshots must show the CURRENT UI.
+
+    Regenerating them was a prose convention in the README, followed by hand -
+    and it silently failed once already, leaving the market screenshot several
+    commits out of date. This makes it mechanical.
+
+    It compares a hash of the rendered HTML rather than the pixels: font
+    rasterisation differs between macOS and the Linux CI runner, so a pixel
+    comparison would fail on every run whether or not anything changed.
+    """
+
+    LOCK = os.path.join(ROOT, "docs", "screenshots.lock")
+
+    def test_lock_file_exists(self):
+        self.assertTrue(os.path.isfile(self.LOCK),
+                        "docs/screenshots.lock is missing - run python3 docs/render_screenshots.py")
+
+    def test_screenshots_match_the_current_render(self):
+        import hashlib
+        recorded = None
+        for line in open(self.LOCK, encoding="utf-8"):
+            if line.startswith("sha256"):
+                recorded = line.split("=", 1)[1].strip()
+        self.assertIsNotNone(recorded, "no sha256 recorded in docs/screenshots.lock")
+        actual = hashlib.sha256(render_once()["page"].encode("utf-8")).hexdigest()
+        self.assertEqual(
+            actual, recorded,
+            "The rendered brief has changed but the README screenshots were not "
+            "regenerated, so the README is showing a stale UI.\n"
+            "Fix: python3 docs/render_screenshots.py  (then commit docs/*.png and "
+            "docs/screenshots.lock)")
 
 
 class TestReadmeAndPrivacy(unittest.TestCase):
