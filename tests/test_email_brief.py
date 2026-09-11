@@ -120,14 +120,16 @@ class TestGeneratorOutputs(unittest.TestCase):
         self.assertRegex(page, r"\+\d+\.\d{2}% \u25b2")
         self.assertRegex(page, r"\u2212\d+\.\d{2}% \u25bc")
 
-    def test_fund_rows_carry_a_change_bar_on_an_even_axis(self):
+    def test_fund_rows_carry_change_bars_on_even_axes(self):
         page, em = self.r["page"], self.r["email"]
-        funds = page.split("Vanguard funds")[1][:4000]
-        self.assertIn('class="dbar"', funds, "fund rows must carry a 1D change bar")
-        self.assertIn('class="daxis"', funds, "the fund bar column needs its own ruler")
-        self.assertIn("1D axis", page)
-        # the email states the same axis as text above its bars
-        self.assertIn("NAV · 1D", em)
+        funds = page.split("Vanguard funds")[1][:6000]
+        self.assertIn('class="dbar"', funds, "fund rows must carry change bars")
+        self.assertIn('class="daxis"', funds, "each fund bar column needs its own ruler")
+        for horizon in ("1D", "1W", "YTD"):
+            self.assertIn(horizon, funds, f"funds missing {horizon}")
+            self.assertIn(f"{horizon} axis", page)
+        # the email is capped at three columns, so YTD rides in the first one
+        self.assertIn("Fund · NAV · YTD", em)
 
     def test_plain_text_is_a_full_fallback_not_a_stub(self):
         self.assertGreater(len(self.r["text"]), 4000)
@@ -225,7 +227,7 @@ class TestGeneratorOutputs(unittest.TestCase):
         self.assertLess(tx.index("NEEDS YOU TODAY"), tx.index("1. HIGH PRIORITY"))
         self.assertLess(tx.index("1. HIGH PRIORITY"), tx.index("2. RELEVANT JOB POSTS"))
 
-    def test_market_and_crypto_carry_1d_and_1w_bars(self):
+    def test_market_and_crypto_carry_1d_1w_and_ytd(self):
         """Both tables, both horizons, same bar scheme, separate even axes, and
         labels that are true of BOTH asset classes — an equity move is never
         '24H' (Fri->Mon close is ~65 hours)."""
@@ -233,10 +235,10 @@ class TestGeneratorOutputs(unittest.TestCase):
         for out in (page, em):
             for sec in ("US market", "Cryptocurrency"):
                 block = out.split(sec)[1][:6000]
-                self.assertIn("1D", block, f"{sec} missing the 1D column")
-                self.assertIn("1W", block, f"{sec} missing the 1W column")
+                for horizon in ("1D", "1W", "YTD"):
+                    self.assertIn(horizon, block, f"{sec} missing {horizon}")
         # the precise mechanics live in each table's own caption
-        self.assertIn("close→close vs the prior session", page)
+        self.assertIn("close → close vs the prior session", page)
         self.assertIn("trailing 5 sessions", page)
         self.assertIn("rolling 24 h", page)
         self.assertIn("no daily close", page)
