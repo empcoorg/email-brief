@@ -40,10 +40,10 @@ SPEC = {
     "PKG":        ("rows", 6, "shipments: (carrier, tracking, item, recipient, status, eta)"),
     "PKG_NOTE":   ("str", None, "package section note"),
     "RETAIL":     ("obj", ("sub", "rewards", "items"), "retail: subtitle, rewards line, offer rows"),
-    "MKT_ROWS":   ("rows", 6, "indexes: (name, close, pts1d, pct1d, pts1w, pct1w)"),
-    "FUNDS":      ("rows", 8, "funds: (ticker, name, nav, chg_amount, chg_pct, asof, ytd, note)"),
+    "MKT_ROWS":   ("rows", 8, "indexes: (name, close, pts1d, pct1d, pts1w, pct1w, pts_ytd, pct_ytd)"),
+    "FUNDS":      ("rows", 11, "funds: (ticker, name, nav, amt1d, pct1d, amt1w, pct1w, amt_ytd, pct_ytd, asof, note)"),
     "MKT_BULLETS": ("list", None, "market bullets"),
-    "CRYPTO_ROWS": ("rows", 6, "coins: (name, price, pct1d, amt1d, pct1w, amt1w)"),
+    "CRYPTO_ROWS": ("rows", 8, "coins: (name, price, pct1d, amt1d, pct1w, amt1w, pct_ytd, amt_ytd)"),
     "CRYPTO_NOTE": ("str", None, "crypto sourcing note"),
     "CRYPTO_BULLETS": ("list", None, "crypto bullets"),
     "AI_ITEMS":   ("rows", 3, "AI items: (title, detail, link)"),
@@ -167,7 +167,8 @@ def validate(payload):
                               f"{row[5]!r} — the fit tier depends on the owner's "
                               "interests, so the run must decide it; the renderer cannot")
 
-    for key, idx in (("MKT_ROWS", (3, 5)), ("CRYPTO_ROWS", (2, 4)), ("FUNDS", (4,))):
+    for key, idx in (("MKT_ROWS", (3, 5, 7)), ("CRYPTO_ROWS", (2, 4, 6)),
+                     ("FUNDS", (4, 6, 8))):
         for n, row in enumerate(payload[key]):
             for i in idx:
                 if not isinstance(row[i], (int, float)):
