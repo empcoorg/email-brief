@@ -69,6 +69,18 @@
   "sales": [
    "Northwind Outfitters — Spring Kickoff, 20–40% off outerwear: ends Sun Mar 8. Caveat: excludes new arrivals; no adjustments to prior purchases.",
    "Cascade Home — nothing in the window."
+  ],
+  "items": [
+   [
+    "Northwind Outfitters",
+    "Fall clearance, 30–50% off",
+    "Mar 2–Mar 9 · excludes new arrivals · member card required"
+   ],
+   [
+    "Cascade Home",
+    "Bedding event, 25% off",
+    "Ends Mar 8 · online only · code SLEEP25 · no adjustments to prior purchases"
+   ]
   ]
  },
  "ACTIONS": [
@@ -233,7 +245,19 @@
  "VOIP": {
   "headline": "One text message in the window; no voicemails.",
   "last_msg": "Text (Mon Mar 2, 2:12 PM EST) — from 555-010-7788 (Riley, Maple Street Dental) to 555-010-0001: “Hi Alex, confirming your cleaning Thu Mar 5 at 2:30 PM. Reply YES to confirm.”",
-  "last_acct": "Last provider account notice: Feb 26 — routine invoice receipt. No login alerts or blocked-call warnings since."
+  "last_acct": "Last provider account notice: Feb 26 — routine invoice receipt. No login alerts or blocked-call warnings since.",
+  "messages": [
+   [
+    "Mon Mar 2, 2:12 PM EST",
+    "555-010-7788 · Riley, Maple Street Dental",
+    "555-010-0001",
+    "Text",
+    "Hi Alex, confirming your cleaning Thu Mar 5 at 2:30 PM. Reply YES to confirm."
+   ]
+  ],
+  "notes": [
+   "Last provider account notice: Feb 26 — routine invoice receipt. No login alerts or blocked-call warnings since."
+  ]
  },
  "HIPRI": [
   [

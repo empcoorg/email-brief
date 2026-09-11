@@ -253,7 +253,9 @@ class TestTieredDetail(unittest.TestCase):
 
     def test_tiers_are_visually_weighted_not_just_concatenated(self):
         f, em, _ = render_all(self._row(self.THREE))
-        cell = f.split('data-l="Detail"')[1].split("</td>")[0]
+        # scope to the money table — High priority also has a Detail column
+        fin = f.split("Deposits &amp; finances")[1]
+        cell = fin.split('data-l="Detail"')[1].split("</td>")[0]
         self.assertEqual(cell.count("<br>"), 2, "tiers must be separate lines")
         self.assertIn('class="meta"', cell, "tier 2 must be muted")
         self.assertIn("font-size:12px", cell, "tier 3 must be smaller still")
@@ -280,7 +282,8 @@ class TestTieredDetail(unittest.TestCase):
 
     def test_blank_lines_are_dropped_not_rendered_as_gaps(self):
         f, _, _ = render_all(self._row(["Real line", "", "   "]))
-        cell = f.split('data-l="Detail"')[1].split("</td>")[0]
+        fin = f.split("Deposits &amp; finances")[1]
+        cell = fin.split('data-l="Detail"')[1].split("</td>")[0]
         self.assertNotIn("<br>", cell, "empty tiers must not leave blank lines")
 
 
@@ -414,3 +417,117 @@ class TestCliBudget(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class TestSectionOrderAndOmission(unittest.TestCase):
+    """Document order is fixed by the renderer, not by a prose instruction.
+
+    A live brief once shipped with Upcoming flights after Retail sales and High
+    priority away from the top — an order this renderer cannot produce. Pinning
+    it here makes any future report of that kind immediately diagnosable: if
+    these pass, the document did not come from this code.
+    """
+
+    ORDER = ["High priority", "Relevant job posts", "Deposits &amp; finances",
+             "Upcoming flights", "VoIP voicemails", "USPS Informed Delivery",
+             "Package tracking", "US market", "Cryptocurrency",
+             "AI &amp; programming", "Research &amp; publications", "Retail sales"]
+
+    def _positions(self, doc, names):
+        return [n for _, n in sorted((doc.index(n), n) for n in names if n in doc)]
+
+    def test_file_and_email_order(self):
+        f, em, _ = render_all(payload())
+        for doc, name in ((f, "file"), (em, "email")):
+            self.assertEqual(self._positions(doc, self.ORDER), self.ORDER,
+                             f"{name} section order drifted")
+
+    def test_high_priority_immediately_follows_the_action_bar(self):
+        f, em, tx = render_all(payload())
+        for doc in (f, em):
+            between = doc[doc.index("Needs you today"):doc.index("High priority")]
+            for other in ("Relevant job posts", "Retail sales", "Upcoming flights"):
+                self.assertNotIn(other, between, f"{other} sits between the action bar and High priority")
+        self.assertLess(tx.index("NEEDS YOU TODAY"), tx.index("1. HIGH PRIORITY"))
+
+    def test_retail_is_last_and_flights_are_not(self):
+        f, _, _ = render_all(payload())
+        self.assertGreater(f.index("Retail sales"), f.index("Upcoming flights"))
+        self.assertGreater(f.index("Retail sales"), f.index("Research &amp; publications"))
+
+    def test_numbering_closes_the_gap_when_a_section_is_omitted(self):
+        full, _, _ = render_all(payload())
+        nopkg, _, _ = render_all(payload(PKG=[]))
+        self.assertEqual(re.findall(r'<span class="num">(\d)\.', full), list("12345678"))
+        self.assertEqual(re.findall(r'<span class="num">(\d)\.', nopkg), list("1234567"),
+                         "omitting a section must renumber, not leave a hole")
+
+    def test_package_section_dropped_when_empty_kept_when_not(self):
+        full, femail, ftext = render_all(payload())
+        for out, probe in ((full, "Package tracking"), (femail, "Package tracking"),
+                           (ftext, "PACKAGE TRACKING")):
+            self.assertIn(probe, out)
+        empty, eemail, etext = render_all(payload(PKG=[]))
+        for out, probe in ((empty, "Package tracking"), (eemail, "Package tracking"),
+                           (etext, "PACKAGE TRACKING")):
+            self.assertNotIn(probe, out, "an empty package section must be omitted, not left blank")
+
+
+class TestBuildMarker(unittest.TestCase):
+    """Every output carries a fingerprint of the render, so a hand-written brief
+    imitating this design can be told apart from one this code produced."""
+
+    def test_marker_present_in_all_three_outputs(self):
+        f, em, tx = render_all(payload())
+        marks = set(re.findall(r"brief-[0-9a-f]{12}", f + em + tx))
+        self.assertEqual(len(marks), 1, f"expected one consistent marker, saw {marks}")
+
+    def test_marker_changes_with_the_payload(self):
+        a = re.search(r"brief-[0-9a-f]{12}", render_all(payload())[0]).group(0)
+        b = re.search(r"brief-[0-9a-f]{12}",
+                      render_all(payload(JOURNALS="Different"))[0]).group(0)
+        self.assertNotEqual(a, b, "the marker must fingerprint the payload")
+
+    def test_cli_prints_the_marker(self):
+        td = tempfile.mkdtemp()
+        r = subprocess.run([sys.executable, "-m", "brief", "render", "sample_payload.json",
+                            "--out-dir", td, "--date", "2026-09-07"],
+                           cwd=ROOT, capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertRegex(r.stdout, r"build brief-[0-9a-f]{12}")
+
+
+class TestSectionsAsTables(unittest.TestCase):
+    """Five sections read as tables rather than bullet lists."""
+
+    def test_each_section_renders_a_table(self):
+        f, em, _ = render_all(payload())
+        for heading, col in (("High priority", "What needs attention"),
+                             ("VoIP voicemails", "Message"),
+                             ("AI &amp; programming", "What it means"),
+                             ("Research &amp; publications", "Takeaway"),
+                             ("Retail sales", "Dates")):
+            for doc, name in ((f, "file"), (em, "email")):
+                block = doc.split(heading)[1][:4000]
+                self.assertIn("<table", block, f"{name}: {heading} is not a table")
+                self.assertIn(col, block, f"{name}: {heading} missing column {col!r}")
+
+    def test_high_priority_rows_are_colour_coded_by_severity(self):
+        f, em, _ = render_all(payload())
+        hp = f.split("High priority")[1][:3000]
+        self.assertRegex(hp, r'class="badge c-(warn|neg|info|ok)"')
+        self.assertRegex(hp, r'class="c-(warn|neg|info|ok)"')
+        # the email has no classes, so severity rides on an inline colour
+        ehp = em.split("High priority")[1][:3000]
+        self.assertRegex(ehp, r"border:1px solid #[0-9A-F]{6};color:#[0-9A-F]{6}")
+
+    def test_email_tables_stay_within_three_columns(self):
+        _, em, _ = render_all(payload())
+        counts = [len(re.findall(r"<th\b", row))
+                  for row in re.findall(r"<tr>(.*?)</tr>", em, re.S)]
+        self.assertTrue(all(c <= 3 for c in counts), f"saw {max(counts or [0])} columns")
+
+    def test_email_stays_within_the_send_budget(self):
+        _, em, _ = render_all(payload())
+        size = len(em.encode("utf-8"))
+        self.assertLess(size, 85 * 1024, f"email is {size:,} B, over the Gmail budget")

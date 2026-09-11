@@ -72,7 +72,7 @@ class TestGeneratorOutputs(unittest.TestCase):
             self.assertIn(f">{i}.</span>", self.r["email"], f"email missing section {i}")
         for line in ("1. HIGH PRIORITY", "2. RELEVANT JOB POSTS",
                      "4. UPCOMING FLIGHTS", "6. USPS INFORMED DELIVERY",
-                     "7. PACKAGE TRACKING", "8. RETAIL SALES"):
+                     "PACKAGE TRACKING", "8. RETAIL SALES"):
             self.assertIn(line, self.r["text"])
 
     # (heading in the file, heading in the email, heading in the plain text)
@@ -409,6 +409,8 @@ class TestTemplate(unittest.TestCase):
             "LINK EVERY FLIGHT NUMBER TO FLIGHTAWARE",
             'OMIT the leg\'s "stats" field',       # drop the column, do not apologise
             "WORK DOWN THIS CHAIN",               # fund NAV fallback sources
+            "QUOTE THAT MARKER",                  # proof the renderer ran
+            "keep a shipment in the payload until the carrier reports it delivered",
             "stooq.com",                          # the most robust fund source
             'Never call an equity move "24H"',
             "there is no daily close",            # crypto trades 24/7

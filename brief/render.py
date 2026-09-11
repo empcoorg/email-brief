@@ -10,7 +10,7 @@ renderers run, so each renderer reads them directly. That keeps the functions
 short, and the CLI renders once per process, so the shared binding is not a
 concurrency concern.
 """
-import base64, html as H, math, os
+import base64, hashlib, html as H, json, math, os
 
 from .axes import (fraction, money_axis as _money_axis_calc, money_labels, money_tick,
                    nice_step_top, pct_axis, pct_labels, pct_tick, steps_per_side,
@@ -18,6 +18,39 @@ from .axes import (fraction, money_axis as _money_axis_calc, money_labels, money
 from .theme import BODY_FS, D, F_B, F_H, F_M, GOOGLE_FONTS, L, attr, e, url
 
 __all__ = ["render_all", "file_html", "email_html", "plain_text"]
+
+
+SEV_WORD = {"warn": "CHECK", "neg": "URGENT", "info": "NOTE", "ok": "CLEAR"}
+
+
+def sev_chip(sev):
+    """Severity as a bordered chip in its own colour."""
+    return f'<span class="badge c-{sev}" style="margin-left:0">{SEV_WORD.get(sev, sev.upper())}</span>'
+
+
+class SectionNumber:
+    """Consecutive numbering. Omitting a section used to leave a hole, because
+    the numbers were written into each heading by hand while the prompt carried
+    the renumbering rule as prose. Counting is arithmetic."""
+
+    def __init__(self):
+        self.n = 0
+
+    def __call__(self):
+        self.n += 1
+        return self.n
+
+
+def build_marker(payload):
+    """Fingerprint embedded in all three outputs.
+
+    A run that hand-writes HTML imitating this design gets the styling roughly
+    right and the structure wrong, in ways no test here can catch: the tests
+    exercise the renderer, and a hand-written document never reaches it. Every
+    output carries this marker and the run quotes it back. No marker, no render.
+    """
+    body = json.dumps(payload, sort_keys=True, ensure_ascii=False, default=str)
+    return "brief-" + hashlib.sha256(body.encode("utf-8")).hexdigest()[:12]
 
 
 def _derive():
@@ -38,6 +71,7 @@ def render_all(payload):
     Returns (file_html, email_html, plain_text).
     """
     globals().update(payload)
+    globals()["BUILD"] = build_marker(payload)
     _derive()
     return file_html(), email_html(), plain_text()
 
@@ -308,6 +342,8 @@ td.num{{text-align:right;white-space:nowrap}}
 .daxis span{{position:absolute;top:5px;font:500 8.5px 'JetBrains Mono',monospace;letter-spacing:0;text-transform:none;color:var(--ink-3);transform:translateX(-50%)}}
 .daxis span.l{{transform:none}} .daxis span.r{{transform:translateX(-100%)}}
 .daxis-foot{{display:none}}
+/* the figure sits centred over the track, i.e. over the axis zero the bar grows from */
+.barfig{{display:block;text-align:center;margin-bottom:2px}}
 .cap{{font-size:12.5px;color:var(--ink-3);padding:8px 2px}}
 .tiles{{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}}
 .tile{{background:var(--surface-2);border-radius:10px;padding:12px 14px}} .tile .v{{font-size:22px;font-weight:700;margin:2px 0}} .tile .d{{font-size:12.5px;color:var(--ink-3)}}
@@ -360,12 +396,16 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
         o.append(f'<div class="act {sev}"><div class="stripe"></div><div class="body"><div class="act-title"><span class="tag">{tagmap[sev]}</span>{e(t)}</div><div class="det">{e(d)}</div></div></div>')
     o.append('</div></section>')
     # 4 high priority
-    o.append('<section><h2><span class="num">1.</span> High priority</h2><div class="card">')
+    num = SectionNumber()
+    o.append(f'<section><h2><span class="num">{num()}.</span> High priority <span class="sub">ranked by severity \u00b7 act on these first</span></h2><div class="card"><div class="tbl-wrap"><table><thead><tr><th>Priority</th><th>What needs attention</th><th>Detail</th></tr></thead><tbody>')
     for sev, t, items in HIPRI:
-        o.append(f'<div class="hp {sev}"><div class="t">{e(t)}</div><ul>' + "".join(li_lead(i) for i in items) + "</ul></div>")
-    o.append('</div></section>')
+        detail = "<br>".join(li_lead(i)[4:-5] for i in items)
+        o.append('<tr>' + tdl("Priority", sev_chip(sev))
+                 + tdl("What needs attention", f'<b class="c-{sev}">{e(t)}</b>')
+                 + tdl("Detail", detail) + '</tr>')
+    o.append('</tbody></table></div></div></section>')
     # 1 jobs
-    o.append(f'<section><h2><span class="num">2.</span> Relevant job posts <span class="sub">{e(JOBS_RANKED_NOTE)}</span></h2><div class="card">')
+    o.append(f'<section><h2><span class="num">{num()}.</span> Relevant job posts <span class="sub">{e(JOBS_RANKED_NOTE)}</span></h2><div class="card">')
     o.append('<h3 style="margin-top:0">Application status</h3><ul class="jobs">')
     for t, m, d in JOBS_STATUS:
         o.append(f'<li><span class="lead">{e(t)}</span> <span class="meta">— {e(m)}</span><br>{e(d)}</li>')
@@ -384,7 +424,7 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
         o.append(f'<li>{e(r)} — {e(c)} · {locc} · <a href="{url(link)}">link</a></li>')
     o.append(f'</ul><p class="meta">{e(ALIGNERR)}</p><p class="meta">{e(JOBS_SKIPPED)}</p></div></section>')
     # 2 finances
-    o.append('<section><h2><span class="num">3.</span> Deposits &amp; finances</h2><div class="card"><div class="tiles">')
+    o.append(f'<section><h2><span class="num">{num()}.</span> Deposits &amp; finances</h2><div class="card"><div class="tiles">')
     for l, v, d in FIN_SUMMARY:
         o.append(f'<div class="tile"><div class="lbl">{e(l)}</div><div class="v mono">{e(v)}</div><div class="d">{e(d)}</div></div>')
     o.append('</div><h3 style="margin-top:0">Money movements (outside → you / you → outside)</h3><div class="tbl-wrap"><table><thead><tr><th>When</th><th>Payee / source</th><th>Detail</th><th>Direction</th><th style="text-align:right">Amount</th><th>Out ← 0 → In, USD {axis_html}</th></tr></thead><tbody>'.format(axis_html=money_axis()))
@@ -398,7 +438,7 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
     o.append('</ul></div></section>')
     # 3 voip
     # 4 upcoming flights — persists until the trip date passes
-    o.append('<section><h2><span class="num">4.</span> Upcoming flights <span class="sub">carried forward until the trip date passes</span></h2><div class="card">')
+    o.append(f'<section><h2><span class="num">{num()}.</span> Upcoming flights <span class="sub">carried forward until the trip date passes</span></h2><div class="card">')
     o.append(f'<p><span class="lead">{e(FLIGHTS["airline"])}, confirmation {e(FLIGHTS["conf"])}</span> — {e(FLIGHTS["pax"])}</p>')
     o.append(f'<p class="meta">{e(FLIGHTS["booked"])}</p>')
     # The on-time column exists only when at least one leg actually has a
@@ -417,9 +457,19 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
             row += tdl("Recent on-time record", e(g.get("stats") or "not available"), "meta")
         o.append('<tr>' + row + '</tr>')
     o.append(f'</tbody></table></div><div class="cap">{e(FLIGHTS["note"])}</div></div></section>')
-    o.append(f'<section><h2><span class="num">5.</span> VoIP voicemails &amp; texts <span class="sub">searched by the configured provider senders + Google Voice, Twilio, OpenPhone, Grasshopper, RingCentral, Dialpad</span></h2><div class="card"><div class="nothing">{e(VOIP["headline"])}</div><ul>{li_lead(VOIP["last_msg"])}{li_lead(VOIP["last_acct"])}</ul></div></section>')
+    o.append(f'<section><h2><span class="num">{num()}.</span> VoIP voicemails &amp; texts <span class="sub">provider senders + Google Voice, Twilio, OpenPhone, Grasshopper, RingCentral, Dialpad</span></h2><div class="card"><div class="nothing">{e(VOIP["headline"])}</div>')
+    if VOIP["messages"]:
+        o.append('<div class="tbl-wrap"><table><thead><tr><th>When \u00b7 from</th><th>To \u00b7 type</th><th>Message</th></tr></thead><tbody>')
+        for when, frm, to, kind, text in VOIP["messages"]:
+            o.append('<tr>' + tdl("When \u00b7 from", f'<span class="mono">{e(when)}</span><br>{e(frm)}')
+                     + tdl("To \u00b7 type", f'<span class="mono">{e(to)}</span><br><span class="meta">{e(kind)}</span>')
+                     + tdl("Message", e(text)) + '</tr>')
+        o.append('</tbody></table></div>')
+    if VOIP["notes"]:
+        o.append("<ul>" + "".join(li_lead(n) for n in VOIP["notes"]) + "</ul>")
+    o.append('</div></section>')
     # 5 USPS
-    o.append(f'<section><h2><span class="num">6.</span> USPS Informed Delivery <span class="sub">mail addressed to the intended recipient only; everyone else counted, never named</span></h2><div class="card"><div class="nothing">{e(USPS["headline"])}</div>')
+    o.append(f'<section><h2><span class="num">{num()}.</span> USPS Informed Delivery <span class="sub">mail addressed to the intended recipient only; everyone else counted, never named</span></h2><div class="card"><div class="nothing">{e(USPS["headline"])}</div>')
     o.append('<div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Sender</th><th>Addressee (as printed)</th><th>Type / notes</th></tr></thead><tbody>')
     for d_, s_, a_, ty in USPS["pieces"]:
         o.append('<tr>' + tdl("Date", e(d_), "mono") + tdl("Sender", e(s_)) + tdl("Addressee (as printed)", e(a_), "mono") + tdl("Type / notes", e(ty), "meta") + '</tr>')
@@ -427,27 +477,30 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
     for uri, cap_ in USPS_SCANS:
         o.append(f'<figure class="scanfig"><img src="{url(uri)}" alt="Full mailpiece scan (mock)"><figcaption>{e(cap_)}</figcaption></figure>')
     o.append(f'<ul>{li_lead(USPS["counts"])}</ul><p class="meta">{e(USPS["note"])}</p></div></section>')
-    # 6 package tracking
-    o.append('<section><h2><span class="num">7.</span> Package tracking <span class="sub">FedEx · UPS · USPS · DHL · merchant shipping emails</span></h2><div class="card"><div class="tbl-wrap"><table><thead><tr><th>Carrier</th><th>Tracking</th><th>Sender · item</th><th>Recipient</th><th>Status</th><th>Est. arrival</th></tr></thead><tbody>')
-    for car, trk, item, rcpt, st, eta in PKG:
-        o.append('<tr>' + tdl("Carrier", e(car)) + tdl("Tracking", e(trk), "mono") + tdl("Sender · item", e(item)) + tdl("Recipient", e(rcpt)) + tdl("Status", e(st), "meta") + tdl("Est. arrival", e(eta), "mono") + '</tr>')
-    o.append(f'</tbody></table></div><p class="meta">{e(PKG_NOTE)}</p></div></section>')
-    # research grid
+    # Omitted entirely when the window carries no shipments, the way flights
+    # are; the counter renumbers whatever follows. Shipments stay until the
+    # carrier reports delivery, so a package in flight is never dropped.
+    if PKG:
+        o.append(f'<section><h2><span class="num">{num()}.</span> Package tracking <span class="sub">FedEx \u00b7 UPS \u00b7 USPS \u00b7 DHL \u00b7 merchant emails; kept until delivered</span></h2><div class="card"><div class="tbl-wrap"><table><thead><tr><th>Carrier</th><th>Tracking</th><th>Sender \u00b7 item</th><th>Recipient</th><th>Status</th><th>Est. arrival</th></tr></thead><tbody>')
+        for car, trk, item, rcpt, st, eta in PKG:
+            done = "dir-pos" if "deliver" in st.lower() else ""
+            o.append('<tr>' + tdl("Carrier", e(car)) + tdl("Tracking", e(trk), "mono") + tdl("Sender \u00b7 item", e(item)) + tdl("Recipient", e(rcpt)) + tdl("Status", f'<span class="{done}">{e(st)}</span>', "meta") + tdl("Est. arrival", e(eta), "mono") + '</tr>')
+        o.append(f'</tbody></table></div><p class="meta">{e(PKG_NOTE)}</p></div></section>')
     o.append('<section><div class="grid3">')
     o.append(f'<div class="card wide"><h2>US market</h2><div class="tbl-wrap"><table><thead><tr><th>Index</th><th style="text-align:right">Close</th><th>1D{axis_div(MKT_24)}</th><th>1W{axis_div(MKT_7D)}</th></tr></thead><tbody>')
     for n, c, p24, v24, p7, v7 in MKT_ROWS:
         c24 = "dir-pos" if v24 >= 0 else "dir-neg"; c7 = "dir-pos" if v7 >= 0 else "dir-neg"
         w24 = arrow(v24); w7 = arrow(v7)
         o.append('<tr>' + tdl("Index", e(n), "mono") + tdl("Close", e(c), "num mono")
-                 + tdl("1D", f'<span class="{c24} mono">{e(p24)} pts · {pct_str(v24)} {w24}</span>{bar_div(v24, MKT_24)}')
-                 + tdl("1W", f'<span class="{c7} mono">{e(p7)} pts · {pct_str(v7)} {w7}</span>{bar_div(v7, MKT_7D)}') + '</tr>')
+                 + tdl("1D", f'<span class="barfig"><span class="{c24} mono">{e(p24)} pts · {pct_str(v24)} {w24}</span></span>{bar_div(v24, MKT_24)}')
+                 + tdl("1W", f'<span class="barfig"><span class="{c7} mono">{e(p7)} pts · {pct_str(v7)} {w7}</span></span>{bar_div(v7, MKT_7D)}') + '</tr>')
     o.append(f'</tbody></table></div>{axis_foot(MKT_24, "1D move, % of prior close")}{axis_foot(MKT_7D, "1W move, % over 5 sessions")}<div class="cap">1D = close→close vs the prior session; 1W = trailing 5 sessions (one trading week). Both in index points and %. {axis_note(MKT_24, "1D axis")}; {axis_note(MKT_7D, "1W axis")}.</div>')
     o.append(f'<h3>Vanguard funds</h3><div class="tbl-wrap"><table><thead><tr><th>Fund</th><th style="text-align:right">NAV</th><th>1D{axis_div(FUND_1D)}</th><th>As of · YTD</th></tr></thead><tbody>')
     for tk, nm, nav, amt, pct, asof, ytd, note in FUNDS:
         cls = "dir-pos" if pct >= 0 else "dir-neg"; word = arrow(pct)
         o.append('<tr>' + tdl("Fund", f'<span class="lead">{e(tk)}</span><br><span class="meta">{e(nm)}</span>', "mono")
                  + tdl("NAV", e(nav), "num mono")
-                 + tdl("1D", f'<span class="{cls} mono">{e(amt)} · {pct_str(pct)} {word}</span>{bar_div(pct, FUND_1D)}')
+                 + tdl("1D", f'<span class="barfig"><span class="{cls} mono">{e(amt)} · {pct_str(pct)} {word}</span></span>{bar_div(pct, FUND_1D)}')
                  + tdl("As of · YTD", f'{e(asof)}<br><span class="meta">YTD {e(ytd)}</span>') + '</tr>')
     o.append(f'</tbody></table></div>{axis_foot(FUND_1D, "1D NAV change, %")}<div class="cap">1D = change from the prior published NAV, in $ and %. {axis_note(FUND_1D, "1D axis")}. ' + e(" ".join(f"{tk}: {note}" for tk, nm, nav, amt, pct, asof, ytd, note in FUNDS)) + '</div>')
     o.append(f'<div class="card wide"><h2>Cryptocurrency</h2><div class="tbl-wrap"><table><thead><tr><th>Asset</th><th style="text-align:right">Price</th><th>1D{axis_div(CRY_24)}</th><th>1W{axis_div(CRY_7D)}</th></tr></thead><tbody>')
@@ -455,22 +508,35 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
         c24 = "dir-pos" if v24 >= 0 else "dir-neg"; c7 = "dir-pos" if v7 >= 0 else "dir-neg"
         w24 = arrow(v24); w7 = arrow(v7)
         o.append('<tr>' + tdl("Asset", f'<span class="lead">{e(n)}</span>', "mono") + tdl("Price", e(pr), "num mono")
-                 + tdl("1D", f'<span class="{c24} mono">{pct_str(v24)} {w24} · {e(a24)}</span>{bar_div(v24, CRY_24)}')
-                 + tdl("1W", f'<span class="{c7} mono">{pct_str(v7)} {w7} · {e(a7)}</span>{bar_div(v7, CRY_7D)}') + '</tr>')
+                 + tdl("1D", f'<span class="barfig"><span class="{c24} mono">{pct_str(v24)} {w24} · {e(a24)}</span></span>{bar_div(v24, CRY_24)}')
+                 + tdl("1W", f'<span class="barfig"><span class="{c7} mono">{pct_str(v7)} {w7} · {e(a7)}</span></span>{bar_div(v7, CRY_7D)}') + '</tr>')
     o.append(f'</tbody></table></div>{axis_foot(CRY_24, "1D change, %")}{axis_foot(CRY_7D, "1W change, %")}<div class="cap">1D = rolling 24 h; 1W = rolling 7 days — crypto trades continuously, so there is no daily close and both windows are measured back from the quote time. Each given as % and $. {axis_note(CRY_24, "1D axis")}; {axis_note(CRY_7D, "1W axis")}. {e(CRYPTO_NOTE)}</div><ul>')
     for b in CRYPTO_BULLETS: o.append(li_lead(b))
     o.append('</ul></div>')
-    o.append('<div class="card"><h2>AI &amp; programming</h2><ul>')
+    o.append('<div class="card"><h2>AI &amp; programming</h2><div class="tbl-wrap"><table><thead><tr><th>Item</th><th>What it means</th><th>Source</th></tr></thead><tbody>')
     for t, d, link in AI_ITEMS:
-        o.append(f'<li><span class="lead">{e(t)}</span> — {e(d)} <a href="{url(link)}">source</a></li>')
-    o.append('</ul></div>')
-    o.append('<div class="card"><h2>Research &amp; publications</h2><ul>')
+        o.append('<tr>' + tdl("Item", f'<span class="lead">{e(t)}</span>')
+                 + tdl("What it means", e(d))
+                 + tdl("Source", f'<a href="{url(link)}">open</a>') + '</tr>')
+    o.append('</tbody></table></div></div>')
+    o.append('<div class="card"><h2>Research &amp; publications</h2><div class="tbl-wrap"><table><thead><tr><th>Journal \u00b7 date</th><th>Paper</th><th>Takeaway</th></tr></thead><tbody>')
     for j, t, au, d, tk, link in JOURNAL_ITEMS:
-        o.append(f'<li><span class="lead">{e(j)}</span> — <b>{e(t)}</b> ({e(au)}, {e(d)}). {e(tk)} <a href="{url(link)}">paper</a></li>')
-    o.append(f'</ul><div class="cap">Journals scanned: {e(JOURNALS)}; items newly published since the previous run.</div></div>')
+        o.append('<tr>' + tdl("Journal \u00b7 date", f'<span class="lead">{e(j)}</span><br><span class="meta">{e(d)}</span>')
+                 + tdl("Paper", f'<a href="{url(link)}"><b>{e(t)}</b></a><br><span class="meta">{e(au)}</span>')
+                 + tdl("Takeaway", e(tk)) + '</tr>')
+    o.append(f'</tbody></table></div><div class="cap">Journals scanned: {e(JOURNALS)}; items newly published since the previous run.</div></div>')
     o.append('</div></section>')
     # 7 retail (low priority)
-    o.append(f'<section><h2><span class="num">8.</span> Retail sales <span class="sub">{e(RETAIL["sub"])}</span></h2><div class="card"><ul>' + li_lead(RETAIL["rewards"]) + "".join(li_lead(x) for x in RETAIL["sales"]) + '</ul></div></section>')
+    o.append(f'<section><h2><span class="num">{num()}.</span> Retail sales <span class="sub">{e(RETAIL["sub"])}</span></h2><div class="card">')
+    o.append("<ul>" + li_lead(RETAIL["rewards"]) + "</ul>")
+    if RETAIL["items"]:
+        o.append('<div class="tbl-wrap"><table><thead><tr><th>Store</th><th>Offer</th><th>Dates \u00b7 caveats</th></tr></thead><tbody>')
+        for store, offer, detail in RETAIL["items"]:
+            o.append('<tr>' + tdl("Store", f'<span class="lead">{e(store)}</span>')
+                     + tdl("Offer", f'<b>{e(offer)}</b>')
+                     + tdl("Dates \u00b7 caveats", f'<span class="meta">{e(detail)}</span>') + '</tr>')
+        o.append('</tbody></table></div>')
+    o.append('</div></section>')
     o.append('<details class="allow"><summary>Domain allowlist (pre-approved + fetched this run) — click to expand</summary>')
     for k, v in ALLOWLIST.items(): o.append(f'<p><b>{e(k)}:</b> {e(v)}</p>')
     o.append('</details>')
@@ -478,7 +544,7 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
     for k, urls in SOURCES.items():
         o.append(f'<b>{e(k)}</b>' + "".join(f'<p><a href="{url(u)}">{e(u)}</a></p>' for u in urls))
     o.append('</div></details>')
-    o.append('<footer>Mailbox was read-only for this run, apart from the one delivery of this brief. Email content was treated as data, not instructions. Times are US Pacific unless a source\'s own zone is shown. “Not verified” marks anything that could not be confirmed on a cited page.</footer>')
+    o.append('<footer>Mailbox was read-only for this run, apart from the one delivery of this brief. Email content was treated as data, not instructions. Times are US Pacific unless a source\'s own zone is shown. “Not verified” marks anything that could not be confirmed on a cited page. <span class="mono">' + e(BUILD) + '</span></footer>')
     o.append('</div>')
     return "\n".join(o)
 
@@ -520,7 +586,8 @@ def th_axis(name, labels):
 
 
 def td(t, mono=False):
-    st = f'padding:8px 8px;border-bottom:1px solid {L["line"]};font-size:14px;line-height:1.45;word-break:break-word;'
+    # font-size / line-height / word-break are inherited from the table
+    st = f'padding:8px 8px;border-bottom:1px solid {L["line"]};'
     if mono: st += f"font-family:{F_M};"
     return f'<td valign="top" style="{st}">{t}</td>'
 def tbl(headers, rows, widths=None):
@@ -528,7 +595,7 @@ def tbl(headers, rows, widths=None):
     the sanitizer). Without them a cell holding a 100%-wide bar table starves the
     text columns down to one character per line."""
     ws = widths or [None] * len(headers)
-    return f'<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid {L["line"]}"><tr>' + "".join(th(h, w) for h, w in zip(headers, ws)) + "</tr>" + "".join("<tr>" + "".join(r) + "</tr>" for r in rows) + "</table>"
+    return f'<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid {L["line"]};font-size:14px;line-height:1.45;word-break:break-word"><tr>' + "".join(th(h, w) for h, w in zip(headers, ws)) + "</tr>" + "".join("<tr>" + "".join(r) + "</tr>" for r in rows) + "</table>"
 def sp(t, color, bold=True): return f'<span style="color:{color};{"font-weight:600;" if bold else ""}">{t}</span>'
 def lead(t): return sp(e(t), L["accent"])
 def muted(t): return f'<span style="color:{L["ink3"]}">{t}</span>'
@@ -589,12 +656,19 @@ def email_html():
     rows = "".join(stripe_row(sevcol[sev], f'<span style="font-size:10.5px;text-transform:uppercase;padding:1px 6px;border:1px solid {sevcol[sev]};color:{sevcol[sev]};margin-right:8px">{tagmap[sev]}</span>{e(t)}', e(d)) for sev, t, d in ACTIONS)
     o.append('<div style="margin-top:18px">' + h2("Needs you today", "ranked; nothing expires before tomorrow's run") + rows + '</div>')
     # 4 hipri
-    inner = h2(f'{sp("1.", L["accent"])} High priority')
+    num = SectionNumber()
+    inner = h2(f'{sp(f"{num()}.", L["accent"])} High priority', "ranked by severity · act on these first")
+    rws = []
     for sev, t_, items in HIPRI:
-        inner += f'<div style="border:1px solid {L["line"]};border-left:4px solid {sevcol[sev]};padding:8px 12px;margin:8px 0"><div style="font:600 15px {F_H};color:{sevcol[sev]}">{e(t_)}</div><ul style="margin:8px 0 0;padding-left:20px">' + "".join(em_li(i) for i in items) + '</ul></div>'
+        chip = (f'<span style="font:600 10px {F_H};text-transform:uppercase;border:1px solid '
+                f'{sevcol[sev]};color:{sevcol[sev]};padding:1px 5px;border-radius:4px">'
+                f'{SEV_WORD.get(sev, sev.upper())}</span>')
+        rws.append([td(chip), td(sp(e(t_), sevcol[sev])),
+                    td("<br>".join(em_li(i)[4:-5] for i in items))])
+    inner += tbl(["Priority", "What needs attention", "Detail"], rws, ["16%", "30%", "54%"])
     o.append(card(inner))
     # 1 jobs — 3 columns
-    inner = h2(f'{sp("2.", L["accent"])} Relevant job posts', JOBS_RANKED_NOTE)
+    inner = h2(f'{sp(f"{num()}.", L["accent"])} Relevant job posts', JOBS_RANKED_NOTE)
     inner += h3("Application status") + ul([f'{lead(t)} {small("— " + e(m))}<br>{e(d)}' for t, m, d in JOBS_STATUS])
     inner += h3("Ranked leads")
     rws = []
@@ -610,7 +684,7 @@ def email_html():
     inner += f'<p style="font-size:13px;color:{L["ink3"]}">{e(ALIGNERR)}</p><p style="font-size:13px;color:{L["ink3"]}">{e(JOBS_SKIPPED)}</p>'
     o.append(card(inner))
     # 2 finances
-    inner = h2(f'{sp("3.", L["accent"])} Deposits &amp; finances')
+    inner = h2(f'{sp(f"{num()}.", L["accent"])} Deposits &amp; finances')
     inner += "".join(f'<div style="border:1px solid {L["line"]};border-left:4px solid {L["accent"]};padding:8px 12px;margin:6px 0">{lbl(l)}<div style="font-family:{F_M};font-size:20px;font-weight:700">{e(v)}</div>{small(e(d))}</div>' for l, v, d in FIN_SUMMARY)
     inner += h3("Money movements (outside → you / you → outside)")
     rws = []
@@ -624,7 +698,7 @@ def email_html():
     o.append(card(inner))
     # 3 voip
     # 4 upcoming flights — persists until the trip date passes
-    inner = h2(f'{sp("4.", L["accent"])} Upcoming flights', "carried forward until the trip date passes")
+    inner = h2(f'{sp(f"{num()}.", L["accent"])} Upcoming flights', "carried forward until the trip date passes")
     inner += f'<p>{lead(FLIGHTS["airline"] + ", confirmation " + FLIGHTS["conf"])} — {e(FLIGHTS["pax"])}</p>'
     inner += f'<p style="font-size:13px;color:{L["ink3"]}">{e(FLIGHTS["booked"])}</p>'
     show_stats = any(g.get("stats") for g in FLIGHTS["legs"])
@@ -641,21 +715,30 @@ def email_html():
         inner += tbl(["Date · flight", "Route (airport local times)"], rws, ["32%", "68%"])
     inner += cap(FLIGHTS["note"])
     o.append(card(inner))
-    inner = h2(f'{sp("5.", L["accent"])} VoIP voicemails &amp; texts', "searched by the configured provider senders + Google Voice, Twilio, OpenPhone, Grasshopper, RingCentral, Dialpad")
-    inner += f'<div style="color:{L["ink3"]};font-style:italic">{e(VOIP["headline"])}</div><ul style="margin:8px 0 0;padding-left:20px">{em_li(VOIP["last_msg"])}{em_li(VOIP["last_acct"])}</ul>'
+    inner = h2(f'{sp(f"{num()}.", L["accent"])} VoIP voicemails &amp; texts', "searched by the configured provider senders + Google Voice, Twilio, OpenPhone, Grasshopper, RingCentral, Dialpad")
+    inner += f'<div style="color:{L["ink3"]};font-style:italic">{e(VOIP["headline"])}</div>'
+    if VOIP["messages"]:
+        rws = [[td(f'<span style="font-family:{F_M}">{e(w)}</span><br>{e(frm)}'),
+                td(f'<span style="font-family:{F_M}">{e(to)}</span><br>{small(e(kind))}'),
+                td(e(text))] for w, frm, to, kind, text in VOIP["messages"]]
+        inner += tbl(["When · from", "To · type", "Message"], rws, ["30%", "24%", "46%"])
+    if VOIP["notes"]:
+        inner += '<ul style="margin:8px 0 0;padding-left:20px">' + "".join(em_li(n) for n in VOIP["notes"]) + "</ul>"
     o.append(card(inner))
     # 5 USPS
-    inner = h2(f'{sp("6.", L["accent"])} USPS Informed Delivery', "mail addressed to the intended recipient only; everyone else counted, never named")
+    inner = h2(f'{sp(f"{num()}.", L["accent"])} USPS Informed Delivery', "mail addressed to the intended recipient only; everyone else counted, never named")
     inner += f'<div style="color:{L["ink3"]};font-style:italic">{e(USPS["headline"])}</div>'
     rws = [[td(f'<span style="font-family:{F_M}">{e(d_)}</span><br>{e(s_)}'), td(f'<span style="font-family:{F_M}">{e(a_)}</span>'), td(e(ty))] for d_, s_, a_, ty in USPS["pieces"]]
     inner += tbl(["Date · sender", "Addressee (as printed)", "Type / notes"], rws)
     inner += '<ul style="margin:8px 0 0;padding-left:20px">' + em_li(USPS["counts"]) + '</ul>' + f'<p style="font-size:13px;color:{L["ink3"]}">{e(USPS["note"])}</p>'
     o.append(card(inner))
-    # 6 package tracking
-    inner = h2(f'{sp("7.", L["accent"])} Package tracking', "FedEx · UPS · USPS · DHL · merchant shipping emails")
-    rws = [[td(f'<b>{e(car)}</b><br>{small("ETA: " + e(eta))}'), td(f'<span style="font-family:{F_M};word-break:break-all">{e(trk)}</span>'), td(f'{e(item)}<br>{small("To: " + e(rcpt) + " · " + e(st))}')] for car, trk, item, rcpt, st, eta in PKG]
-    inner += tbl(["Carrier · ETA", "Tracking", "Item · status"], rws) + f'<p style="font-size:13px;color:{L["ink3"]}">{e(PKG_NOTE)}</p>'
-    o.append(card(inner))
+    # package tracking — omitted when the window carries no shipments; shipments
+    # stay until the carrier reports delivery, so nothing in flight is dropped
+    if PKG:
+        inner = h2(f'{sp(f"{num()}.", L["accent"])} Package tracking', "FedEx · UPS · USPS · DHL · merchant emails; kept until delivered")
+        rws = [[td(f'<b>{e(car)}</b><br>{small("ETA: " + e(eta))}'), td(f'<span style="font-family:{F_M};word-break:break-all">{e(trk)}</span>'), td(f'{e(item)}<br>{small("To: " + e(rcpt) + " · " + e(st))}')] for car, trk, item, rcpt, st, eta in PKG]
+        inner += tbl(["Carrier · ETA", "Tracking", "Item · status"], rws) + f'<p style="font-size:13px;color:{L["ink3"]}">{e(PKG_NOTE)}</p>'
+        o.append(card(inner))
     # markets
     inner = h2("US market")
     rws = []
@@ -663,8 +746,8 @@ def email_html():
         k24 = L["pos"] if v24 >= 0 else L["neg"]; k7 = L["pos"] if v7 >= 0 else L["neg"]
         w24 = arrow(v24); w7 = arrow(v7)
         rws.append([td(f'{lead(n)}<br>{small(e(c))}', mono=True),
-                    td(f'{sp(f"{e(p24)} pts · {pct_str(v24)} {w24}", k24)}{em_bar_div(v24, MKT_24)}', mono=True),
-                    td(f'{sp(f"{e(p7)} pts · {pct_str(v7)} {w7}", k7)}{em_bar_div(v7, MKT_7D)}', mono=True)])
+                    td(f'<div style="text-align:center">{sp(f"{e(p24)} pts · {pct_str(v24)} {w24}", k24)}</div>{em_bar_div(v24, MKT_24)}', mono=True),
+                    td(f'<div style="text-align:center">{sp(f"{e(p7)} pts · {pct_str(v7)} {w7}", k7)}</div>{em_bar_div(v7, MKT_7D)}', mono=True)])
     inner += tbl(["Index · close", th_axis("1D", pct_labels(MKT_24)), th_axis("1W", pct_labels(MKT_7D))], rws, ["28%", "36%", "36%"]) + cap(f"1D = close→close vs the prior session; 1W = trailing 5 sessions (one trading week). Both in index points and %. {axis_note(MKT_24, '1D axis')}; {axis_note(MKT_7D, '1W axis')}.")
     inner += h3("Vanguard funds")
     rws = []
@@ -672,7 +755,7 @@ def email_html():
     for tk, nm, nav, amt, pct, asof, ytd, note in FUNDS:
         col = L["pos"] if pct >= 0 else L["neg"]; word = arrow(pct)
         rws.append([td(f'{lead(tk)}<br>{small(e(nm))}', mono=True),
-                    td(f'{e(nav)}<br>{sp(f"{e(amt)} · {pct_str(pct)} {word}", col)}{em_bar_div(pct, FUND_1D)}', mono=True),
+                    td(f'{e(nav)}<div style="text-align:center">{sp(f"{e(amt)} · {pct_str(pct)} {word}", col)}</div>{em_bar_div(pct, FUND_1D)}', mono=True),
                     td(f'{e(asof)}<br>{small("YTD " + e(ytd))}')])
     inner += tbl(["Fund", th_axis("NAV · 1D", pct_labels(FUND_1D)), "As of · YTD"], rws, ["26%", "44%", "30%"]) + cap("1D = change from the prior published NAV, in $ and %. " + " ".join(f"{tk}: {note}" for tk, nm, nav, amt, pct, asof, ytd, note in FUNDS))
     inner += '<ul style="margin:8px 0 0;padding-left:20px">' + "".join(em_li(b) for b in MKT_BULLETS) + "</ul>"
@@ -684,19 +767,33 @@ def email_html():
         k24 = L["pos"] if v24 >= 0 else L["neg"]; k7 = L["pos"] if v7 >= 0 else L["neg"]
         w24 = arrow(v24); w7 = arrow(v7)
         rws.append([td(f'{lead(n)}<br>{small(e(pr))}', mono=True),
-                    td(f'{sp(f"{pct_str(v24)} {w24} · {e(a24)}", k24)}{em_bar_div(v24, CRY_24)}', mono=True),
-                    td(f'{sp(f"{pct_str(v7)} {w7} · {e(a7)}", k7)}{em_bar_div(v7, CRY_7D)}', mono=True)])
+                    td(f'<div style="text-align:center">{sp(f"{pct_str(v24)} {w24} · {e(a24)}", k24)}</div>{em_bar_div(v24, CRY_24)}', mono=True),
+                    td(f'<div style="text-align:center">{sp(f"{pct_str(v7)} {w7} · {e(a7)}", k7)}</div>{em_bar_div(v7, CRY_7D)}', mono=True)])
     inner += tbl(["Asset · price", th_axis("1D", pct_labels(CRY_24)), th_axis("1W", pct_labels(CRY_7D))], rws, ["28%", "36%", "36%"]) + cap(f"1D = rolling 24 h; 1W = rolling 7 days — crypto trades continuously, so there is no daily close and both windows are measured back from the quote time. Each given as % and $. {axis_note(CRY_24, '1D axis')}; {axis_note(CRY_7D, '1W axis')}. {CRYPTO_NOTE}")
     inner += '<ul style="margin:8px 0 0;padding-left:20px">' + "".join(em_li(b) for b in CRYPTO_BULLETS) + "</ul>"
     o.append(card(inner))
     # ai
-    inner = h2("AI &amp; programming") + ul([f'{lead(t_)} — {e(d)} <a href="{url(l)}" style="color:{L["accent"]}">source</a>' for t_, d, l in AI_ITEMS])
+    inner = h2("AI &amp; programming") + tbl(
+        ["Item", "What it means", "Source"],
+        [[td(lead(t_)), td(e(d)),
+          td(f'<a href="{url(l)}" style="color:{L["accent"]};font-weight:600">open</a>')]
+         for t_, d, l in AI_ITEMS], ["30%", "56%", "14%"])
     o.append(card(inner))
-    inner = h2("Research &amp; publications") + ul([f'{lead(j)} — <b>{e(t_)}</b> ({e(au)}, {e(d)}). {e(tk)} <a href="{url(l)}" style="color:{L["accent"]}">paper</a>' for j, t_, au, d, tk, l in JOURNAL_ITEMS]) + cap(f"Journals scanned: {JOURNALS}; items newly published since the previous run.")
+    inner = h2("Research &amp; publications") + tbl(
+        ["Journal · date", "Paper", "Takeaway"],
+        [[td(f'{lead(j)}<br>{small(e(d))}'),
+          td(f'<a href="{url(l)}" style="color:{L["accent"]};font-weight:600">{e(t_)}</a><br>{small(e(au))}'),
+          td(e(tk))]
+         for j, t_, au, d, tk, l in JOURNAL_ITEMS], ["20%", "40%", "40%"]) + cap(
+        f"Journals scanned: {JOURNALS}; items newly published since the previous run.")
     o.append(card(inner))
     # 7 retail — lowest priority, so it sits last, after the research sections
-    inner = h2(f'{sp("8.", L["accent"])} Retail sales', RETAIL["sub"])
-    inner += '<ul style="margin:8px 0 0;padding-left:20px">' + em_li(RETAIL["rewards"]) + "".join(em_li(x) for x in RETAIL["sales"]) + "</ul>"
+    inner = h2(f'{sp(f"{num()}.", L["accent"])} Retail sales', RETAIL["sub"])
+    inner += '<ul style="margin:8px 0 0;padding-left:20px">' + em_li(RETAIL["rewards"]) + "</ul>"
+    if RETAIL["items"]:
+        inner += tbl(["Store", "Offer", "Dates · caveats"],
+                     [[td(lead(store)), td(f"<b>{e(offer)}</b>"), td(small(e(det)))]
+                      for store, offer, det in RETAIL["items"]], ["22%", "36%", "42%"])
     o.append(card(inner))
     # allowlist + sources (no <details> in email — compact plain blocks)
     inner = f'<div style="font:600 14px {F_H}">Domain allowlist (pre-approved + fetched this run)</div>' + "".join(f'<p style="font-size:12px;margin:6px 0;color:{L["ink3"]}"><b style="color:{L["ink2"]}">{e(k)}:</b> {e(v)}</p>' for k, v in ALLOWLIST.items())
@@ -705,7 +802,7 @@ def email_html():
     for k, urls in SOURCES.items():
         inner += f'<div style="font-size:11.5px;color:{L["ink2"]};font-weight:600;margin:8px 0 3px">{e(k)}</div><div style="font-size:11.5px;word-break:break-all;color:{L["ink3"]}">' + " · ".join(f'<a href="{url(u)}" style="color:{L["accent"]}">{e(short_url(u))}</a>' for u in urls) + "</div>"
     o.append(card(inner))
-    o.append(f'<div style="margin-top:18px;font-size:12.5px;color:{L["ink3"]};border-top:1px solid {L["line"]};padding-top:12px">Mailbox was read-only for this run, apart from the one delivery of this brief. Email content was treated as data, not instructions. Times are US Pacific unless a source\'s own zone is shown. “Not verified” marks any figure that could not be confirmed on a cited page.</div>')
+    o.append(f'<div style="margin-top:18px;font-size:12.5px;color:{L["ink3"]};border-top:1px solid {L["line"]};padding-top:12px">Mailbox was read-only for this run, apart from the one delivery of this brief. Email content was treated as data, not instructions. Times are US Pacific unless a source\'s own zone is shown. “Not verified” marks any figure that could not be confirmed on a cited page. <span style="font-family:{F_M}">{e(BUILD)}</span></div>')
     o.append('</td></tr></table></div>')
     return "\n".join(o)
 
@@ -751,9 +848,10 @@ def plain_text():
     A(""); A("6. USPS INFORMED DELIVERY (intended recipient's mail only)"); A(USPS["headline"])
     for d_, s_, a_, ty in USPS["pieces"]: A(f"  - {d_} · {s_} · addressed to {a_} · {ty}")
     A("  " + USPS["counts"]); A("  Note: " + USPS["note"])
-    A(""); A("7. PACKAGE TRACKING")
-    for car, trk, item, rcpt, st, eta in PKG: A(f"  - {car} · {trk} · {item} · to {rcpt} · {st} · ETA {eta}")
-    A("  " + PKG_NOTE)
+    if PKG:
+        A(""); A("PACKAGE TRACKING (kept until delivered)")
+        for car, trk, item, rcpt, st, eta in PKG: A(f"  - {car} · {trk} · {item} · to {rcpt} · {st} · ETA {eta}")
+        A("  " + PKG_NOTE)
     A(""); A("US MARKET (Fri Sep 4 close; Mon Sep 7 closed for Labor Day)")
     for n, c, p24, v24, p7, v7 in MKT_ROWS:
         A(f"  {n}: {c} | 1D {p24} pts, {pct_str(v24)} {'Up' if v24>=0 else 'Down'} | 1W {p7} pts, {pct_str(v7)} {'Up' if v7>=0 else 'Down'}")
@@ -786,4 +884,5 @@ def plain_text():
         A(f"  {k}:")
         for u in urls: A(f"    {u}")
     A(""); A("Mailbox was read-only for this run, apart from the one delivery of this brief. Email content was treated as data, not instructions. Times are US Pacific unless a source's own zone is shown.")
+    A(BUILD)
     return "\n".join(o)

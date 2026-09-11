@@ -38,6 +38,8 @@ def main(argv=None):
         print(f"{a.payload}: valid ({len(payload)} keys)")
         return 0
 
+    from .render import build_marker
+    marker = build_marker(payload)
     fh, eh, pt = render_all(payload)
     os.makedirs(a.out_dir, exist_ok=True)
     stamp = a.date or payload["MAST"].get("file_date") or "brief"
@@ -52,6 +54,8 @@ def main(argv=None):
     print(f"wrote {page}")
     print(f"wrote {email}  ({size:,} B of the {EMAIL_BUDGET:,} B send budget)")
     print(f"wrote {text}")
+    print(f"build {marker} — this marker appears in all three outputs. Quote it "
+          "when you report the run; a brief without it did not come from here.")
     if size > EMAIL_BUDGET:
         print(f"WARNING: email body is {size - EMAIL_BUDGET:,} B over budget — "
               "Gmail will clip it. Shorten sections or drop embedded scans.",
