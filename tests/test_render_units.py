@@ -355,7 +355,7 @@ class TestAxisPathsNotInTheSample(unittest.TestCase):
                              "the axis must use decades, not the raw maximum")
 
     def test_single_row_tables_still_produce_an_even_axis(self):
-        p = payload(MKT_ROWS=[["ONLY", "1.00", "+0.01", 0.01, "+0.02", 0.02]])
+        p = payload(MKT_ROWS=[["ONLY", "1.00", "+0.01", 0.01, "+0.02", 0.02, "+0.05", 0.05]])
         f, _, _ = render_all(p)
         self.assertIn('class="daxis"', f)
 
@@ -376,7 +376,8 @@ class TestDeterminismAndIsolation(unittest.TestCase):
         """render_all binds the payload as module globals; a leak would show
         last run's rows in this run's brief."""
         first = render_all(payload())[0]
-        other = render_all(payload(MKT_ROWS=[["ONLY", "1.00", "+1.00", 0.10, "+2.00", 0.20]],
+        other = render_all(payload(MKT_ROWS=[["ONLY", "1.00", "+1.00", 0.10, "+2.00", 0.20,
+                                                 "+3.00", 0.30]],
                                    CRYPTO_ROWS=[]))[0]
         self.assertNotIn("Nasdaq", other, "previous payload's rows leaked into this render")
         self.assertIn("ONLY", other)
@@ -575,3 +576,63 @@ class TestNoMarkupLeaksAsText(unittest.TestCase):
             self.assertFalse(out.startswith("<li"), f"{fn.__name__} must not wrap in <li>")
             self.assertNotIn("</li>", out)
             self.assertIn("Fed", out)
+
+
+class TestThreeHorizons(unittest.TestCase):
+    """Every market table carries the same three horizons: 1D, 1W, YTD.
+
+    The file charts all three. The email is capped at three columns — a fourth
+    is about 85px on a phone — so it charts 1D and 1W and states YTD as a figure
+    in the first column. All three horizons are present everywhere; only the
+    chart affordance differs, and only where the medium forbids it.
+    """
+
+    TABLES = ("US market", "Vanguard funds", "Cryptocurrency")
+
+    def test_file_charts_all_three_horizons_in_every_table(self):
+        f, _, _ = render_all(payload())
+        for table in self.TABLES:
+            block = f.split(table)[1][:9000]
+            for horizon in ("1D", "1W", "YTD"):
+                self.assertIn(f">{horizon}<", block, f"{table}: no {horizon} column")
+            # three rulers and one track per horizon per row
+            self.assertGreaterEqual(block.count('class="daxis"'), 3,
+                                    f"{table}: each horizon needs its own ruler")
+
+    def test_each_horizon_gets_its_own_axis(self):
+        """A year's move dwarfs a day's; one shared scale would flatten 1D."""
+        from brief.render import render_all as _r
+        _r(payload())
+        import brief.render as R
+        self.assertGreater(R.MKT_YTD[1], R.MKT_7D[1], "YTD axis must be wider than 1W")
+        self.assertGreater(R.MKT_7D[1], R.MKT_24[1], "1W axis must be wider than 1D")
+        self.assertGreater(R.CRY_YTD[1], R.CRY_7D[1])
+        self.assertGreater(R.FUND_YTD[1], R.FUND_1D[1])
+
+    def test_email_states_ytd_in_the_first_column(self):
+        _, em, _ = render_all(payload())
+        for header in ("Index · close · YTD", "Fund · NAV · YTD", "Asset · price · YTD"):
+            self.assertIn(header, em, f"email missing {header!r}")
+        self.assertGreaterEqual(em.count("YTD "), 10, "every row needs its YTD figure")
+
+    def test_email_still_has_at_most_three_columns(self):
+        _, em, _ = render_all(payload())
+        counts = [len(re.findall(r"<th\b", row))
+                  for row in re.findall(r"<tr>(.*?)</tr>", em, re.S)]
+        self.assertTrue(all(c <= 3 for c in counts), f"saw {max(counts or [0])} columns")
+
+    def test_plain_text_carries_all_three(self):
+        _, _, tx = render_all(payload())
+        for probe in ("1D", "1W", "YTD"):
+            self.assertIn(probe, tx)
+
+    def test_email_stays_within_budget_with_three_horizons(self):
+        _, em, _ = render_all(payload())
+        size = len(em.encode("utf-8"))
+        self.assertLess(size, 85 * 1024, f"email is {size:,} B, over the Gmail budget")
+
+    def test_arrows_are_flanked_by_spaces(self):
+        """"close→close" reads as one word; "close → close" reads as a range."""
+        f, em, tx = render_all(payload())
+        for out in (f, em, tx):
+            self.assertNotRegex(out, r"[^\s>]→[^\s<]", "an arrow is missing its spaces")
