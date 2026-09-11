@@ -114,6 +114,42 @@ class TestTheRuleIsWrittenDown(unittest.TestCase):
                       "the README must point contributors at the data rule")
 
 
+class TestCommitMetadata(unittest.TestCase):
+    """Commit authorship is personal data too, and it is the easiest kind to
+    forget: rewriting history fixes the commits that exist, while the NEXT
+    commit quietly picks the real name back up from git config. That happened
+    here, twice, minutes after a history rewrite."""
+
+    APPROVED_AUTHORS = {"empcoorg", "Claude"}
+
+    def _authors(self):
+        r = subprocess.run(["git", "log", "--format=%an|%ae"], cwd=ROOT,
+                           capture_output=True, text=True)
+        return [l for l in r.stdout.splitlines() if l.strip()]
+
+    def test_authors_are_anonymous(self):
+        entries = self._authors()
+        if len(entries) <= 1:
+            self.skipTest("shallow checkout — no history to inspect")
+        bad = sorted({e for e in entries if e.split("|")[0] not in self.APPROVED_AUTHORS})
+        self.assertEqual(bad, [], f"commit author outside {sorted(self.APPROVED_AUTHORS)}: {bad}")
+
+    def test_author_emails_leak_no_hostname(self):
+"""A default git identity ending in .local publishes the machine name."""
+        entries = self._authors()
+        if len(entries) <= 1:
+            self.skipTest("shallow checkout — no history to inspect")
+        bad = sorted({e for e in entries if e.split("|")[1].endswith(".local")})
+        self.assertEqual(bad, [], f"author email exposes a hostname: {bad}")
+
+    def test_repo_local_identity_is_set(self):
+        """Setting it repo-locally is what stops the next commit regressing."""
+        r = subprocess.run(["git", "config", "--local", "user.name"], cwd=ROOT,
+                           capture_output=True, text=True)
+        self.assertIn(r.stdout.strip(), self.APPROVED_AUTHORS,
+                      "set: git config --local user.name empcoorg")
+
+
 class TestPrivateDenylist(unittest.TestCase):
     """The owner's own identifiers, kept out of the repository.
 

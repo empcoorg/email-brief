@@ -38,6 +38,19 @@ Real **public** facts are fine and are not personal data: ticker symbols, index
 names (`Russell 2000`), airline IATA/ICAO codes, journal names, domain names of
 data sources. The test is whether the value identifies *this owner*.
 
+### Commit metadata counts too
+
+Authorship is personal data. This repo commits as `empcoorg
+<empcoorg@users.noreply.github.com>`, set **repo-locally** so it cannot be
+forgotten:
+
+    git config --local user.name empcoorg
+    git config --local user.email empcoorg@users.noreply.github.com
+
+Rewriting history fixes the commits that exist; the next commit picks the real
+identity straight back up from git config unless this is set. That happened
+here, twice, minutes after a history rewrite. `tests/test_privacy.py` checks it.
+
 ### What enforces it
 
 - `tests/test_privacy.py` — booking references must carry a fiction marker;
