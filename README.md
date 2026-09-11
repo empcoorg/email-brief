@@ -126,4 +126,4 @@ bar. It is a rule with tests, not a judgement made fresh each evening.
 
 ## Data policy — no personal content in this repo
 
-This repository holds the **generic template only**. Never commit a filled-in prompt, real brief output, email content, mailpiece scans, or any personal details — here or in any public fork. If you version your filled-in prompt, do it in a **private** repository.
+**Everything in this repository is invented — see [`CLAUDE.md`](CLAUDE.md) for the rule and the approved mock vocabulary.** It holds the **generic template only**. Never commit a filled-in prompt, real brief output, email content, mailpiece scans, or any personal details — here or in any public fork. If you version your filled-in prompt, do it in a **private** repository.

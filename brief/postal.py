@@ -33,7 +33,35 @@ GENERIC_ADDRESSEES = (
 _TITLES = {"mr", "mrs", "ms", "miss", "dr", "prof", "rev", "sir", "madam"}
 _SUFFIXES = {"jr", "sr", "ii", "iii", "iv", "v", "md", "phd", "dds", "esq"}
 
-RECIPIENT, OTHER_NAMED, GENERIC = "recipient", "other_named", "generic"
+RECIPIENT, LIKELY, OTHER_NAMED, GENERIC = "recipient", "likely", "other_named", "generic"
+
+# Common English diminutives, checked both directions. Explicit and auditable:
+# guessing that two names are "probably the same person" is how a relative's
+# mail ends up published, so the guesses live here where they can be read.
+NICKNAMES = {
+    "james": {"jim", "jimmy", "jamie", "jas"},
+    "robert": {"bob", "bobby", "rob", "robbie"},
+    "william": {"will", "bill", "billy", "liam"},
+    "richard": {"rick", "ricky", "dick", "rich"},
+    "michael": {"mike", "mickey", "mick"},
+    "charles": {"charlie", "chuck", "chas"},
+    "thomas": {"tom", "tommy"},
+    "joseph": {"joe", "joey"},
+    "john": {"jack", "johnny", "jon"},
+    "edward": {"ed", "eddie", "ted", "teddy"},
+    "anthony": {"tony"}, "andrew": {"andy", "drew"},
+    "daniel": {"dan", "danny"}, "matthew": {"matt"},
+    "christopher": {"chris"}, "nicholas": {"nick"},
+    "benjamin": {"ben", "benji"}, "alexander": {"alex", "xander"},
+    "alexandra": {"alex", "sasha", "lexi"}, "katherine": {"kate", "katie", "kathy", "kat"},
+    "elizabeth": {"liz", "beth", "betty", "eliza", "lizzie"},
+    "margaret": {"maggie", "meg", "peggy"}, "patricia": {"pat", "patty", "tricia"},
+    "jennifer": {"jen", "jenny"}, "jessica": {"jess"},
+    "rebecca": {"becca", "becky"}, "stephanie": {"steph"},
+    "samantha": {"sam"}, "samuel": {"sam", "sammy"},
+    "deborah": {"deb", "debbie"}, "susan": {"sue", "suzie"},
+    "theodore": {"ted", "teddy", "theo"}, "frederick": {"fred", "freddie"},
+}
 
 
 def _fold(text):
@@ -62,6 +90,50 @@ def is_generic_addressee(printed):
     if not folded:
         return False
     return any(g == folded or g in folded for g in GENERIC_ADDRESSEES)
+
+
+def _edit_distance(a, b):
+    """Levenshtein distance, for catching a spelling variant of one name."""
+    if a == b:
+        return 0
+    prev = list(range(len(b) + 1))
+    for i, ca in enumerate(a, 1):
+        cur = [i]
+        for j, cb in enumerate(b, 1):
+            cur.append(min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (ca != cb)))
+        prev = cur
+    return prev[-1]
+
+
+def _nickname_pair(a, b):
+    for full, shorts in NICKNAMES.items():
+        if {a, b} <= ({full} | shorts):
+            return True
+    return False
+
+
+def first_name_relation(a, b):
+    """How two first names relate: "exact", "likely" or "different".
+
+    "exact" covers the same name and initials. "likely" covers a diminutive
+    (Alexander/Alex), a shared opening (at least three letters) and a one- or
+    two-character spelling variant on a name long enough for that to mean
+    something. Everything else is a different person.
+
+    >>> first_name_relation("james", "jim")
+    'likely'
+    >>> first_name_relation("james", "dana")
+    'different'
+    """
+    if _initial_match(a, b):
+        return "exact"
+    if _nickname_pair(a, b):
+        return "likely"
+    if len(a) >= 3 and len(b) >= 3 and (a.startswith(b[:3]) or b.startswith(a[:3])):
+        return "likely"
+    if min(len(a), len(b)) >= 4 and _edit_distance(a, b) <= 2:
+        return "likely"
+    return "different"
 
 
 def _initial_match(a, b):
@@ -121,18 +193,26 @@ def addressee_matches(printed, owner):
     return any(_matches_one(printed, form) for form in name_forms(owner))
 
 
-def _matches_one(printed, owner):
+def _relation_one(printed, owner):
+    """"exact", "likely" or "different" for one accepted form of the name."""
     want, got = _tokens(owner), _tokens(printed)
     if len(want) < 2 or len(got) < 2:
         # a single token can never be an identification - "Alex" or "Sample"
         # alone is exactly the ambiguity this filter exists to refuse
-        return False
+        return "different"
     surname = want[-1]
     if surname not in got:
-        return False
+        return "different"          # the surname is the anchor, always exact
     first = want[0]
-    # the first name must appear too, allowing an initial in either direction
-    return any(_initial_match(first, g) for g in got if g != surname or got.count(surname) > 1)
+    candidates = [g for g in got if g != surname or got.count(surname) > 1]
+    relations = [first_name_relation(first, g) for g in candidates]
+    if "exact" in relations:
+        return "exact"
+    return "likely" if "likely" in relations else "different"
+
+
+def _matches_one(printed, owner):
+    return _relation_one(printed, owner) == "exact"
 
 
 def classify_addressee(printed, owner):
@@ -151,12 +231,17 @@ def classify_addressee(printed, owner):
     """
     if is_generic_addressee(printed):
         return GENERIC
-    return RECIPIENT if addressee_matches(printed, owner) else OTHER_NAMED
+    relations = [_relation_one(printed, form) for form in name_forms(owner)]
+    if "exact" in relations:
+        return RECIPIENT
+    if "likely" in relations:
+        return LIKELY
+    return OTHER_NAMED
 
 
 def counts(printed_names, owner):
     """Bucket a run's scans. Returns {RECIPIENT: n, OTHER_NAMED: n, GENERIC: n}."""
-    out = {RECIPIENT: 0, OTHER_NAMED: 0, GENERIC: 0}
+    out = {RECIPIENT: 0, LIKELY: 0, OTHER_NAMED: 0, GENERIC: 0}
     for name in printed_names:
         out[classify_addressee(name, owner)] += 1
     return out

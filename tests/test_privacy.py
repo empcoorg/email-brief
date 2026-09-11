@@ -94,6 +94,26 @@ class TestNoRealIdentifiers(unittest.TestCase):
         self.assertNotIn("payload.json\"", script.replace("sample_payload.json", ""))
 
 
+class TestTheRuleIsWrittenDown(unittest.TestCase):
+    """The structural checks catch shapes. They cannot catch a real name that
+    looks like any other name — only the rule does that, and only if whoever is
+    editing the repo reads it. So the rule has to exist, in the file an agent
+    working here loads automatically."""
+
+    def test_claude_md_states_the_rule(self):
+        path = os.path.join(ROOT, "CLAUDE.md")
+        self.assertTrue(os.path.isfile(path), "CLAUDE.md is missing")
+        body = open(path, encoding="utf-8").read()
+        self.assertIn("NO PERSONAL DATA", body.upper())
+        for anchor in ("public", "invented", "private_denylist.txt"):
+            self.assertIn(anchor, body, f"CLAUDE.md no longer explains {anchor!r}")
+
+    def test_readme_points_at_the_rule(self):
+        readme = open(os.path.join(ROOT, "README.md"), encoding="utf-8").read()
+        self.assertIn("CLAUDE.md", readme,
+                      "the README must point contributors at the data rule")
+
+
 class TestPrivateDenylist(unittest.TestCase):
     """The owner's own identifiers, kept out of the repository.
 
