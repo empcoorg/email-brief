@@ -88,7 +88,7 @@ class TestGeneratorOutputs(unittest.TestCase):
         ("Vanguard funds", "Vanguard funds", "Vanguard funds"),
         ("Cryptocurrency", "Cryptocurrency", "CRYPTOCURRENCY"),
         ("AI &amp; programming", "AI &amp; programming", "AI & PROGRAMMING"),
-        ("Research and publications", "Research and publications", "RESEARCH AND PUBLICATIONS"),
+        ("Research &amp; publications", "Research &amp; publications", "RESEARCH & PUBLICATIONS"),
         ("Retail sales", "Retail sales", "RETAIL SALES"),
         ("Domain allowlist", "Domain allowlist", "DOMAIN ALLOWLIST"),
         ("Sources", "Sources", "SOURCES"),
@@ -102,6 +102,23 @@ class TestGeneratorOutputs(unittest.TestCase):
             self.assertIn(in_file, self.r["page"], f"FILE is missing section {in_file!r}")
             self.assertIn(in_email, self.r["email"], f"EMAIL is missing section {in_email!r}")
             self.assertIn(in_text, self.r["text"], f"TEXT is missing section {in_text!r}")
+
+    def test_direction_shown_as_arrows_in_html_words_in_plain_text(self):
+        """Finance figures use arrows to save width. Shape carries the meaning,
+        so colour is never the only channel; the plain-text fallback has no
+        colour at all, so it keeps the words."""
+        page, em, tx = self.r["page"], self.r["email"], self.r["text"]
+        for out, name in ((page, "file"), (em, "email")):
+            self.assertGreaterEqual(out.count("\u25b2"), 10, f"{name} missing up arrows")
+            self.assertGreaterEqual(out.count("\u25bc"), 4, f"{name} missing down arrows")
+            for word in (" Up<", " Down<", " Up ", " Down "):
+                self.assertNotIn(word, out, f"{name} still spells out {word.strip()!r}")
+        self.assertNotIn("\u25b2", tx, "plain text has no colour, so it keeps words")
+        self.assertIn("Up", tx); self.assertIn("Down", tx)
+        # the sign still accompanies every figure, so direction survives without
+        # colour or glyph rendering
+        self.assertRegex(page, r"\+\d+\.\d{2}% \u25b2")
+        self.assertRegex(page, r"\u2212\d+\.\d{2}% \u25bc")
 
     def test_fund_rows_carry_a_change_bar_on_an_even_axis(self):
         page, em = self.r["page"], self.r["email"]
@@ -161,9 +178,9 @@ class TestGeneratorOutputs(unittest.TestCase):
             self.assertIn("$1,082", out, "crypto 24h move must carry $ magnitude")
             self.assertIn("$3,594", out, "crypto 7d move must carry $ magnitude")
         # journals research card in all three outputs
-        self.assertIn("Research and publications", page)
-        self.assertIn("Research and publications", em)
-        self.assertIn("RESEARCH AND PUBLICATIONS", tx)
+        self.assertIn("Research &amp; publications", page)
+        self.assertIn("Research &amp; publications", em)
+        self.assertIn("RESEARCH & PUBLICATIONS", tx)
         self.assertIn("Journal of Phycology", page)
 
     def test_money_bars_diverge_from_zero_with_even_axis_breaks(self):
@@ -249,7 +266,7 @@ class TestGeneratorOutputs(unittest.TestCase):
         """Lowest priority — retail sits below the research sections."""
         page, tx = self.r["page"], self.r["text"]
         self.assertLess(page.index("US market"), page.index("Retail sales"))
-        self.assertLess(page.index("Research and publications"), page.index("Retail sales"))
+        self.assertLess(page.index("Research &amp; publications"), page.index("Retail sales"))
         self.assertLess(tx.index("US MARKET"), tx.index("8. RETAIL SALES"))
 
     def test_fit_badges_are_bordered_chips_labelled_strong_fit_and_related(self):
@@ -371,7 +388,7 @@ class TestTemplate(unittest.TestCase):
             "PACKAGE TRACKING",
             "ESTIMATED ARRIVAL DATE",
             "INFERRED FROM THE MAILBOX, NOT CONFIGURED",
-            "RESEARCH AND PUBLICATIONS",
+            "RESEARCH & PUBLICATIONS",
             "THIS SECTION PERSISTS",              # flights
             "LOCAL TIME AT THAT AIRPORT",
             "LINK EVERY FLIGHT NUMBER TO FLIGHTAWARE",

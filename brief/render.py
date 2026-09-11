@@ -68,6 +68,27 @@ def loc_tier(loc):
     return "", ""
 
 # ------------------------------------------------------------------ RENDER: FILE (tokens)
+# Direction glyphs. SHAPE carries the meaning, colour only reinforces it — the
+# brief never lets colour be the sole channel, and an arrow is a non-colour cue
+# that costs a third of the width of the word it replaces.
+ARROW_UP, ARROW_DOWN = "\u25b2", "\u25bc"
+
+
+def arrow(v):
+    """Up/down glyph for a signed change."""
+    return ARROW_UP if v >= 0 else ARROW_DOWN
+
+
+def pct_str(v):
+    """A signed percentage using a real minus sign (U+2212), not a hyphen.
+
+    The payload's own figures and the axis labels already use U+2212, so a
+    hyphen here would put two different minus characters in one cell:
+    "\u2212121.40 pts \u00b7 -0.26%".
+    """
+    return f"{v:+.2f}%".replace("-", "\u2212")
+
+
 def pct_tick(v):
     """Even percentage axis label: −3% · 0 · +3%."""
     return "0" if v == 0 else f"{v:+g}".replace("-", "\u2212") + "%"
@@ -354,26 +375,26 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
     o.append(f'<div class="card wide"><h2>US market</h2><div class="tbl-wrap"><table><thead><tr><th>Index</th><th style="text-align:right">Close</th><th>1D{axis_div(MKT_24)}</th><th>1W{axis_div(MKT_7D)}</th></tr></thead><tbody>')
     for n, c, p24, v24, p7, v7 in MKT_ROWS:
         c24 = "dir-pos" if v24 >= 0 else "dir-neg"; c7 = "dir-pos" if v7 >= 0 else "dir-neg"
-        w24 = "Up" if v24 >= 0 else "Down"; w7 = "Up" if v7 >= 0 else "Down"
+        w24 = arrow(v24); w7 = arrow(v7)
         o.append('<tr>' + tdl("Index", e(n), "mono") + tdl("Close", e(c), "num mono")
-                 + tdl("1D", f'<span class="{c24} mono">{e(p24)} pts · {v24:+.2f}% {w24}</span>{bar_div(v24, MKT_24)}')
-                 + tdl("1W", f'<span class="{c7} mono">{e(p7)} pts · {v7:+.2f}% {w7}</span>{bar_div(v7, MKT_7D)}') + '</tr>')
+                 + tdl("1D", f'<span class="{c24} mono">{e(p24)} pts · {pct_str(v24)} {w24}</span>{bar_div(v24, MKT_24)}')
+                 + tdl("1W", f'<span class="{c7} mono">{e(p7)} pts · {pct_str(v7)} {w7}</span>{bar_div(v7, MKT_7D)}') + '</tr>')
     o.append(f'</tbody></table></div>{axis_foot(MKT_24, "1D move, % of prior close")}{axis_foot(MKT_7D, "1W move, % over 5 sessions")}<div class="cap">1D = close→close vs the prior session; 1W = trailing 5 sessions (one trading week). Both in index points and %. {axis_note(MKT_24, "1D axis")}; {axis_note(MKT_7D, "1W axis")}.</div>')
     o.append(f'<h3>Vanguard funds</h3><div class="tbl-wrap"><table><thead><tr><th>Fund</th><th style="text-align:right">NAV</th><th>1D{axis_div(FUND_1D)}</th><th>As of · YTD</th></tr></thead><tbody>')
     for tk, nm, nav, amt, pct, asof, ytd, note in FUNDS:
-        cls = "dir-pos" if pct >= 0 else "dir-neg"; word = "Up" if pct >= 0 else "Down"
+        cls = "dir-pos" if pct >= 0 else "dir-neg"; word = arrow(pct)
         o.append('<tr>' + tdl("Fund", f'<span class="lead">{e(tk)}</span><br><span class="meta">{e(nm)}</span>', "mono")
                  + tdl("NAV", e(nav), "num mono")
-                 + tdl("1D", f'<span class="{cls} mono">{e(amt)} · {pct:+.2f}% {word}</span>{bar_div(pct, FUND_1D)}')
+                 + tdl("1D", f'<span class="{cls} mono">{e(amt)} · {pct_str(pct)} {word}</span>{bar_div(pct, FUND_1D)}')
                  + tdl("As of · YTD", f'{e(asof)}<br><span class="meta">YTD {e(ytd)}</span>') + '</tr>')
     o.append(f'</tbody></table></div>{axis_foot(FUND_1D, "1D NAV change, %")}<div class="cap">1D = change from the prior published NAV, in $ and %. {axis_note(FUND_1D, "1D axis")}. ' + e(" ".join(f"{tk}: {note}" for tk, nm, nav, amt, pct, asof, ytd, note in FUNDS)) + '</div>')
     o.append(f'<div class="card wide"><h2>Cryptocurrency</h2><div class="tbl-wrap"><table><thead><tr><th>Asset</th><th style="text-align:right">Price</th><th>1D{axis_div(CRY_24)}</th><th>1W{axis_div(CRY_7D)}</th></tr></thead><tbody>')
     for n, pr, v24, a24, v7, a7 in CRYPTO_ROWS:
         c24 = "dir-pos" if v24 >= 0 else "dir-neg"; c7 = "dir-pos" if v7 >= 0 else "dir-neg"
-        w24 = "Up" if v24 >= 0 else "Down"; w7 = "Up" if v7 >= 0 else "Down"
+        w24 = arrow(v24); w7 = arrow(v7)
         o.append('<tr>' + tdl("Asset", f'<span class="lead">{e(n)}</span>', "mono") + tdl("Price", e(pr), "num mono")
-                 + tdl("1D", f'<span class="{c24} mono">{v24:+.2f}% {w24} · {e(a24)}</span>{bar_div(v24, CRY_24)}')
-                 + tdl("1W", f'<span class="{c7} mono">{v7:+.2f}% {w7} · {e(a7)}</span>{bar_div(v7, CRY_7D)}') + '</tr>')
+                 + tdl("1D", f'<span class="{c24} mono">{pct_str(v24)} {w24} · {e(a24)}</span>{bar_div(v24, CRY_24)}')
+                 + tdl("1W", f'<span class="{c7} mono">{pct_str(v7)} {w7} · {e(a7)}</span>{bar_div(v7, CRY_7D)}') + '</tr>')
     o.append(f'</tbody></table></div>{axis_foot(CRY_24, "1D change, %")}{axis_foot(CRY_7D, "1W change, %")}<div class="cap">1D = rolling 24 h; 1W = rolling 7 days — crypto trades continuously, so there is no daily close and both windows are measured back from the quote time. Each given as % and $. {axis_note(CRY_24, "1D axis")}; {axis_note(CRY_7D, "1W axis")}. {e(CRYPTO_NOTE)}</div><ul>')
     for b in CRYPTO_BULLETS: o.append(li_lead(b))
     o.append('</ul></div>')
@@ -381,7 +402,7 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
     for t, d, link in AI_ITEMS:
         o.append(f'<li><span class="lead">{e(t)}</span> — {e(d)} <a href="{url(link)}">source</a></li>')
     o.append('</ul></div>')
-    o.append('<div class="card"><h2>Research and publications</h2><ul>')
+    o.append('<div class="card"><h2>Research &amp; publications</h2><ul>')
     for j, t, au, d, tk, link in JOURNAL_ITEMS:
         o.append(f'<li><span class="lead">{e(j)}</span> — <b>{e(t)}</b> ({e(au)}, {e(d)}). {e(tk)} <a href="{url(link)}">paper</a></li>')
     o.append(f'</ul><div class="cap">Journals scanned: {e(JOURNALS)}; items newly published since the previous run.</div></div>')
@@ -578,18 +599,18 @@ def email_html():
     rws = []
     for n, c, p24, v24, p7, v7 in MKT_ROWS:
         k24 = L["pos"] if v24 >= 0 else L["neg"]; k7 = L["pos"] if v7 >= 0 else L["neg"]
-        w24 = "Up" if v24 >= 0 else "Down"; w7 = "Up" if v7 >= 0 else "Down"
+        w24 = arrow(v24); w7 = arrow(v7)
         rws.append([td(f'{lead(n)}<br>{small(e(c))}', mono=True),
-                    td(f'{sp(f"{e(p24)} pts · {v24:+.2f}% {w24}", k24)}{em_bar_div(v24, MKT_24)}', mono=True),
-                    td(f'{sp(f"{e(p7)} pts · {v7:+.2f}% {w7}", k7)}{em_bar_div(v7, MKT_7D)}', mono=True)])
+                    td(f'{sp(f"{e(p24)} pts · {pct_str(v24)} {w24}", k24)}{em_bar_div(v24, MKT_24)}', mono=True),
+                    td(f'{sp(f"{e(p7)} pts · {pct_str(v7)} {w7}", k7)}{em_bar_div(v7, MKT_7D)}', mono=True)])
     inner += tbl(["Index · close", th_axis("1D", pct_labels(MKT_24)), th_axis("1W", pct_labels(MKT_7D))], rws, ["28%", "36%", "36%"]) + cap(f"1D = close→close vs the prior session; 1W = trailing 5 sessions (one trading week). Both in index points and %. {axis_note(MKT_24, '1D axis')}; {axis_note(MKT_7D, '1W axis')}.")
     inner += h3("Vanguard funds")
     rws = []
     rws = []
     for tk, nm, nav, amt, pct, asof, ytd, note in FUNDS:
-        col = L["pos"] if pct >= 0 else L["neg"]; word = "Up" if pct >= 0 else "Down"
+        col = L["pos"] if pct >= 0 else L["neg"]; word = arrow(pct)
         rws.append([td(f'{lead(tk)}<br>{small(e(nm))}', mono=True),
-                    td(f'{e(nav)}<br>{sp(f"{e(amt)} · {pct:+.2f}% {word}", col)}{em_bar_div(pct, FUND_1D)}', mono=True),
+                    td(f'{e(nav)}<br>{sp(f"{e(amt)} · {pct_str(pct)} {word}", col)}{em_bar_div(pct, FUND_1D)}', mono=True),
                     td(f'{e(asof)}<br>{small("YTD " + e(ytd))}')])
     inner += tbl(["Fund", th_axis("NAV · 1D", pct_labels(FUND_1D)), "As of · YTD"], rws, ["26%", "44%", "30%"]) + cap("1D = change from the prior published NAV, in $ and %. " + " ".join(f"{tk}: {note}" for tk, nm, nav, amt, pct, asof, ytd, note in FUNDS))
     inner += '<ul style="margin:8px 0 0;padding-left:20px">' + "".join(em_li(b) for b in MKT_BULLETS) + "</ul>"
@@ -599,17 +620,17 @@ def email_html():
     rws = []
     for n, pr, v24, a24, v7, a7 in CRYPTO_ROWS:
         k24 = L["pos"] if v24 >= 0 else L["neg"]; k7 = L["pos"] if v7 >= 0 else L["neg"]
-        w24 = "Up" if v24 >= 0 else "Down"; w7 = "Up" if v7 >= 0 else "Down"
+        w24 = arrow(v24); w7 = arrow(v7)
         rws.append([td(f'{lead(n)}<br>{small(e(pr))}', mono=True),
-                    td(f'{sp(f"{v24:+.2f}% {w24} · {e(a24)}", k24)}{em_bar_div(v24, CRY_24)}', mono=True),
-                    td(f'{sp(f"{v7:+.2f}% {w7} · {e(a7)}", k7)}{em_bar_div(v7, CRY_7D)}', mono=True)])
+                    td(f'{sp(f"{pct_str(v24)} {w24} · {e(a24)}", k24)}{em_bar_div(v24, CRY_24)}', mono=True),
+                    td(f'{sp(f"{pct_str(v7)} {w7} · {e(a7)}", k7)}{em_bar_div(v7, CRY_7D)}', mono=True)])
     inner += tbl(["Asset · price", th_axis("1D", pct_labels(CRY_24)), th_axis("1W", pct_labels(CRY_7D))], rws, ["28%", "36%", "36%"]) + cap(f"1D = rolling 24 h; 1W = rolling 7 days — crypto trades continuously, so there is no daily close and both windows are measured back from the quote time. Each given as % and $. {axis_note(CRY_24, '1D axis')}; {axis_note(CRY_7D, '1W axis')}. {CRYPTO_NOTE}")
     inner += '<ul style="margin:8px 0 0;padding-left:20px">' + "".join(em_li(b) for b in CRYPTO_BULLETS) + "</ul>"
     o.append(card(inner))
     # ai
     inner = h2("AI &amp; programming") + ul([f'{lead(t_)} — {e(d)} <a href="{url(l)}" style="color:{L["accent"]}">source</a>' for t_, d, l in AI_ITEMS])
     o.append(card(inner))
-    inner = h2("Research and publications") + ul([f'{lead(j)} — <b>{e(t_)}</b> ({e(au)}, {e(d)}). {e(tk)} <a href="{url(l)}" style="color:{L["accent"]}">paper</a>' for j, t_, au, d, tk, l in JOURNAL_ITEMS]) + cap(f"Journals scanned: {JOURNALS}; items newly published since the previous run.")
+    inner = h2("Research &amp; publications") + ul([f'{lead(j)} — <b>{e(t_)}</b> ({e(au)}, {e(d)}). {e(tk)} <a href="{url(l)}" style="color:{L["accent"]}">paper</a>' for j, t_, au, d, tk, l in JOURNAL_ITEMS]) + cap(f"Journals scanned: {JOURNALS}; items newly published since the previous run.")
     o.append(card(inner))
     # 7 retail — lowest priority, so it sits last, after the research sections
     inner = h2(f'{sp("8.", L["accent"])} Retail sales', RETAIL["sub"])
@@ -670,17 +691,17 @@ def plain_text():
     A("  " + PKG_NOTE)
     A(""); A("US MARKET (Fri Sep 4 close; Mon Sep 7 closed for Labor Day)")
     for n, c, p24, v24, p7, v7 in MKT_ROWS:
-        A(f"  {n}: {c} | 1D {p24} pts, {v24:+.2f}% {'Up' if v24>=0 else 'Down'} | 1W {p7} pts, {v7:+.2f}% {'Up' if v7>=0 else 'Down'}")
+        A(f"  {n}: {c} | 1D {p24} pts, {pct_str(v24)} {'Up' if v24>=0 else 'Down'} | 1W {p7} pts, {pct_str(v7)} {'Up' if v7>=0 else 'Down'}")
     A("  " + "1D = close→close vs the prior session; 1W = trailing 5 sessions (one trading week). Both in index points and %.")
     A(f"  (1D axis ±{MKT_24[1]:g}%, step {MKT_24[0]:g}%; 1W axis ±{MKT_7D[1]:g}%, step {MKT_7D[0]:g}%.)")
     A("  Vanguard funds:")
     for tk, nm, nav, amt, pct, asof, ytd, note in FUNDS:
-        A(f"    {tk} ({nm}): NAV {nav} · 1D {amt} · {pct:+.2f}% {'Up' if pct>=0 else 'Down'} · as of {asof} · YTD {ytd}. {note}")
+        A(f"    {tk} ({nm}): NAV {nav} · 1D {amt} · {pct_str(pct)} {'Up' if pct>=0 else 'Down'} · as of {asof} · YTD {ytd}. {note}")
     A(f"    (1D axis ±{FUND_1D[1]:g}%, step {FUND_1D[0]:g}%.)")
     for b in MKT_BULLETS: A(f"  - {b}")
     A(""); A("CRYPTOCURRENCY")
     for n, pr, v24, a24, v7, a7 in CRYPTO_ROWS:
-        A(f"  {n}: {pr} | 1D {v24:+.2f}% {'Up' if v24>=0 else 'Down'} ({a24}) | 1W {v7:+.2f}% {'Up' if v7>=0 else 'Down'} ({a7})")
+        A(f"  {n}: {pr} | 1D {pct_str(v24)} {'Up' if v24>=0 else 'Down'} ({a24}) | 1W {pct_str(v7)} {'Up' if v7>=0 else 'Down'} ({a7})")
     A("  " + "1D = rolling 24 h; 1W = rolling 7 days — crypto trades continuously, so there is no daily close and both windows are measured back from the quote time.")
     A(f"  (1D axis ±{CRY_24[1]:g}%, step {CRY_24[0]:g}%; 1W axis ±{CRY_7D[1]:g}%, step {CRY_7D[0]:g}%.)")
     A("  (24 h and 7 d changes each as % and $.)")
@@ -688,7 +709,7 @@ def plain_text():
     for b in CRYPTO_BULLETS: A(f"  - {b}")
     A(""); A("AI & PROGRAMMING")
     for t, d, l in AI_ITEMS: A(f"  - {t} — {d}\n    {l}")
-    A(""); A("RESEARCH AND PUBLICATIONS (" + JOURNALS + ")")
+    A(""); A("RESEARCH & PUBLICATIONS (" + JOURNALS + ")")
     for j, t, au, d, tk, l in JOURNAL_ITEMS: A(f"  - {j}: {t} ({au}, {d}) — {tk}\n    {l}")
     A(""); A("8. RETAIL SALES (lowest priority — configured retailers)")
     A("  - " + RETAIL["rewards"])
