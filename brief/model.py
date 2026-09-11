@@ -34,12 +34,12 @@ SPEC = {
     "FIN_NOTES":  ("list", None, "bills/statements bullets"),
     "FIN_INTERNAL": ("str", None, "internal-transfer summary line"),
     "FLIGHTS":    ("obj", ("airline", "conf", "pax", "booked", "legs", "note"), "upcoming flights"),
-    "VOIP":       ("obj", ("headline", "last_msg", "last_acct"), "VoIP summary"),
+    "VOIP":       ("obj", ("headline", "messages", "notes"), "VoIP: headline, message rows, notes"),
     "USPS":       ("obj", ("headline", "pieces", "counts", "note"), "postal digest"),
     "USPS_SCANS": ("rows", 2, "mailpiece scans: (data-uri, caption)"),
     "PKG":        ("rows", 6, "shipments: (carrier, tracking, item, recipient, status, eta)"),
     "PKG_NOTE":   ("str", None, "package section note"),
-    "RETAIL":     ("obj", ("sub", "rewards", "sales"), "retail sales"),
+    "RETAIL":     ("obj", ("sub", "rewards", "items"), "retail: subtitle, rewards line, offer rows"),
     "MKT_ROWS":   ("rows", 6, "indexes: (name, close, pts1d, pct1d, pts1w, pct1w)"),
     "FUNDS":      ("rows", 8, "funds: (ticker, name, nav, chg_amount, chg_pct, asof, ytd, note)"),
     "MKT_BULLETS": ("list", None, "market bullets"),
@@ -116,6 +116,14 @@ def validate(payload):
             absent = [k2 for k2 in arity if k2 not in v]
             if absent:
                 _fail(key, f"missing field(s) {', '.join(absent)} ({desc})")
+
+    for n, row in enumerate(payload["VOIP"]["messages"]):
+        if not isinstance(row, (list, tuple)) or len(row) != 5:
+            _fail("VOIP", f"message {n} must have 5 fields "
+                          "(when, from, to, kind, text)")
+    for n, row in enumerate(payload["RETAIL"]["items"]):
+        if not isinstance(row, (list, tuple)) or len(row) != 3:
+            _fail("RETAIL", f"offer {n} must have 3 fields (store, offer, detail)")
 
     for n, leg in enumerate(payload["FLIGHTS"]["legs"]):
         absent = [k for k in FLIGHT_LEG_KEYS if k not in leg]
