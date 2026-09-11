@@ -410,6 +410,8 @@ class TestTemplate(unittest.TestCase):
             'OMIT the leg\'s "stats" field',       # drop the column, do not apologise
             "WORK DOWN THIS CHAIN",               # fund NAV fallback sources
             "QUOTE THAT MARKER",                  # proof the renderer ran
+            "MAY LIST SEVERAL MAILBOXES",         # one address or many
+            "ONE merged report, never one report per mailbox",
             "keep a shipment in the payload until the carrier reports it delivered",
             "stooq.com",                          # the most robust fund source
             'Never call an equity move "24H"',
@@ -486,9 +488,11 @@ class TestReadmeAndPrivacy(unittest.TestCase):
             self.assertTrue(os.path.isfile(os.path.join(ROOT, img)), f"missing image {img}")
 
     # Domains that may legitimately appear in the template and mock data.
+    # example.com/.org/.net are reserved by IANA for documentation, so they can
+    # never belong to a real person — that is exactly why mock data uses them.
     ALLOWED_EMAIL_DOMAINS = re.compile(
-        r"@([\w.-]*\.)?(example\.com|usps\.com|voip\.ms|anthropic\.com|"
-        r"claude\.ai|github\.com)$", re.I)
+        r"@([\w.-]*\.)?(example\.(com|org|net)|usps\.com|voip\.ms|"
+        r"anthropic\.com|claude\.ai|github\.com)$", re.I)
 
     def test_screenshots_share_a_scale(self):
         import struct
