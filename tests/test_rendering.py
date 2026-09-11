@@ -226,6 +226,55 @@ class TestBarGeometry(_BrowserCase):
             self.assertFalse(a["overlap"], f"axis labels collide: {a['labels']}")
         pg.close()
 
+    def test_axis_aligns_with_track_at_every_width(self):
+        """The ruler's 0 must fall on the track's centre at every width. At phone
+        width the header collapses and the ruler repeats below the table, where
+        it has to inset by the cell padding or it is wider than the bars."""
+        for width in (1280, 1024, 768):
+            pg = self._page(width)
+            pairs = pg.evaluate("""() => {
+                const out = [];
+                for (const t of document.querySelectorAll('table')) {
+                    for (const ax of t.querySelectorAll('thead .daxis')) {
+                        if (ax.getBoundingClientRect().width === 0) continue;
+                        const th = ax.closest('th');
+                        const i = [...th.parentNode.children].indexOf(th);
+                        for (const tr of t.querySelectorAll('tbody tr')) {
+                            const bar = tr.children[i] && tr.children[i].querySelector('.dbar');
+                            if (!bar) continue;
+                            const a = ax.getBoundingClientRect(), r = bar.getBoundingClientRect();
+                            const z = [...ax.querySelectorAll('span')].find(s => s.textContent.trim() === '0');
+                            const zc = z ? z.getBoundingClientRect().left + z.getBoundingClientRect().width / 2 : null;
+                            out.push({dl: a.left - r.left, dw: a.width - r.width,
+                                      dz: zc === null ? 0 : zc - (r.left + r.width / 2)});
+                        }
+                    }
+                }
+                return out;
+            }""")
+            self.assertGreaterEqual(len(pairs), 10, f"no axis/track pairs found @{width}px")
+            for p_ in pairs:
+                self.assertLessEqual(abs(p_["dl"]), 1.6, f"ruler offset from track @{width}px: {p_}")
+                self.assertLessEqual(abs(p_["dw"]), 1.6, f"ruler width differs @{width}px: {p_}")
+                self.assertLessEqual(abs(p_["dz"]), 1.6, f"axis 0 misses track centre @{width}px: {p_}")
+            pg.close()
+
+        # phone: the repeated ruler under the table must match the track width
+        pg = self._page(390)
+        feet = pg.evaluate("""() => [...document.querySelectorAll('.daxis-foot')]
+            .filter(f => f.getBoundingClientRect().width > 0)
+            .map(f => {
+                const a = f.querySelector('.daxis').getBoundingClientRect();
+                const tbl = f.closest('.card').querySelector('.dbar');
+                const r = tbl.getBoundingClientRect();
+                return {dl: a.left - r.left, dw: a.width - r.width};
+            })""")
+        self.assertGreaterEqual(len(feet), 1, "phone width must repeat the ruler below the table")
+        for f in feet:
+            self.assertLessEqual(abs(f["dl"]), 2.5, f"phone ruler offset from tracks: {f}")
+            self.assertLessEqual(abs(f["dw"]), 2.5, f"phone ruler width differs from tracks: {f}")
+        pg.close()
+
     def test_money_bars_direction_colored_with_axis(self):
         pg = self._page(1280)
         r = pg.evaluate("""() => {

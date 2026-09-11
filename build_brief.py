@@ -189,13 +189,22 @@ HIPRI = [
 FLIGHTS = dict(
     airline="Delta", conf="SAMPLE7", pax="ALEX Q SAMPLE",
     booked="Confirmation received Feb 11 — carried forward each run until the trip date passes.",
-    legs=[  # date, flight, from, dep (airport-local), to, arr (airport-local)
-        ("Mon, Mar 23, 2026", "NW 412", "Denver (DEN)", "1:29 PM CST",
-         "Chicago (ORD)", "7:19 PM EDT"),
-        ("Mon, Mar 23, 2026", "NW 987", "Chicago (ORD)", "9:55 PM EDT",
-         "Boston (BOS)", "11:51 PM EDT"),
+    legs=[
+        dict(date="Mon, Mar 23, 2026", flight="NW 412", ident="NWA412",
+             frm="Denver (DEN)", dep="1:29 PM CST",
+             to="Chicago (ORD)", arr="7:19 PM EDT",
+             fa="https://www.flightaware.com/live/flight/NWA412",
+             stats="71% on time · avg delay 18 min (last 30 days, FlightAware)"),
+        dict(date="Mon, Mar 23, 2026", flight="NW 987", ident="NWA987",
+             frm="Chicago (ORD)", dep="9:55 PM EDT",
+             to="Boston (BOS)", arr="11:51 PM EDT",
+             fa="https://www.flightaware.com/live/flight/NWA987",
+             stats="84% on time · avg delay 9 min (last 30 days, FlightAware)"),
     ],
-    note="All times are LOCAL TO EACH AIRPORT — departure in the origin's zone, arrival in the destination's. No schedule changes since booking.",
+    note=("All times are LOCAL TO EACH AIRPORT — departure in the origin's zone, "
+          "arrival in the destination's. On-time rates and average delays are that "
+          "flight number's recent history from FlightAware, not a prediction. "
+          "No schedule changes since booking."),
 )
 
 # Markets ------------------------------------------------------------
@@ -435,7 +444,7 @@ td.num{{text-align:right;white-space:nowrap}}
 .dbar::before{{content:"";position:absolute;left:50%;top:0;bottom:0;width:1px;background:var(--line-strong);z-index:1}}
 .dbar .fill{{position:absolute;top:3px;bottom:3px;min-width:3px;border-radius:2px}}
 .dbar .fill.right{{left:50%}} .dbar .fill.left{{right:50%}} .fill.pos{{background:var(--positive)}} .fill.neg{{background:var(--negative)}} .fill.neu{{background:var(--ink-3)}}
-.daxis{{position:relative;height:16px;width:150px;margin-top:3px}}
+.daxis{{position:relative;height:16px;width:150px;margin-top:3px;box-sizing:border-box;border:1px solid transparent}}
 .dbar.money,.daxis.money{{width:100%;min-width:150px;max-width:280px}}
 .daxis i{{position:absolute;top:0;height:3px;width:1px;background:var(--line)}}
 .daxis i.mj{{height:5px;background:var(--line-strong)}}
@@ -470,7 +479,7 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
  tr{{background:var(--surface);border:1px solid var(--line);border-radius:10px;margin:0 0 10px;padding:6px 0}}
  td{{border:0;padding:5px 12px;font-size:15px;text-align:left!important;white-space:normal!important}}
  td[data-l]::before{{content:attr(data-l);display:block;font-family:Archivo,sans-serif;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);margin-bottom:1px}}
- td.num{{text-align:left}} .dbar,.daxis{{width:100%}} .grid3 .dbar{{width:100%}} .grid3 .daxis{{width:100%}} .daxis-foot{{display:block;margin:2px 0 8px}} .grid3 .tbl-wrap table{{font-size:15px}}
+ td.num{{text-align:left}} .dbar,.daxis{{width:100%}} .grid3 .dbar{{width:100%}} .grid3 .daxis{{width:100%}} .daxis-foot{{display:block;margin:2px 12px 8px}}  /* 12px == td side padding, so the ruler lines up with the tracks */ .grid3 .tbl-wrap table{{font-size:15px}}
  li{{margin:11px 0}} .meta{{font-size:14px}} .legend span{{display:block;margin:2px 0}}
 }}
 """
@@ -531,9 +540,20 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
     for n in FIN_NOTES: o.append(li_lead(n))
     o.append('</ul></div></section>')
     # 3 voip
-    o.append(f'<section><h2><span class="num">4.</span> VoIP voicemails &amp; texts <span class="sub">searched by the configured provider senders + Google Voice, Twilio, OpenPhone, Grasshopper, RingCentral, Dialpad</span></h2><div class="card"><div class="nothing">{e(VOIP["headline"])}</div><ul>{li_lead(VOIP["last_msg"])}{li_lead(VOIP["last_acct"])}</ul></div></section>')
+    # 4 upcoming flights — persists until the trip date passes
+    o.append('<section><h2><span class="num">4.</span> Upcoming flights <span class="sub">carried forward until the trip date passes</span></h2><div class="card">')
+    o.append(f'<p><span class="lead">{e(FLIGHTS["airline"])}, confirmation {e(FLIGHTS["conf"])}</span> — {e(FLIGHTS["pax"])}</p>')
+    o.append(f'<p class="meta">{e(FLIGHTS["booked"])}</p>')
+    o.append('<div class="tbl-wrap"><table><thead><tr><th>Date · flight</th><th>Departs (airport local)</th><th>Arrives (airport local)</th><th>Recent on-time record</th></tr></thead><tbody>')
+    for g in FLIGHTS["legs"]:
+        o.append('<tr>' + tdl("Date · flight", f'{e(g["date"])}<br><a href="{e(g["fa"])}" class="mono">{e(g["flight"])}</a>')
+                 + tdl("Departs (airport local)", f'{e(g["frm"])}<br><span class="mono">{e(g["dep"])}</span>')
+                 + tdl("Arrives (airport local)", f'{e(g["to"])}<br><span class="mono">{e(g["arr"])}</span>')
+                 + tdl("Recent on-time record", f'{e(g["stats"])}', "meta") + '</tr>')
+    o.append(f'</tbody></table></div><div class="cap">{e(FLIGHTS["note"])}</div></div></section>')
+    o.append(f'<section><h2><span class="num">5.</span> VoIP voicemails &amp; texts <span class="sub">searched by the configured provider senders + Google Voice, Twilio, OpenPhone, Grasshopper, RingCentral, Dialpad</span></h2><div class="card"><div class="nothing">{e(VOIP["headline"])}</div><ul>{li_lead(VOIP["last_msg"])}{li_lead(VOIP["last_acct"])}</ul></div></section>')
     # 5 USPS
-    o.append(f'<section><h2><span class="num">5.</span> USPS Informed Delivery <span class="sub">mail addressed to the intended recipient only; everyone else counted, never named</span></h2><div class="card"><div class="nothing">{e(USPS["headline"])}</div>')
+    o.append(f'<section><h2><span class="num">6.</span> USPS Informed Delivery <span class="sub">mail addressed to the intended recipient only; everyone else counted, never named</span></h2><div class="card"><div class="nothing">{e(USPS["headline"])}</div>')
     o.append('<div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Sender</th><th>Addressee (as printed)</th><th>Type / notes</th></tr></thead><tbody>')
     for d_, s_, a_, ty in USPS["pieces"]:
         o.append('<tr>' + tdl("Date", e(d_), "mono") + tdl("Sender", e(s_)) + tdl("Addressee (as printed)", e(a_), "mono") + tdl("Type / notes", e(ty), "meta") + '</tr>')
@@ -542,18 +562,12 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
         o.append(f'<figure class="scanfig"><img src="{uri}" alt="Full mailpiece scan (mock)"><figcaption>{e(cap_)}</figcaption></figure>')
     o.append(f'<ul>{li_lead(USPS["counts"])}</ul><p class="meta">{e(USPS["note"])}</p></div></section>')
     # 6 package tracking
-    o.append('<section><h2><span class="num">6.</span> Package tracking <span class="sub">FedEx · UPS · USPS · DHL · merchant shipping emails</span></h2><div class="card"><div class="tbl-wrap"><table><thead><tr><th>Carrier</th><th>Tracking</th><th>Sender · item</th><th>Recipient</th><th>Status</th><th>Est. arrival</th></tr></thead><tbody>')
+    o.append('<section><h2><span class="num">7.</span> Package tracking <span class="sub">FedEx · UPS · USPS · DHL · merchant shipping emails</span></h2><div class="card"><div class="tbl-wrap"><table><thead><tr><th>Carrier</th><th>Tracking</th><th>Sender · item</th><th>Recipient</th><th>Status</th><th>Est. arrival</th></tr></thead><tbody>')
     for car, trk, item, rcpt, st, eta in PKG:
         o.append('<tr>' + tdl("Carrier", e(car)) + tdl("Tracking", e(trk), "mono") + tdl("Sender · item", e(item)) + tdl("Recipient", e(rcpt)) + tdl("Status", e(st), "meta") + tdl("Est. arrival", e(eta), "mono") + '</tr>')
     o.append(f'</tbody></table></div><p class="meta">{e(PKG_NOTE)}</p></div></section>')
     # research grid
     o.append('<section><div class="grid3">')
-    o.append('<div class="card"><h2>Upcoming flights</h2>')
-    o.append(f'<p><span class="lead">{e(FLIGHTS["airline"])}, confirmation {e(FLIGHTS["conf"])}</span> — {e(FLIGHTS["pax"])}</p>')
-    o.append(f'<p class="meta">{e(FLIGHTS["booked"])}</p>')
-    for d_, fl, frm, dep, to, arr in FLIGHTS["legs"]:
-        o.append(f'<p><b>{e(d_)}</b><br><span class="mono">{e(fl)}</span> · {e(frm)} <span class="mono">{e(dep)}</span> → {e(to)} <span class="mono">{e(arr)}</span></p>')
-    o.append(f'<div class="cap">{e(FLIGHTS["note"])}</div></div>')
     o.append(f'<div class="card wide"><h2>US market</h2><div class="tbl-wrap"><table><thead><tr><th>Index</th><th style="text-align:right">Close</th><th>1D{axis_div(MKT_24)}</th><th>1W{axis_div(MKT_7D)}</th></tr></thead><tbody>')
     for n, c, p24, v24, p7, v7 in MKT_ROWS:
         c24 = "dir-pos" if v24 >= 0 else "dir-neg"; c7 = "dir-pos" if v7 >= 0 else "dir-neg"
@@ -582,7 +596,7 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
     o.append(f'</ul><div class="cap">Journals scanned: {e(JOURNALS)}; items newly published since the previous run.</div></div>')
     o.append('</div></section>')
     # 7 retail (low priority)
-    o.append(f'<section><h2><span class="num">7.</span> Retail sales <span class="sub">{e(RETAIL["sub"])}</span></h2><div class="card"><ul>' + li_lead(RETAIL["rewards"]) + "".join(li_lead(x) for x in RETAIL["sales"]) + '</ul></div></section>')
+    o.append(f'<section><h2><span class="num">8.</span> Retail sales <span class="sub">{e(RETAIL["sub"])}</span></h2><div class="card"><ul>' + li_lead(RETAIL["rewards"]) + "".join(li_lead(x) for x in RETAIL["sales"]) + '</ul></div></section>')
     o.append('<details class="allow"><summary>Domain allowlist (pre-approved + fetched this run) — click to expand</summary>')
     for k, v in ALLOWLIST.items(): o.append(f'<p><b>{e(k)}:</b> {e(v)}</p>')
     o.append('</details>')
@@ -719,29 +733,30 @@ def email_html():
     inner += h3("Bills, statements & notices") + '<ul style="margin:8px 0 0;padding-left:20px">' + "".join(em_li(n) for n in FIN_NOTES) + "</ul>"
     o.append(card(inner))
     # 3 voip
-    inner = h2(f'{sp("4.", L["accent"])} VoIP voicemails &amp; texts', "searched by the configured provider senders + Google Voice, Twilio, OpenPhone, Grasshopper, RingCentral, Dialpad")
+    # 4 upcoming flights — persists until the trip date passes
+    inner = h2(f'{sp("4.", L["accent"])} Upcoming flights', "carried forward until the trip date passes")
+    inner += f'<p>{lead(FLIGHTS["airline"] + ", confirmation " + FLIGHTS["conf"])} — {e(FLIGHTS["pax"])}</p>'
+    inner += f'<p style="font-size:13px;color:{L["ink3"]}">{e(FLIGHTS["booked"])}</p>'
+    rws = [[td(f'{e(g["date"])}<br><a href="{e(g["fa"])}" style="color:{L["accent"]};font-family:{F_M};font-weight:600">{e(g["flight"])}</a>'),
+            td(f'{e(g["frm"])} <span style="font-family:{F_M}">{e(g["dep"])}</span><br>→ {e(g["to"])} <span style="font-family:{F_M}">{e(g["arr"])}</span>'),
+            td(small(e(g["stats"])))] for g in FLIGHTS["legs"]]
+    inner += tbl(["Date · flight", "Route (airport local times)", "On-time record"], rws, ["26%", "44%", "30%"])
+    inner += cap(FLIGHTS["note"])
+    o.append(card(inner))
+    inner = h2(f'{sp("5.", L["accent"])} VoIP voicemails &amp; texts', "searched by the configured provider senders + Google Voice, Twilio, OpenPhone, Grasshopper, RingCentral, Dialpad")
     inner += f'<div style="color:{L["ink3"]};font-style:italic">{e(VOIP["headline"])}</div><ul style="margin:8px 0 0;padding-left:20px">{em_li(VOIP["last_msg"])}{em_li(VOIP["last_acct"])}</ul>'
     o.append(card(inner))
     # 5 USPS
-    inner = h2(f'{sp("5.", L["accent"])} USPS Informed Delivery', "mail addressed to the intended recipient only; everyone else counted, never named")
+    inner = h2(f'{sp("6.", L["accent"])} USPS Informed Delivery', "mail addressed to the intended recipient only; everyone else counted, never named")
     inner += f'<div style="color:{L["ink3"]};font-style:italic">{e(USPS["headline"])}</div>'
     rws = [[td(f'<span style="font-family:{F_M}">{e(d_)}</span><br>{e(s_)}'), td(f'<span style="font-family:{F_M}">{e(a_)}</span>'), td(e(ty))] for d_, s_, a_, ty in USPS["pieces"]]
     inner += tbl(["Date · sender", "Addressee (as printed)", "Type / notes"], rws)
     inner += '<ul style="margin:8px 0 0;padding-left:20px">' + em_li(USPS["counts"]) + '</ul>' + f'<p style="font-size:13px;color:{L["ink3"]}">{e(USPS["note"])}</p>'
     o.append(card(inner))
     # 6 package tracking
-    inner = h2(f'{sp("6.", L["accent"])} Package tracking', "FedEx · UPS · USPS · DHL · merchant shipping emails")
+    inner = h2(f'{sp("7.", L["accent"])} Package tracking', "FedEx · UPS · USPS · DHL · merchant shipping emails")
     rws = [[td(f'<b>{e(car)}</b><br>{small("ETA: " + e(eta))}'), td(f'<span style="font-family:{F_M};word-break:break-all">{e(trk)}</span>'), td(f'{e(item)}<br>{small("To: " + e(rcpt) + " · " + e(st))}')] for car, trk, item, rcpt, st, eta in PKG]
     inner += tbl(["Carrier · ETA", "Tracking", "Item · status"], rws) + f'<p style="font-size:13px;color:{L["ink3"]}">{e(PKG_NOTE)}</p>'
-    o.append(card(inner))
-    # upcoming flights — carried forward until the trip date passes
-    inner = h2("Upcoming flights")
-    inner += f'<p>{lead(FLIGHTS["airline"] + ", confirmation " + FLIGHTS["conf"])} — {e(FLIGHTS["pax"])}</p>'
-    inner += f'<p style="font-size:13px;color:{L["ink3"]}">{e(FLIGHTS["booked"])}</p>'
-    for d_, fl, frm, dep, to, arr in FLIGHTS["legs"]:
-        inner += (f'<p style="margin:8px 0"><b>{e(d_)}</b><br><span style="font-family:{F_M}">{e(fl)}</span> · '
-                  f'{e(frm)} <span style="font-family:{F_M}">{e(dep)}</span> → {e(to)} <span style="font-family:{F_M}">{e(arr)}</span></p>')
-    inner += cap(FLIGHTS["note"])
     o.append(card(inner))
     # markets
     inner = h2("US market")
@@ -779,7 +794,7 @@ def email_html():
     inner = h2("New publications") + ul([f'{lead(j)} — <b>{e(t_)}</b> ({e(au)}, {e(d)}). {e(tk)} <a href="{e(l)}" style="color:{L["accent"]}">paper</a>' for j, t_, au, d, tk, l in JOURNAL_ITEMS]) + cap(f"Journals scanned: {JOURNALS}; items newly published since the previous run.")
     o.append(card(inner))
     # 7 retail — lowest priority, so it sits last, after the research sections
-    inner = h2(f'{sp("7.", L["accent"])} Retail sales', RETAIL["sub"])
+    inner = h2(f'{sp("8.", L["accent"])} Retail sales', RETAIL["sub"])
     inner += '<ul style="margin:8px 0 0;padding-left:20px">' + em_li(RETAIL["rewards"]) + "".join(em_li(x) for x in RETAIL["sales"]) + "</ul>"
     o.append(card(inner))
     # allowlist + sources (no <details> in email — compact plain blocks)
@@ -819,19 +834,21 @@ def plain_text():
     for when, payee, det, amt, cur, dirw, sign in FIN_MOVES: A(f"  - {when} · {payee} · {sign} {dirw} · {cur_sym(cur)}{amt:,.2f} · {det}")
     A("Transfers between own accounts: nothing new.")
     for n in FIN_NOTES: A(f"  - {n}")
-    A(""); A("4. VOIP VOICEMAILS & TEXTS"); A(VOIP["headline"]); A("  - " + VOIP["last_msg"]); A("  - " + VOIP["last_acct"]); A("")
-    A(""); A("5. USPS INFORMED DELIVERY (intended recipient's mail only)"); A(USPS["headline"])
-    for d_, s_, a_, ty in USPS["pieces"]: A(f"  - {d_} · {s_} · addressed to {a_} · {ty}")
-    A("  " + USPS["counts"]); A("  Note: " + USPS["note"])
-    A(""); A("6. PACKAGE TRACKING")
-    for car, trk, item, rcpt, st, eta in PKG: A(f"  - {car} · {trk} · {item} · to {rcpt} · {st} · ETA {eta}")
-    A("  " + PKG_NOTE)
-    A(""); A("UPCOMING FLIGHTS (carried forward until the trip date passes)")
+    A(""); A("4. UPCOMING FLIGHTS (carried forward until the trip date passes)")
     A(f"  {FLIGHTS['airline']}, confirmation {FLIGHTS['conf']} — {FLIGHTS['pax']}")
     A(f"  {FLIGHTS['booked']}")
-    for d_, fl, frm, dep, to, arr in FLIGHTS["legs"]:
-        A(f"  - {d_}: {fl} · {frm} {dep} -> {to} {arr}")
+    for g in FLIGHTS["legs"]:
+        A(f"  - {g['date']}: {g['flight']} · {g['frm']} {g['dep']} -> {g['to']} {g['arr']}")
+        A(f"    on-time: {g['stats']}")
+        A(f"    {g['fa']}")
     A(f"  {FLIGHTS['note']}")
+    A(""); A("5. VOIP VOICEMAILS & TEXTS"); A(VOIP["headline"]); A("  - " + VOIP["last_msg"]); A("  - " + VOIP["last_acct"]); A("")
+    A(""); A("6. USPS INFORMED DELIVERY (intended recipient's mail only)"); A(USPS["headline"])
+    for d_, s_, a_, ty in USPS["pieces"]: A(f"  - {d_} · {s_} · addressed to {a_} · {ty}")
+    A("  " + USPS["counts"]); A("  Note: " + USPS["note"])
+    A(""); A("7. PACKAGE TRACKING")
+    for car, trk, item, rcpt, st, eta in PKG: A(f"  - {car} · {trk} · {item} · to {rcpt} · {st} · ETA {eta}")
+    A("  " + PKG_NOTE)
     A(""); A("US MARKET (Fri Sep 4 close; Mon Sep 7 closed for Labor Day)")
     for n, c, p24, v24, p7, v7 in MKT_ROWS:
         A(f"  {n}: {c} | 1D {p24} pts, {v24:+.2f}% {'Up' if v24>=0 else 'Down'} | 1W {p7} pts, {v7:+.2f}% {'Up' if v7>=0 else 'Down'}")
@@ -852,7 +869,7 @@ def plain_text():
     for t, d, l in AI_ITEMS: A(f"  - {t} — {d}\n    {l}")
     A(""); A("NEW PUBLICATIONS (" + JOURNALS + ")")
     for j, t, au, d, tk, l in JOURNAL_ITEMS: A(f"  - {j}: {t} ({au}, {d}) — {tk}\n    {l}")
-    A(""); A("7. RETAIL SALES (lowest priority — configured retailers)")
+    A(""); A("8. RETAIL SALES (lowest priority — configured retailers)")
     A("  - " + RETAIL["rewards"])
     for x in RETAIL["sales"]: A("  - " + x)
     A(""); A("DOMAIN ALLOWLIST")

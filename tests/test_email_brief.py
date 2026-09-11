@@ -57,15 +57,15 @@ class TestGeneratorOutputs(unittest.TestCase):
 
     def test_sections_numbered_in_order_in_file(self):
         nums = re.findall(r'<span class="num">(\d)\.</span>', self.r["page"])
-        self.assertEqual(nums, [str(i) for i in range(1, 8)],
-                         "file sections must be numbered 1..7 in order")
+        self.assertEqual(nums, [str(i) for i in range(1, 9)],
+                         "file sections must be numbered 1..8 in order")
 
     def test_sections_in_email_and_text(self):
-        for i in range(1, 8):
+        for i in range(1, 9):
             self.assertIn(f">{i}.</span>", self.r["email"], f"email missing section {i}")
         for line in ("1. HIGH PRIORITY", "2. RELEVANT JOB POSTS",
-                     "5. USPS INFORMED DELIVERY", "6. PACKAGE TRACKING",
-                     "7. RETAIL SALES"):
+                     "4. UPCOMING FLIGHTS", "6. USPS INFORMED DELIVERY",
+                     "7. PACKAGE TRACKING", "8. RETAIL SALES"):
             self.assertIn(line, self.r["text"])
 
     def test_plain_text_is_a_full_fallback_not_a_stub(self):
@@ -172,21 +172,33 @@ class TestGeneratorOutputs(unittest.TestCase):
         self.assertIn("1D", tx); self.assertIn("1W", tx)
         self.assertNotIn(">MOVE<", page, "no per-table label variants")
 
-    def test_flights_persist_and_state_airport_local_time(self):
+    def test_flights_persist_link_flightaware_and_use_airport_local_time(self):
         page, em, tx = self.r["page"], self.r["email"], self.r["text"]
+        # standing section 4, directly after Deposits & finances
+        self.assertIn('<span class="num">4.</span> Upcoming flights', page)
+        self.assertLess(page.index("Deposits &amp; finances"), page.index("Upcoming flights"))
+        self.assertLess(page.index("Upcoming flights"), page.index("VoIP voicemails"))
         for out in (page, em, tx):
-            self.assertIn("Upcoming flights", out) if out is not tx else self.assertIn("UPCOMING FLIGHTS", out)
             self.assertIn("LOCAL TO EACH AIRPORT", out.upper())
-        self.assertIn("carried forward", page.lower() + tx.lower())
+            self.assertIn("carried forward", out.lower())
         # every leg time carries its own zone abbreviation
         self.assertRegex(page, r"\d{1,2}:\d{2} [AP]M (CST|EDT|EST|PDT|PST|CDT)")
+        # FlightAware link per flight, ICAO ident, plus a recent on-time record
+        idents = re.findall(r"flightaware\.com/live/flight/([A-Z]{3}\d+)", page)
+        self.assertGreaterEqual(len(idents), 2, "each flight needs a FlightAware link")
+        for out in (page, em, tx):
+            self.assertIn("flightaware.com/live/flight/", out)
+            self.assertRegex(out, r"\d+% on time")
+            self.assertRegex(out, r"avg delay \d+ min")
+        # framed as history, never as a prediction
+        self.assertIn("not a prediction", page)
 
     def test_retail_sales_is_the_last_section(self):
         """Lowest priority — retail sits below the research sections."""
         page, tx = self.r["page"], self.r["text"]
         self.assertLess(page.index("US market"), page.index("Retail sales"))
         self.assertLess(page.index("New publications"), page.index("Retail sales"))
-        self.assertLess(tx.index("US MARKET"), tx.index("7. RETAIL SALES"))
+        self.assertLess(tx.index("US MARKET"), tx.index("8. RETAIL SALES"))
 
     def test_fit_badges_are_bordered_chips_labelled_strong_fit_and_related(self):
         """Fit badges are chips with a thin border in their own colour — never
@@ -324,6 +336,9 @@ class TestTemplate(unittest.TestCase):
             "there is no daily close",              # crypto trades 24/7
             "THIS SECTION PERSISTS",                # flights
             "LOCAL TIME AT THAT AIRPORT",
+            "ALIGNED BY CONSTRUCTION, NOT BY EYE",
+            "LINK EVERY FLIGHT NUMBER TO FLIGHTAWARE",
+            "on-time record not available",         # never invent a delay figure
             "THIS SPEC ALWAYS OUTRANKS THE PREVIOUS BRIEF",  # design changes must stick
             "renumber the remaining sections consecutively",
         ):
