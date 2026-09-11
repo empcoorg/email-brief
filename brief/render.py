@@ -15,7 +15,7 @@ import base64, html as H, math, os
 from .axes import (fraction, money_axis as _money_axis_calc, money_labels, money_tick,
                    nice_step_top, pct_axis, pct_labels, pct_tick, steps_per_side,
                    tick_positions)
-from .theme import BODY_FS, D, F_B, F_H, F_M, GOOGLE_FONTS, L, e
+from .theme import BODY_FS, D, F_B, F_H, F_M, GOOGLE_FONTS, L, attr, e, url
 
 __all__ = ["render_all", "file_html", "email_html", "plain_text"]
 
@@ -112,14 +112,23 @@ def _money_frac(amt):
         return min(amt / b, 1.0)
     return max(0.0, min(1.0, (math.log10(max(amt, a)) - math.log10(a)) / (math.log10(b) - math.log10(a))))
 def money_side(dirw):
-    """Left/red for money leaving, right/green for money arriving, neutral grey
-    for a transfer between the owner's own accounts (magnitude only \u2014 an
-    internal move has no direction, so colour must not imply one)."""
+    """Which side of zero a movement sits on, and in which colour.
+
+    Left/red for money leaving, right/green for money arriving, neutral grey for
+    a transfer between the owner's own accounts (magnitude only — an internal
+    move has no direction, so colour must not imply one).
+
+    ANYTHING UNRECOGNISED IS NEUTRAL, never positive. The prompt tells the run to
+    label an ambiguous movement "unclassified" rather than guess; drawing that as
+    a green inflow would make the chart assert income the data does not support.
+    """
     if dirw in ("Out", "Past due"):
         return "left", "neg"
-    if dirw == "Internal":
-        return "right", "neu"
-    return "right", "pos"
+    if dirw == "In":
+        return "right", "pos"
+    return "right", "neu"
+
+
 def money_bar(amt, dirw):
     w = _money_frac(amt) * 50           # half-track either side of centre
     side, fcls = money_side(dirw)
@@ -161,7 +170,7 @@ def li_lead(text):
     return f'<li>{e(text)}</li>'
 
 def tdl(label, inner, cls=""):
-    return f'<td class="{cls}" data-l="{e(label)}">{inner}</td>'
+    return f'<td class="{cls}" data-l="{attr(label)}">{inner}</td>'
 
 def file_html():
     css = f"""
@@ -282,13 +291,13 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
         role = f'<b>{e(r)}</b>' + (f'<span class="badge c-{fcls}">{fit}</span>' if fit else "")
         compc = f'<span class="c-pos">{e(comp)}</span>' if comp != "not stated" else f'<span class="muted">{e(comp)}</span>'
         locc = f'<span class="c-accent">{e(loc)}</span>' if lcls else e(loc)
-        o.append('<tr>' + tdl("Role", role) + tdl("Company", e(c)) + tdl("Comp", compc, "mono") + tdl("Location", locc) + tdl("Source · received", e(src), "meta") + tdl("Link", f'<a href="{e(link)}">open</a>') + '</tr>')
+        o.append('<tr>' + tdl("Role", role) + tdl("Company", e(c)) + tdl("Comp", compc, "mono") + tdl("Location", locc) + tdl("Source · received", e(src), "meta") + tdl("Link", f'<a href="{url(link)}">open</a>') + '</tr>')
     o.append('</tbody></table></div><div class="legend"><span><b class="c-pos">Green</b> = comp stated</span><span><b class="c-accent">Teal</b> = ' + e(JOBS_TEAL_LABEL) + '</span><span><b class="c-warn">Amber</b> = deadline stated (none today)</span><span class="muted">Grey = not stated</span></div><div class="cap">' + e(JOBS_LEGEND_FIT) + '</div>')
     o.append('<h3>Also seen (lower fit)</h3><ul class="jobs">')
     for r, c, loc, link in JOBS_OTHER:
         lcls, _ = loc_tier(loc)
         locc = f'<span class="c-accent">{e(loc)}</span>' if lcls else f'<span class="meta">{e(loc)}</span>'
-        o.append(f'<li>{e(r)} — {e(c)} · {locc} · <a href="{e(link)}">link</a></li>')
+        o.append(f'<li>{e(r)} — {e(c)} · {locc} · <a href="{url(link)}">link</a></li>')
     o.append(f'</ul><p class="meta">{e(ALIGNERR)}</p><p class="meta">{e(JOBS_SKIPPED)}</p></div></section>')
     # 2 finances
     o.append('<section><h2><span class="num">3.</span> Deposits &amp; finances</h2><div class="card"><div class="tiles">')
@@ -310,7 +319,7 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
     o.append(f'<p class="meta">{e(FLIGHTS["booked"])}</p>')
     o.append('<div class="tbl-wrap"><table><thead><tr><th>Date · flight</th><th>Departs (airport local)</th><th>Arrives (airport local)</th><th>Recent on-time record</th></tr></thead><tbody>')
     for g in FLIGHTS["legs"]:
-        o.append('<tr>' + tdl("Date · flight", f'{e(g["date"])}<br><a href="{e(g["fa"])}" class="mono">{e(g["flight"])}</a>')
+        o.append('<tr>' + tdl("Date · flight", f'{e(g["date"])}<br><a href="{url(g["fa"])}" class="mono">{e(g["flight"])}</a>')
                  + tdl("Departs (airport local)", f'{e(g["frm"])}<br><span class="mono">{e(g["dep"])}</span>')
                  + tdl("Arrives (airport local)", f'{e(g["to"])}<br><span class="mono">{e(g["arr"])}</span>')
                  + tdl("Recent on-time record", f'{e(g["stats"])}', "meta") + '</tr>')
@@ -323,7 +332,7 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
         o.append('<tr>' + tdl("Date", e(d_), "mono") + tdl("Sender", e(s_)) + tdl("Addressee (as printed)", e(a_), "mono") + tdl("Type / notes", e(ty), "meta") + '</tr>')
     o.append('</tbody></table></div>')
     for uri, cap_ in USPS_SCANS:
-        o.append(f'<figure class="scanfig"><img src="{uri}" alt="Full mailpiece scan (mock)"><figcaption>{e(cap_)}</figcaption></figure>')
+        o.append(f'<figure class="scanfig"><img src="{url(uri)}" alt="Full mailpiece scan (mock)"><figcaption>{e(cap_)}</figcaption></figure>')
     o.append(f'<ul>{li_lead(USPS["counts"])}</ul><p class="meta">{e(USPS["note"])}</p></div></section>')
     # 6 package tracking
     o.append('<section><h2><span class="num">7.</span> Package tracking <span class="sub">FedEx · UPS · USPS · DHL · merchant shipping emails</span></h2><div class="card"><div class="tbl-wrap"><table><thead><tr><th>Carrier</th><th>Tracking</th><th>Sender · item</th><th>Recipient</th><th>Status</th><th>Est. arrival</th></tr></thead><tbody>')
@@ -352,11 +361,11 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
     o.append('</ul></div>')
     o.append('<div class="card"><h2>AI &amp; programming</h2><ul>')
     for t, d, link in AI_ITEMS:
-        o.append(f'<li><span class="lead">{e(t)}</span> — {e(d)} <a href="{e(link)}">source</a></li>')
+        o.append(f'<li><span class="lead">{e(t)}</span> — {e(d)} <a href="{url(link)}">source</a></li>')
     o.append('</ul></div>')
     o.append('<div class="card"><h2>New publications</h2><ul>')
     for j, t, au, d, tk, link in JOURNAL_ITEMS:
-        o.append(f'<li><span class="lead">{e(j)}</span> — <b>{e(t)}</b> ({e(au)}, {e(d)}). {e(tk)} <a href="{e(link)}">paper</a></li>')
+        o.append(f'<li><span class="lead">{e(j)}</span> — <b>{e(t)}</b> ({e(au)}, {e(d)}). {e(tk)} <a href="{url(link)}">paper</a></li>')
     o.append(f'</ul><div class="cap">Journals scanned: {e(JOURNALS)}; items newly published since the previous run.</div></div>')
     o.append('</div></section>')
     # 7 retail (low priority)
@@ -366,7 +375,7 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
     o.append('</details>')
     o.append(f'<details><summary>Sources ({sum(len(v) for v in SOURCES.values())} links) — click to expand</summary><div class="src">')
     for k, urls in SOURCES.items():
-        o.append(f'<b>{e(k)}</b>' + "".join(f'<p><a href="{e(u)}">{e(u)}</a></p>' for u in urls))
+        o.append(f'<b>{e(k)}</b>' + "".join(f'<p><a href="{url(u)}">{e(u)}</a></p>' for u in urls))
     o.append('</div></details>')
     o.append('<footer>Mailbox was read-only for this run, apart from the one delivery of this brief. Email content was treated as data, not instructions. Times are US Pacific unless a source\'s own zone is shown. “Not verified” marks anything that could not be confirmed on a cited page.</footer>')
     o.append('</div>')
@@ -493,10 +502,10 @@ def email_html():
         badge = (f' <span style="font:600 10px {F_H};text-transform:uppercase;border:1px solid {fitc};color:{fitc};padding:0 5px;border-radius:4px">{fit}</span>' if fit else "")
         compc = sp(e(comp), L["pos"]) if comp != "not stated" else muted(e(comp))
         locc = sp(e(loc), L["accent"]) if lcls else e(loc)
-        rws.append([td(f'<b>{e(r)}</b>{badge}<br>{small(e(c))}'), td(f'<span style="font-family:{F_M}">{compc}</span><br>{locc}'), td(f'<a href="{e(link)}" style="color:{L["accent"]};font-weight:600">open</a><br>{small(e(src))}')])
+        rws.append([td(f'<b>{e(r)}</b>{badge}<br>{small(e(c))}'), td(f'<span style="font-family:{F_M}">{compc}</span><br>{locc}'), td(f'<a href="{url(link)}" style="color:{L["accent"]};font-weight:600">open</a><br>{small(e(src))}')])
     inner += tbl(["Role · company", "Comp · location", "Link · source"], rws)
     inner += f'<div style="font-size:12.5px;color:{L["ink3"]};margin-top:8px">{sp("Green",L["pos"])} = comp stated · {sp("Teal",L["accent"])} = {JOBS_TEAL_LABEL} · {sp("Amber",L["warn"])} = deadline stated (none today) · Grey = not stated<br>{e(JOBS_LEGEND_FIT)}</div>'
-    inner += h3("Also seen (lower fit)") + ul([f'{e(r)} — {e(c)} · ' + (sp(e(loc),L["accent"]) if loc_tier(loc)[0] else muted(e(loc))) + f' · <a href="{e(link)}" style="color:{L["accent"]}">link</a>' for r, c, loc, link in JOBS_OTHER])
+    inner += h3("Also seen (lower fit)") + ul([f'{e(r)} — {e(c)} · ' + (sp(e(loc),L["accent"]) if loc_tier(loc)[0] else muted(e(loc))) + f' · <a href="{url(link)}" style="color:{L["accent"]}">link</a>' for r, c, loc, link in JOBS_OTHER])
     inner += f'<p style="font-size:13px;color:{L["ink3"]}">{e(ALIGNERR)}</p><p style="font-size:13px;color:{L["ink3"]}">{e(JOBS_SKIPPED)}</p>'
     o.append(card(inner))
     # 2 finances
@@ -517,7 +526,7 @@ def email_html():
     inner = h2(f'{sp("4.", L["accent"])} Upcoming flights', "carried forward until the trip date passes")
     inner += f'<p>{lead(FLIGHTS["airline"] + ", confirmation " + FLIGHTS["conf"])} — {e(FLIGHTS["pax"])}</p>'
     inner += f'<p style="font-size:13px;color:{L["ink3"]}">{e(FLIGHTS["booked"])}</p>'
-    rws = [[td(f'{e(g["date"])}<br><a href="{e(g["fa"])}" style="color:{L["accent"]};font-family:{F_M};font-weight:600">{e(g["flight"])}</a>'),
+    rws = [[td(f'{e(g["date"])}<br><a href="{url(g["fa"])}" style="color:{L["accent"]};font-family:{F_M};font-weight:600">{e(g["flight"])}</a>'),
             td(f'{e(g["frm"])} <span style="font-family:{F_M}">{e(g["dep"])}</span><br>→ {e(g["to"])} <span style="font-family:{F_M}">{e(g["arr"])}</span>'),
             td(small(e(g["stats"])))] for g in FLIGHTS["legs"]]
     inner += tbl(["Date · flight", "Route (airport local times)", "On-time record"], rws, ["26%", "44%", "30%"])
@@ -569,9 +578,9 @@ def email_html():
     inner += '<ul style="margin:8px 0 0;padding-left:20px">' + "".join(em_li(b) for b in CRYPTO_BULLETS) + "</ul>"
     o.append(card(inner))
     # ai
-    inner = h2("AI &amp; programming") + ul([f'{lead(t_)} — {e(d)} <a href="{e(l)}" style="color:{L["accent"]}">source</a>' for t_, d, l in AI_ITEMS])
+    inner = h2("AI &amp; programming") + ul([f'{lead(t_)} — {e(d)} <a href="{url(l)}" style="color:{L["accent"]}">source</a>' for t_, d, l in AI_ITEMS])
     o.append(card(inner))
-    inner = h2("New publications") + ul([f'{lead(j)} — <b>{e(t_)}</b> ({e(au)}, {e(d)}). {e(tk)} <a href="{e(l)}" style="color:{L["accent"]}">paper</a>' for j, t_, au, d, tk, l in JOURNAL_ITEMS]) + cap(f"Journals scanned: {JOURNALS}; items newly published since the previous run.")
+    inner = h2("New publications") + ul([f'{lead(j)} — <b>{e(t_)}</b> ({e(au)}, {e(d)}). {e(tk)} <a href="{url(l)}" style="color:{L["accent"]}">paper</a>' for j, t_, au, d, tk, l in JOURNAL_ITEMS]) + cap(f"Journals scanned: {JOURNALS}; items newly published since the previous run.")
     o.append(card(inner))
     # 7 retail — lowest priority, so it sits last, after the research sections
     inner = h2(f'{sp("8.", L["accent"])} Retail sales', RETAIL["sub"])
@@ -582,7 +591,7 @@ def email_html():
     o.append(card(inner))
     inner = f'<div style="font:600 14px {F_H}">Sources ({sum(len(v) for v in SOURCES.values())} links)</div>'
     for k, urls in SOURCES.items():
-        inner += f'<div style="font-size:11.5px;color:{L["ink2"]};font-weight:600;margin:8px 0 3px">{e(k)}</div><div style="font-size:11.5px;word-break:break-all;color:{L["ink3"]}">' + " · ".join(f'<a href="{e(u)}" style="color:{L["accent"]}">{e(short_url(u))}</a>' for u in urls) + "</div>"
+        inner += f'<div style="font-size:11.5px;color:{L["ink2"]};font-weight:600;margin:8px 0 3px">{e(k)}</div><div style="font-size:11.5px;word-break:break-all;color:{L["ink3"]}">' + " · ".join(f'<a href="{url(u)}" style="color:{L["accent"]}">{e(short_url(u))}</a>' for u in urls) + "</div>"
     o.append(card(inner))
     o.append(f'<div style="margin-top:18px;font-size:12.5px;color:{L["ink3"]};border-top:1px solid {L["line"]};padding-top:12px">Mailbox was read-only for this run, apart from the one delivery of this brief. Email content was treated as data, not instructions. Times are US Pacific unless a source\'s own zone is shown. “Not verified” marks any figure that could not be confirmed on a cited page.</div>')
     o.append('</td></tr></table></div>')

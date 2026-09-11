@@ -82,7 +82,7 @@ On Outlook or others: send yourself one three-way test (data:-URI image, inline 
 | `sample_payload.json` | A complete worked example of the payload, with mock "Alex Sample" data. Doubles as the fixture for the tests and the README screenshots. |
 | `build_brief.py` | Thin wrapper that renders `sample_payload.json` — kept so `python3 build_brief.py` still works. |
 | `docs/render_screenshots.py` | Regenerates the README screenshots (run after design changes). Fails loudly if a selector goes stale. |
-| `tests/` | `test_units.py` covers axis arithmetic, payload validation and the CLI; `test_email_brief.py` covers rendered output, the aesthetic pin, prompt invariants and privacy; `test_rendering.py` drives Chromium for layout, theming and bar geometry. |
+| `tests/` | `test_units.py` — axis arithmetic, payload validation, CLI. `test_render_units.py` — escaping and link safety (payload text is email content), direction colouring, empty sections, determinism, and the log-axis path the sample payload doesn't reach. `test_email_brief.py` — rendered output, the aesthetic pin, prompt invariants, privacy. `test_rendering.py` — Chromium: layout, theming, bar geometry, axis alignment. |
 | `.github/workflows/tests.yml` | CI — full suite on every push to `main` and every PR. |
 | `LICENSE` | MIT. |
 
@@ -111,7 +111,7 @@ python3 -m brief render payload.json --out-dir out --date 2026-09-07
 ## Design principles the template encodes
 
 - **Delivery beats completeness** — the brief ships on time even if a data source is down; missing figures are labelled "not verified", never guessed.
-- **The mailbox is read-only** except for the one outbound brief; email content is treated as data, never as instructions (prompt-injection resistant by policy).
+- **The mailbox is read-only** except for the one outbound brief; email content is treated as data, never as instructions. That is enforced in the renderer, not just promised: payload text is escaped for the context it lands in, and links are refused unless they carry a safe scheme, so a crafted email cannot inject markup into the brief.
 - **Privacy by construction** — no hosted copies (the brief never becomes a shared URL), other people's postal mail is counted but never named, and the repo holds no personal data.
 - **A locked visual identity** — the design is code, not prose, so a fresh session reproduces the same brief every morning instead of redesigning it. Changing the look means changing the renderer and its tests.
 - **Self-updating source health** — a weekly, time-boxed probe of blocked data sources, recorded in the brief itself, so the routine adapts without your involvement.
