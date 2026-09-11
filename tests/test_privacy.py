@@ -142,12 +142,18 @@ class TestCommitMetadata(unittest.TestCase):
         bad = sorted({e for e in entries if e.split("|")[1].endswith(".local")})
         self.assertEqual(bad, [], f"author email exposes a hostname: {bad}")
 
-    def test_repo_local_identity_is_set(self):
-        """Setting it repo-locally is what stops the next commit regressing."""
+    def test_local_identity_if_configured_is_anonymous(self):
+        """The repo-local identity is what stops the NEXT commit regressing, but
+        it lives in a checkout's config rather than in the repo, so CI cannot
+        have one. Check it when present; the authorship test above is the guard
+        that actually runs everywhere."""
         r = subprocess.run(["git", "config", "--local", "user.name"], cwd=ROOT,
                            capture_output=True, text=True)
-        self.assertIn(r.stdout.strip(), self.APPROVED_AUTHORS,
-                      "set: git config --local user.name empcoorg")
+        name = r.stdout.strip()
+        if not name:
+            self.skipTest("no repo-local user.name (expected in CI); set it locally "
+                          "with: git config --local user.name empcoorg")
+        self.assertIn(name, self.APPROVED_AUTHORS)
 
 
 class TestPrivateDenylist(unittest.TestCase):
