@@ -16,11 +16,11 @@ All content below is **mock data** for a fictional "Alex Sample" — nothing rea
 
 ![Mock brief — masthead and action bar](docs/mock-brief-top.png)
 
-Section 1, Relevant job posts — application-status lead-ins, the ranked-leads table with fit badges and the colour-code legend:
+Section 2, Relevant job posts — application-status lead-ins, the ranked-leads table with bordered fit badges (STRONG FIT / RELATED) and the colour-code legend:
 
 ![Mock brief — relevant job posts section](docs/mock-brief-jobs.png)
 
-The Deposits & finances section — summary tiles, the money-movements table with direction words and proportional bars, and external money separated from internal transfers:
+Section 3, Deposits & finances — summary tiles, and the money-movements table: bars diverge from a centred zero on one **USD** axis with even round breaks, so a foreign-currency charge is plotted at its converted value rather than its face number. External money stays separate from internal transfers.
 
 ![Mock brief — deposits and finances section](docs/mock-brief-sections.png)
 
@@ -32,7 +32,7 @@ Package tracking — carrier, tracking number (or the link/order reference to qu
 
 ![Mock brief — package tracking section](docs/mock-brief-packages.png)
 
-The web-researched market grid — US indexes with diverging bars, your fund tickers, and the crypto table:
+The researched cards — US indexes, your fund tickers and crypto, each carrying **1D** and **1W** columns on their own even axes, with the figure centred over the zero the bar grows from:
 
 ![Mock brief — US market and cryptocurrency sections](docs/mock-brief-markets.png)
 
@@ -51,8 +51,9 @@ That's the whole setup. The rest of this README explains what you get and how to
 ## What a brief contains
 
 - **A "needs you today" action bar** — severity-striped items ranked by urgency.
-- **Standing sections** (each one optional — the template tells Claude to omit sections your mailbox has no content for): relevant job posts (with exact-posting links, not tracking redirects), deposits & finances (external money separated from transfers between your own accounts), VoIP voicemails/texts, high-priority items & security alerts, a postal-mail digest (US, via USPS Informed Delivery) that details only the intended recipient's mail with full mailpiece scans and counts everyone else's (other named recipients and generic “Resident”/“Homeowner” addressees separately), package tracking (FedEx, UPS, USPS, DHL, merchant emails — tracking numbers and estimated arrival), and retail sales from stores you pick.
-- **Web-researched sections** when there's news: flights/travel from your confirmations, US markets (with your fund tickers), crypto, AI & programming, and new publications from journals you pick (e.g. Science, Nature). Market, fund and crypto tables carry fine-grained labelled bar axes, an explicit timescale on every figure (1-day, 24 h, 7 d, YTD, as-of stamps), and absolute magnitudes ($ / index points) alongside every percentage.
+- **Standing sections, numbered in this order:** high priority (first, so it sits directly under the action bar), relevant job posts (exact-posting links, never tracking redirects), deposits & finances (external money separate from transfers between your own accounts), upcoming flights (carried forward until the trip date passes, with FlightAware links and each flight's recent on-time record), VoIP voicemails & texts, a US postal-mail digest via USPS Informed Delivery that details only your own mail and reduces everyone else's to a count, package tracking (kept until delivered, omitted entirely when nothing is in flight), and retail sales — always last, because it is the lowest-priority thing in the brief.
+  Numbering is computed, so a section with nothing to show is omitted and the rest renumber rather than leaving a gap.
+- **Researched cards** when there's news: US markets with your fund tickers, crypto, AI & programming, and research & publications from journals you pick. Market, fund and crypto tables carry labelled even axes, an explicit horizon on every figure (1D and 1W, plus YTD on funds, with as-of stamps), and absolute magnitudes ($ / index points) beside every percentage.
 - A fixed visual identity, rendered by code — light/dark themed HTML file, a fluid email layout that survives email-provider HTML sanitizers, colour-coded lead-ins, diverging bars on even axes, and mailpiece scans attached as JPGs.
 
 ## Manual Setup
@@ -78,7 +79,7 @@ On Outlook or others: send yourself one three-way test (data:-URI image, inline 
 | File | Purpose |
 |---|---|
 | `ROUTINE_PROMPT.template.md` | The prompt template — placeholders + optional sections. Says what to gather and how to hand it over; carries no design spec. |
-| `brief/` | The renderer and the logic the run calls into. `theme.py` holds every colour and font (the aesthetic pin) plus the escaping and link-safety helpers, `axes.py` the bar/axis arithmetic, `links.py` recovers real posting URLs from LinkedIn and Indeed tracking links and builds FlightAware idents, `postal.py` decides whether a printed mailpiece addressee is the owner, `model.py` the payload contract and its validation, `render.py` the three outputs, `__main__.py` the CLI. Pure standard library. |
+| `brief/` | The renderer and the logic the run calls into. `theme.py` holds every colour and font (the aesthetic pin) plus the escaping and link-safety helpers, `axes.py` the bar/axis arithmetic, `links.py` recovers real posting URLs from LinkedIn and Indeed tracking links and builds FlightAware idents, `postal.py` decides whether a printed mailpiece addressee is the owner, `significance.py` decides whether an extra send is warranted, `attachments.py` catches an attachment the send path would silently truncate, `model.py` the payload contract and its validation, `render.py` the three outputs, `__main__.py` the CLI. Pure standard library. |
 | `sample_payload.json` | A complete worked example of the payload, with mock "Alex Sample" data. Doubles as the fixture for the tests and the README screenshots. |
 | `build_brief.py` | Thin wrapper that renders `sample_payload.json` — kept so `python3 build_brief.py` still works. |
 | `docs/render_screenshots.py` | Regenerates the README screenshots (run after design changes). Fails loudly if a selector goes stale. |
@@ -101,6 +102,7 @@ If the payload is malformed the renderer refuses and names the offending key and
 python3 -m brief validate payload.json      # check without rendering
 python3 -m brief render payload.json --out-dir out --date 2026-09-07
 python3 -m brief significant payload.json   # exit 0 = worth sending, 3 = skip
+python3 -m brief attachment scan.jpg        # exit 0 = survives the send path, 4 = would truncate
 ```
 
 `significant` decides whether an extra send (an evening update, say) has earned
