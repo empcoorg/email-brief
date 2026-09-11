@@ -531,3 +531,47 @@ class TestSectionsAsTables(unittest.TestCase):
         _, em, _ = render_all(payload())
         size = len(em.encode("utf-8"))
         self.assertLess(size, 85 * 1024, f"email is {size:,} B, over the Gmail budget")
+
+
+class TestNoMarkupLeaksAsText(unittest.TestCase):
+    """No fragment of a tag may ever appear as visible text.
+
+    A live brief once showed `style="margin:9px 0">` inside every High-priority
+    detail cell: the code reused a list-item helper and stripped the wrapper by
+    character count, which silently left the attribute behind when the helper's
+    tag grew. Extracting inner HTML properly is the fix; this is the guard.
+    """
+
+    @staticmethod
+    def _visible(doc):
+        body = re.sub(r"<style\b.*?</style>", "", doc, flags=re.S)
+        return re.sub(r"<[^>]+>", "", body)
+
+    FRAGMENTS = ('style="', 'class="', "<li", "</li", "<span", "</span",
+                 "<td", "</td", "<div", "margin:9px", "padding-left:",
+                 "font-family:", "border:1px")
+
+    def test_no_tag_fragments_in_visible_text(self):
+        f, em, tx = render_all(payload())
+        for doc, name in ((f, "file"), (em, "email")):
+            text = self._visible(doc)
+            leaks = [frag for frag in self.FRAGMENTS if frag in text]
+            self.assertEqual(leaks, [], f"{name}: markup leaked into visible text: {leaks}")
+        for frag in self.FRAGMENTS:
+            self.assertNotIn(frag, tx, f"plain text carries markup: {frag}")
+
+    def test_high_priority_detail_is_clean(self):
+        """The cell where it actually leaked."""
+        f, em, _ = render_all(payload())
+        for doc, name in ((f, "file"), (em, "email")):
+            block = doc.split("High priority")[1][:4000]
+            self.assertNotIn('>style=', block, f"{name}: attribute leaked into the cell")
+            self.assertNotIn(">margin:", block)
+
+    def test_lead_helpers_return_inner_html_only(self):
+        from brief.render import em_lead_inner, lead_inner
+        for fn in (lead_inner, em_lead_inner):
+            out = fn("Fed: rates held")
+            self.assertFalse(out.startswith("<li"), f"{fn.__name__} must not wrap in <li>")
+            self.assertNotIn("</li>", out)
+            self.assertIn("Fed", out)
