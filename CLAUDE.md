@@ -90,5 +90,5 @@ only when the owner explicitly asks.
 
 ## 4. Verify, don't assert
 
-Claims about behaviour need evidence: run it, measure it, diff it. "Byte
+Claims about behavior need evidence: run it, measure it, diff it. "Byte
 identical", "aligned", "under budget" are checkable — check them.

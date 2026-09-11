@@ -7,6 +7,7 @@ number") and re-interpreted on every run. They are code now, so they get tests.
 import copy
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -72,7 +73,7 @@ class TestAxisArithmetic(unittest.TestCase):
         self.assertAlmostEqual(fraction(99999, ax), 1.0, msg="must clamp, not overflow the track")
         self.assertAlmostEqual(fraction(-1500, ax), 0.5, msg="sign is carried by the side, not the length")
 
-    def test_ticks_are_symmetric_about_the_centre(self):
+    def test_ticks_are_symmetric_about_the_center(self):
         for ax in (("linear", 1000.0, 3000.0), ("linear", 0.5, 1.0), ("log", 10.0, 10000.0)):
             pos = tick_positions(ax)
             self.assertIn(50.0, pos, "there must be a tick at zero")
@@ -320,3 +321,52 @@ class TestAttachmentCeiling(unittest.TestCase):
                            cwd=ROOT, capture_output=True, text=True)
         self.assertEqual(r.returncode, 4)
         self.assertIn("missing.jpg", r.stderr)
+
+
+class TestSpecCoversWhatTheRendererReads(unittest.TestCase):
+    """The payload SPEC is advertised to the run as THE contract. It was not:
+    render.py read MAST["revised"] and VOIP["last_msg"]/["last_acct"], none of
+    which SPEC required, so a payload that validated still crashed with KeyError
+    and had to be patched by hand mid-run.
+
+    Deriving the requirement from the source means the contract cannot drift
+    from the code again without this failing.
+    """
+
+    SOURCE = open(os.path.join(ROOT, "brief", "render.py"), encoding="utf-8").read()
+
+    def _keys_read(self, name):
+        """Keys render.py reads off a payload dict, by subscript or .get()."""
+        subs = set(re.findall(name + r'\["(\w+)"\]', self.SOURCE))
+        gets = set(re.findall(name + r'\.get\("(\w+)"', self.SOURCE))
+        return subs | gets
+
+    def test_every_key_the_renderer_reads_is_required(self):
+        from brief.model import SPEC
+        for name in ("MAST", "VOIP", "USPS", "RETAIL", "FLIGHTS"):
+            required = set(SPEC[name][1])
+            read = self._keys_read(name)
+            # .get() with a default is an optional read, so only subscripts are
+            # strictly required; treat both as required unless defaulted
+            optional = set(re.findall(name + r'\.get\("(\w+)",', self.SOURCE))
+            missing = read - optional - required
+            self.assertEqual(missing, set(),
+                             f"{name}: render.py reads {sorted(missing)} but SPEC does not "
+                             "require it — a valid payload would crash")
+
+    def test_no_required_key_is_unused(self):
+        """A required key the renderer never reads is a tax on every run."""
+        from brief.model import SPEC
+        for name in ("MAST", "VOIP", "RETAIL"):
+            required = set(SPEC[name][1])
+            unused = required - self._keys_read(name)
+            self.assertEqual(unused, set(),
+                             f"{name}: SPEC requires {sorted(unused)} but nothing reads it")
+
+    def test_the_sample_payload_satisfies_the_derived_requirement(self):
+        payload = json.load(open(SAMPLE, encoding="utf-8"))
+        for name in ("MAST", "VOIP", "USPS", "RETAIL"):
+            for key in self._keys_read(name):
+                if re.search(name + r'\.get\("' + key + r'",', self.SOURCE):
+                    continue
+                self.assertIn(key, payload[name], f"sample payload {name} lacks {key!r}")

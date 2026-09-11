@@ -1,7 +1,7 @@
 """Visual identity — the AESTHETIC PIN lives here and nowhere else.
 
-Every colour and font the brief uses is defined in this module. Changing a value
-here changes the brief everywhere; nothing else is allowed to hardcode a colour.
+Every color and font the brief uses is defined in this module. Changing a value
+here changes the brief everywhere; nothing else is allowed to hardcode a color.
 The test suite asserts these exact values, so a drift fails before it ships.
 """
 import html as _html
@@ -24,6 +24,27 @@ GOOGLE_FONTS = ("https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;7
                 "&family=JetBrains+Mono:wght@400;500;700&family=Source+Sans+3:wght@400;600&display=swap")
 
 
+import re as _re
+
+# A dash squeezed between characters reads as one token: "4.25–4.50%" looks like
+# a single figure, "Sep 15–16" like a date. Spacing it makes the range visible.
+# Only en/em dashes are touched — a hyphen in a compound word is left alone.
+_TIGHT_DASH = _re.compile(r"(?<=[\w%])([\u2013\u2014])(?=[\w$])")
+
+
+def space_ranges(text):
+    """Put spaces around an en/em dash used between two values.
+
+    >>> space_ranges("4.25\u20134.50%")
+    '4.25 \u2013 4.50%'
+    >>> space_ranges("Sep 15\u201316, 2026")
+    'Sep 15 \u2013 16, 2026'
+    >>> space_ranges("close \u2192 close")
+    'close \u2192 close'
+    """
+    return _TIGHT_DASH.sub(r" \1 ", str(text))
+
+
 def e(s):
     """Escape payload text for use as ELEMENT CONTENT.
 
@@ -31,7 +52,7 @@ def e(s):
     and quotation marks readable. Never use this for an attribute value — use
     attr() or url() instead.
     """
-    return _html.escape(str(s), quote=False)
+    return _html.escape(space_ranges(s), quote=False)
 
 
 def attr(s):
