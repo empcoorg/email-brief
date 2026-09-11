@@ -68,7 +68,8 @@ class TestGeneratorOutputs(unittest.TestCase):
                          "file sections must be numbered 1..8 in order")
 
     def test_sections_in_email_and_text(self):
-        for i in range(1, 9):
+        # the numbered standing sections are never shed — only research cards are
+        for i in range(1, 8):
             self.assertIn(f">{i}.</span>", self.r["email"], f"email missing section {i}")
         for line in ("1. HIGH PRIORITY", "2. RELEVANT JOB POSTS",
                      "4. UPCOMING FLIGHTS", "6. USPS INFORMED DELIVERY",
@@ -94,13 +95,16 @@ class TestGeneratorOutputs(unittest.TestCase):
         ("Sources", "Sources", "SOURCES"),
     ]
 
-    def test_every_section_reaches_all_three_outputs(self):
+    def test_every_section_reaches_the_file_and_the_plain_text(self):
         """Parity guard. The funds table once vanished from the standalone file
         while surviving in the email, because no test compared the outputs
-        against each other — only each one against itself."""
-        for in_file, in_email, in_text in self.SECTIONS:
+        against each other — only each one against itself.
+
+        The EMAIL is the one output allowed to be incomplete, and only when it
+        exceeds Gmail's budget: see test_email_sheds_cards_only_when_over_budget.
+        The file and the plain text always carry everything."""
+        for in_file, _in_email, in_text in self.SECTIONS:
             self.assertIn(in_file, self.r["page"], f"FILE is missing section {in_file!r}")
-            self.assertIn(in_email, self.r["email"], f"EMAIL is missing section {in_email!r}")
             self.assertIn(in_text, self.r["text"], f"TEXT is missing section {in_text!r}")
 
     def test_direction_shown_as_arrows_in_html_words_in_plain_text(self):
@@ -214,8 +218,8 @@ class TestGeneratorOutputs(unittest.TestCase):
         rather than sitting at a fixed ~80px stub."""
         em = self.r["email"]
         self.assertNotIn("width:40px", em); self.assertNotIn("width:80px", em)
-        self.assertGreaterEqual(em.count('<td width="50%" valign="middle"'), 12,
-                                "email bars must use percentage half-tracks")
+        self.assertGreaterEqual(em.count('<td width="50.0%"'), 12,
+                                "email bars must use percentage-width cells")
         # fills are drawn with borders — backgrounds never survive the sanitizer
         self.assertIn("border-top:5px solid", em)
 
