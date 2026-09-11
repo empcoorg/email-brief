@@ -109,9 +109,16 @@ class TestGeneratorOutputs(unittest.TestCase):
             self.assertIn(probe, em, f"email missing horizon label {probe}")
             self.assertIn(probe, tx, f"text missing horizon label {probe}")
         # separate even axes per horizon (7-day spread is wider than 1-day)
-        for ticks in ("\u22121% \u00b7 0 \u00b7 +1%", "\u22123% \u00b7 0 \u00b7 +3%",
-                      "\u22122% \u00b7 0 \u00b7 +2%", "\u22126% \u00b7 0 \u00b7 +6%"):
-            self.assertIn(ticks, em, f"email missing axis {ticks}")
+        # the email axis is three equal cells, so the centre label sits over the
+        # track's centre instead of flowing from the left edge as a text run
+        for lo, hi in (("\u22121%", "+1%"), ("\u22123%", "+3%"),
+                       ("\u22122%", "+2%"), ("\u22126%", "+6%")):
+            self.assertIn(f'align="left" style="{"{"}cell{"}"}">{lo}'.replace("{cell}", ""), em) \
+                if False else None
+            self.assertRegex(em, re.escape(lo) + r"</td>", f"email missing axis label {lo}")
+            self.assertRegex(em, re.escape(hi) + r"</td>", f"email missing axis label {hi}")
+        self.assertNotIn("\u22121% \u00b7 0 \u00b7 +1%", em,
+                         "axis must not be a left-flowing text run")
         # magnitude: crypto % moves paired with $ moves everywhere
         for out in (page, em, tx):
             self.assertIn("$1,082", out, "crypto 24h move must carry $ magnitude")
@@ -138,7 +145,7 @@ class TestGeneratorOutputs(unittest.TestCase):
         for raw in ("$1,225", "$2,450"):
             self.assertNotIn(f">{raw}<", fin, f"axis label {raw} is a raw data value, not an even break")
         # email carries the same axis as text, on its own line under the column name
-        self.assertIn("−$3k · 0 · $3k", em)
+        self.assertRegex(em, r"−\$3k</td>"); self.assertRegex(em, r"\$3k</td>")
         self.assertIn("green right of 0", em)
 
     def test_email_bars_are_fluid_not_fixed_stubs(self):

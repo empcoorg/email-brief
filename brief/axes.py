@@ -83,6 +83,18 @@ def pct_tick(v):
     return "0" if v == 0 else f"{v:+g}".replace("-", "−") + "%"
 
 
+def pct_labels(axis):
+    """The three labels a percentage axis shows: (-top, 0, +top)."""
+    top = axis[1]
+    return (pct_tick(-top), "0", pct_tick(top))
+
+
+def money_labels(axis):
+    """The three labels a money axis shows: (-top, 0, +top)."""
+    top = axis[2] if len(axis) == 3 else axis[1]
+    return (money_tick(-top), "0", money_tick(top))
+
+
 def money_tick(v):
     """Compact, even money label: 0 / $1k / -$3k. Never a raw data value."""
     a = abs(v)

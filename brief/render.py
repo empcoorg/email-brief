@@ -12,8 +12,9 @@ concurrency concern.
 """
 import base64, html as H, math, os
 
-from .axes import (fraction, money_axis as _money_axis_calc, money_tick, nice_step_top,
-                   pct_axis, pct_tick, steps_per_side, tick_positions)
+from .axes import (fraction, money_axis as _money_axis_calc, money_labels, money_tick,
+                   nice_step_top, pct_axis, pct_labels, pct_tick, steps_per_side,
+                   tick_positions)
 from .theme import BODY_FS, D, F_B, F_H, F_M, GOOGLE_FONTS, L, e
 
 __all__ = ["render_all", "file_html", "email_html", "plain_text"]
@@ -388,10 +389,26 @@ def card(inner): return f'<table width="100%" cellpadding="0" cellspacing="0" st
 class Raw(str):
     """A header string that is already HTML and must not be escaped."""
 def th(t, w=None): return f'<th align="left"{f" width={chr(34)}{w}{chr(34)}" if w else ""} style="font:600 10.5px {F_H};text-transform:uppercase;color:{L["ink3"]};padding:8px 8px;border-bottom:2px solid {L["lineS"]}">{t if isinstance(t, Raw) else e(t)}</th>'
-def th_axis(name, ticks):
-    """Two lines: the column name, then its axis. Never a cramped run-on."""
-    return Raw(f'{e(name)}<br><span style="font:400 10px {F_M};text-transform:none;'
-               f'letter-spacing:0;color:{L["ink3"]}">{e(ticks)}</span>')
+def th_axis(name, labels):
+    """Two lines: the column name, then its axis.
+
+    The axis is laid out as three equal cells rather than a run of text, so the
+    centre label sits over the TRACK'S CENTRE. A plain text run ("−1% · 0 · +1%")
+    flows from the left edge and puts the zero wherever the characters happen to
+    land, which misreads the chart beneath it — the label must agree with the
+    geometry it describes. The email cannot position elements, but equal-width
+    table cells with align= give the same result, and both survive the sanitizer.
+    """
+    lo, mid, hi = labels
+    cell = f"font:400 10px {F_M};text-transform:none;letter-spacing:0;color:{L['ink3']};padding:0"
+    return Raw(
+        f'{e(name)}'
+        f'<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:1px">'
+        f'<tr><td width="33%" align="left" style="{cell}">{e(lo)}</td>'
+        f'<td width="34%" align="center" style="{cell}">{e(mid)}</td>'
+        f'<td width="33%" align="right" style="{cell}">{e(hi)}</td></tr></table>')
+
+
 def td(t, mono=False):
     st = f'padding:8px 8px;border-bottom:1px solid {L["line"]};font-size:14px;line-height:1.45;word-break:break-word;'
     if mono: st += f"font-family:{F_M};"
@@ -491,7 +508,7 @@ def email_html():
         col = L["pos"] if dirw == "In" else (L["ink2"] if dirw == "Internal" else L["neg"])
         amt_s = ("" if sign == "±" else sign) + f"{cur_sym(cur)}{amt:,.2f}"
         rws.append([td(f'<span style="font-family:{F_M}">{e(when)}</span><br>{e(payee)}'), td(e(det)), td(f'{sp(e(sign+" "+dirw), col)} {sp(amt_s, col)}<br>{em_bar_money(amt, dirw)}')])
-    inner += tbl(["When · payee", "Detail", th_axis("Direction · amount", money_axis_ticks_text())], rws, ["30%", "32%", "38%"]) + cap(f"Bar axis: {money_axis_note()}. In = green right of 0, out / past due = red left of 0, internal = grey (magnitude only) — sign and word state it too.")
+    inner += tbl(["When · payee", "Detail", th_axis("Direction · amount", money_labels(FIN_AXIS))], rws, ["30%", "32%", "38%"]) + cap(f"Bar axis: {money_axis_note()}. In = green right of 0, out / past due = red left of 0, internal = grey (magnitude only) — sign and word state it too.")
     inner += h3("Transfers between your own accounts") + f'<div style="color:{L["ink3"]};font-style:italic">{e(FIN_INTERNAL)}</div>'
     inner += h3("Bills, statements & notices") + '<ul style="margin:8px 0 0;padding-left:20px">' + "".join(em_li(n) for n in FIN_NOTES) + "</ul>"
     o.append(card(inner))
@@ -530,7 +547,7 @@ def email_html():
         rws.append([td(f'{lead(n)}<br>{small(e(c))}', mono=True),
                     td(f'{sp(f"{e(p24)} pts · {v24:+.2f}% {w24}", k24)}{em_bar_div(v24, MKT_24)}', mono=True),
                     td(f'{sp(f"{e(p7)} pts · {v7:+.2f}% {w7}", k7)}{em_bar_div(v7, MKT_7D)}', mono=True)])
-    inner += tbl(["Index · close", th_axis("1D", em_axis(MKT_24)), th_axis("1W", em_axis(MKT_7D))], rws, ["28%", "36%", "36%"]) + cap(f"1D = close→close vs the prior session; 1W = trailing 5 sessions (one trading week). Both in index points and %. {axis_note(MKT_24, '1D axis')}; {axis_note(MKT_7D, '1W axis')}.")
+    inner += tbl(["Index · close", th_axis("1D", pct_labels(MKT_24)), th_axis("1W", pct_labels(MKT_7D))], rws, ["28%", "36%", "36%"]) + cap(f"1D = close→close vs the prior session; 1W = trailing 5 sessions (one trading week). Both in index points and %. {axis_note(MKT_24, '1D axis')}; {axis_note(MKT_7D, '1W axis')}.")
     inner += h3("Vanguard funds")
     rws = []
     for tk, nm, nav, chg, asof, ytd, note in FUNDS:
@@ -548,7 +565,7 @@ def email_html():
         rws.append([td(f'{lead(n)}<br>{small(e(pr))}', mono=True),
                     td(f'{sp(f"{v24:+.2f}% {w24} · {e(a24)}", k24)}{em_bar_div(v24, CRY_24)}', mono=True),
                     td(f'{sp(f"{v7:+.2f}% {w7} · {e(a7)}", k7)}{em_bar_div(v7, CRY_7D)}', mono=True)])
-    inner += tbl(["Asset · price", th_axis("1D", em_axis(CRY_24)), th_axis("1W", em_axis(CRY_7D))], rws, ["28%", "36%", "36%"]) + cap(f"1D = rolling 24 h; 1W = rolling 7 days — crypto trades continuously, so there is no daily close and both windows are measured back from the quote time. Each given as % and $. {axis_note(CRY_24, '1D axis')}; {axis_note(CRY_7D, '1W axis')}. {CRYPTO_NOTE}")
+    inner += tbl(["Asset · price", th_axis("1D", pct_labels(CRY_24)), th_axis("1W", pct_labels(CRY_7D))], rws, ["28%", "36%", "36%"]) + cap(f"1D = rolling 24 h; 1W = rolling 7 days — crypto trades continuously, so there is no daily close and both windows are measured back from the quote time. Each given as % and $. {axis_note(CRY_24, '1D axis')}; {axis_note(CRY_7D, '1W axis')}. {CRYPTO_NOTE}")
     inner += '<ul style="margin:8px 0 0;padding-left:20px">' + "".join(em_li(b) for b in CRYPTO_BULLETS) + "</ul>"
     o.append(card(inner))
     # ai

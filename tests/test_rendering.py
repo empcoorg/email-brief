@@ -150,6 +150,44 @@ class TestRendering(_BrowserCase):
             self._assert_no_horizontal_overflow(pg, width, f"email @{width}")
             pg.close()
 
+    def test_email_axis_zero_sits_over_the_track_centre(self):
+        """The email cannot position elements, so the axis is three equal cells.
+        The centre label must still land on the track's centre — a label that
+        disagrees with the geometry beneath it misreads the chart."""
+        for width in (860, 390):
+            pg = self._page(width, content=self.email_html)
+            pairs = pg.evaluate("""() => {
+                const out = [];
+                for (const table of document.querySelectorAll('table')) {
+                    // rows of THIS table only - querySelectorAll descends into the
+                    // nested axis/bar tables and would return their rows too
+                    const rows = [...table.querySelectorAll('tr')]
+                        .filter(tr => tr.closest('table') === table);
+                    const head = rows[0];
+                    if (!head) continue;
+                    for (const th of head.querySelectorAll('th')) {
+                        const cells = th.querySelectorAll('td');
+                        if (cells.length !== 3) continue;               // not an axis header
+                        const zero = cells[1];
+                        if (zero.textContent.trim() !== '0') continue;
+                        const i = [...head.children].indexOf(th);
+                        const row = rows[1];
+                        const cell = row && row.children[i];
+                        const track = cell && cell.querySelector('table');
+                        if (!track) continue;
+                        const z = zero.getBoundingClientRect(), t = track.getBoundingClientRect();
+                        out.push({dz: (z.left + z.width / 2) - (t.left + t.width / 2)});
+                    }
+                }
+                return out;
+            }""")
+            self.assertGreaterEqual(len(pairs), 4,
+                                    f"expected market+crypto axis headers @{width}px, saw {len(pairs)}")
+            for p_ in pairs:
+                self.assertLessEqual(abs(p_["dz"]), 2.0,
+                                     f"email axis 0 is {p_['dz']:.1f}px off the track centre @{width}px")
+            pg.close()
+
     def test_email_tables_max_three_columns(self):
         counts = [len(m) for m in
                   (re.findall(r"<th\b", row) for row in
