@@ -186,6 +186,7 @@
    "Invoice #241 paid · ACH deposit · First Meridian ···1234",
    2450.0,
    "USD",
+   2450.0,
    "In",
    "+"
   ],
@@ -195,6 +196,7 @@
    "Scheduled monthly transfer between own accounts",
    500.0,
    "USD",
+   500.0,
    "Internal",
    "±"
   ],
@@ -204,7 +206,18 @@
    "Autopay FAILED — card on file expired · bill #88213",
    84.2,
    "USD",
+   84.2,
    "Past due",
+   "−"
+  ],
+  [
+   "Tue Mar 3, 8:12 AM EST",
+   "Aerolinea Example",
+   "Flight ticket · card ···1234 · non-refundable",
+   10200.0,
+   "MXN",
+   551.35,
+   "Out",
    "−"
   ]
  ],
