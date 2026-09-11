@@ -308,19 +308,21 @@
    "VTSAX",
    "Vanguard Total Stock Market Admiral",
    "$132.48",
-   "+$0.71 · +0.54% Up",
+   "+$0.71",
+   0.54,
    "Mon Mar 2 close (5:48 PM ET)",
    "4.2%",
-   "NAV from Zacks; YCharts agrees."
+   "NAV from MarketWatch; Stooq agrees."
   ],
   [
    "VTIAX",
    "Vanguard Total Intl Stock Admiral",
    "$36.02",
-   "−$0.08 · −0.22% Down",
+   "−$0.08",
+   -0.22,
    "Mon Mar 2 close (5:48 PM ET)",
    "6.1%",
-   "NAV from Zacks."
+   "NAV from MarketWatch."
   ]
  ],
  "MKT_BULLETS": [
