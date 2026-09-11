@@ -116,6 +116,53 @@ class TestMoneyDirection(unittest.TestCase):
         self.assertNotIn("fill pos", f.split("Deposits &amp; finances")[1].split("</section>")[0])
 
 
+class TestFlightOnTimeColumn(unittest.TestCase):
+    """When no leg has an on-time record the column is dropped, not filled with
+    an apology in every row — on a phone that column costs a third of the table
+    and carries nothing the reader can act on."""
+
+    @staticmethod
+    def _without_stats():
+        p = payload()
+        for leg in p["FLIGHTS"]["legs"]:
+            leg.pop("stats", None)
+        return p
+
+    def test_column_present_when_records_exist(self):
+        f, em, tx = render_all(payload())
+        self.assertIn("Recent on-time record", f)
+        self.assertIn("On-time record", em)
+        self.assertIn("on-time:", tx)
+
+    def test_column_dropped_when_no_leg_has_a_record(self):
+        f, em, tx = render_all(self._without_stats())
+        self.assertNotIn("Recent on-time record", f)
+        self.assertNotIn("On-time record", em)
+        self.assertNotIn("on-time:", tx)
+        for out in (f, em, tx):
+            self.assertNotIn("not available", out)
+
+    def test_flights_still_render_without_records(self):
+        f, em, tx = render_all(self._without_stats())
+        for out, probe in ((f, "Upcoming flights"), (em, "Upcoming flights"),
+                           (tx, "UPCOMING FLIGHTS")):
+            self.assertIn(probe, out)
+            self.assertIn("NW 412", out)
+        # the row keeps its other three columns, so the table stays well formed
+        self.assertIn("Denver (DEN)", f)
+
+    def test_column_kept_when_only_some_legs_have_a_record(self):
+        p = payload()
+        p["FLIGHTS"]["legs"][1].pop("stats", None)
+        f, _, _ = render_all(p)
+        self.assertIn("Recent on-time record", f)
+        self.assertIn("not available", f, "a leg with no record says so once, in its own cell")
+
+    def test_payload_validates_without_the_optional_stats_field(self):
+        from brief.model import validate
+        self.assertIsNotNone(validate(self._without_stats()))
+
+
 class TestEmptySections(unittest.TestCase):
     EMPTIABLE = ("JOBS_TOP", "JOBS_STATUS", "JOBS_OTHER", "FIN_MOVES", "FIN_SUMMARY",
                  "FIN_NOTES", "PKG", "USPS_SCANS", "MKT_ROWS", "FUNDS", "MKT_BULLETS",

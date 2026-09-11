@@ -75,6 +75,43 @@ class TestGeneratorOutputs(unittest.TestCase):
                      "7. PACKAGE TRACKING", "8. RETAIL SALES"):
             self.assertIn(line, self.r["text"])
 
+    # (heading in the file, heading in the email, heading in the plain text)
+    SECTIONS = [
+        ("High priority", "High priority", "HIGH PRIORITY"),
+        ("Relevant job posts", "Relevant job posts", "RELEVANT JOB POSTS"),
+        ("Deposits &amp; finances", "Deposits &amp; finances", "DEPOSITS & FINANCES"),
+        ("Upcoming flights", "Upcoming flights", "UPCOMING FLIGHTS"),
+        ("VoIP voicemails", "VoIP voicemails", "VOIP VOICEMAILS"),
+        ("USPS Informed Delivery", "USPS Informed Delivery", "USPS INFORMED DELIVERY"),
+        ("Package tracking", "Package tracking", "PACKAGE TRACKING"),
+        ("US market", "US market", "US MARKET"),
+        ("Vanguard funds", "Vanguard funds", "Vanguard funds"),
+        ("Cryptocurrency", "Cryptocurrency", "CRYPTOCURRENCY"),
+        ("AI &amp; programming", "AI &amp; programming", "AI & PROGRAMMING"),
+        ("Research and publications", "Research and publications", "RESEARCH AND PUBLICATIONS"),
+        ("Retail sales", "Retail sales", "RETAIL SALES"),
+        ("Domain allowlist", "Domain allowlist", "DOMAIN ALLOWLIST"),
+        ("Sources", "Sources", "SOURCES"),
+    ]
+
+    def test_every_section_reaches_all_three_outputs(self):
+        """Parity guard. The funds table once vanished from the standalone file
+        while surviving in the email, because no test compared the outputs
+        against each other — only each one against itself."""
+        for in_file, in_email, in_text in self.SECTIONS:
+            self.assertIn(in_file, self.r["page"], f"FILE is missing section {in_file!r}")
+            self.assertIn(in_email, self.r["email"], f"EMAIL is missing section {in_email!r}")
+            self.assertIn(in_text, self.r["text"], f"TEXT is missing section {in_text!r}")
+
+    def test_fund_rows_carry_a_change_bar_on_an_even_axis(self):
+        page, em = self.r["page"], self.r["email"]
+        funds = page.split("Vanguard funds")[1][:4000]
+        self.assertIn('class="dbar"', funds, "fund rows must carry a 1D change bar")
+        self.assertIn('class="daxis"', funds, "the fund bar column needs its own ruler")
+        self.assertIn("1D axis", page)
+        # the email states the same axis as text above its bars
+        self.assertIn("NAV · 1D", em)
+
     def test_plain_text_is_a_full_fallback_not_a_stub(self):
         self.assertGreater(len(self.r["text"]), 4000)
 
@@ -124,8 +161,9 @@ class TestGeneratorOutputs(unittest.TestCase):
             self.assertIn("$1,082", out, "crypto 24h move must carry $ magnitude")
             self.assertIn("$3,594", out, "crypto 7d move must carry $ magnitude")
         # journals research card in all three outputs
-        self.assertIn("New publications", page); self.assertIn("New publications", em)
-        self.assertIn("NEW PUBLICATIONS", tx)
+        self.assertIn("Research and publications", page)
+        self.assertIn("Research and publications", em)
+        self.assertIn("RESEARCH AND PUBLICATIONS", tx)
         self.assertIn("Journal of Phycology", page)
 
     def test_money_bars_diverge_from_zero_with_even_axis_breaks(self):
@@ -211,7 +249,7 @@ class TestGeneratorOutputs(unittest.TestCase):
         """Lowest priority — retail sits below the research sections."""
         page, tx = self.r["page"], self.r["text"]
         self.assertLess(page.index("US market"), page.index("Retail sales"))
-        self.assertLess(page.index("New publications"), page.index("Retail sales"))
+        self.assertLess(page.index("Research and publications"), page.index("Retail sales"))
         self.assertLess(tx.index("US MARKET"), tx.index("8. RETAIL SALES"))
 
     def test_fit_badges_are_bordered_chips_labelled_strong_fit_and_related(self):
@@ -333,11 +371,13 @@ class TestTemplate(unittest.TestCase):
             "PACKAGE TRACKING",
             "ESTIMATED ARRIVAL DATE",
             "INFERRED FROM THE MAILBOX, NOT CONFIGURED",
-            "NEW PUBLICATIONS",
+            "RESEARCH AND PUBLICATIONS",
             "THIS SECTION PERSISTS",              # flights
             "LOCAL TIME AT THAT AIRPORT",
             "LINK EVERY FLIGHT NUMBER TO FLIGHTAWARE",
-            "on-time record not available",       # never invent a delay figure
+            'OMIT the leg\'s "stats" field',       # drop the column, do not apologise
+            "WORK DOWN THIS CHAIN",               # fund NAV fallback sources
+            "stooq.com",                          # the most robust fund source
             'Never call an equity move "24H"',
             "there is no daily close",            # crypto trades 24/7
             "TWO CHART COLUMNS",

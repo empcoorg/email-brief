@@ -41,7 +41,7 @@ SPEC = {
     "PKG_NOTE":   ("str", None, "package section note"),
     "RETAIL":     ("obj", ("sub", "rewards", "sales"), "retail sales"),
     "MKT_ROWS":   ("rows", 6, "indexes: (name, close, pts1d, pct1d, pts1w, pct1w)"),
-    "FUNDS":      ("rows", 7, "funds: (ticker, name, nav, change, asof, ytd, note)"),
+    "FUNDS":      ("rows", 8, "funds: (ticker, name, nav, chg_amount, chg_pct, asof, ytd, note)"),
     "MKT_BULLETS": ("list", None, "market bullets"),
     "CRYPTO_ROWS": ("rows", 6, "coins: (name, price, pct1d, amt1d, pct1w, amt1w)"),
     "CRYPTO_NOTE": ("str", None, "crypto sourcing note"),
@@ -53,7 +53,10 @@ SPEC = {
     "SOURCES":    ("mapl", None, "sources, grouped"),
 }
 
-FLIGHT_LEG_KEYS = ("date", "flight", "ident", "frm", "dep", "to", "arr", "fa", "stats")
+FLIGHT_LEG_KEYS = ("date", "flight", "ident", "frm", "dep", "to", "arr", "fa")
+# "stats" (the flight's recent on-time record) is OPTIONAL: when the source is
+# unreachable the run omits the field, and the renderer drops the whole column
+# rather than printing an apology in every row.
 
 
 class PayloadError(ValueError):
@@ -112,7 +115,7 @@ def validate(payload):
         if not isinstance(row[3], (int, float)):
             _fail("FIN_MOVES", f"row {n}: amount must be a number, got {row[3]!r} — "
                                "bars cannot be drawn from a formatted string")
-    for key, idx in (("MKT_ROWS", (3, 5)), ("CRYPTO_ROWS", (2, 4))):
+    for key, idx in (("MKT_ROWS", (3, 5)), ("CRYPTO_ROWS", (2, 4)), ("FUNDS", (4,))):
         for n, row in enumerate(payload[key]):
             for i in idx:
                 if not isinstance(row[i], (int, float)):

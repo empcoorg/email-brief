@@ -29,6 +29,7 @@ def _derive():
     g["MKT_7D"] = pct_axis([r[5] for r in MKT_ROWS])
     g["CRY_24"] = pct_axis([r[2] for r in CRYPTO_ROWS])
     g["CRY_7D"] = pct_axis([r[4] for r in CRYPTO_ROWS])
+    g["FUND_1D"] = pct_axis([r[4] for r in FUNDS])
 
 
 def render_all(payload):
@@ -317,12 +318,21 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
     o.append('<section><h2><span class="num">4.</span> Upcoming flights <span class="sub">carried forward until the trip date passes</span></h2><div class="card">')
     o.append(f'<p><span class="lead">{e(FLIGHTS["airline"])}, confirmation {e(FLIGHTS["conf"])}</span> — {e(FLIGHTS["pax"])}</p>')
     o.append(f'<p class="meta">{e(FLIGHTS["booked"])}</p>')
-    o.append('<div class="tbl-wrap"><table><thead><tr><th>Date · flight</th><th>Departs (airport local)</th><th>Arrives (airport local)</th><th>Recent on-time record</th></tr></thead><tbody>')
+    # The on-time column exists only when at least one leg actually has a
+    # record. A column of "not available" apologies costs a third of the table
+    # width and tells the reader nothing they can act on.
+    show_stats = any(g.get("stats") for g in FLIGHTS["legs"])
+    hdr = '<th>Date · flight</th><th>Departs (airport local)</th><th>Arrives (airport local)</th>'
+    if show_stats:
+        hdr += '<th>Recent on-time record</th>'
+    o.append(f'<div class="tbl-wrap"><table><thead><tr>{hdr}</tr></thead><tbody>')
     for g in FLIGHTS["legs"]:
-        o.append('<tr>' + tdl("Date · flight", f'{e(g["date"])}<br><a href="{url(g["fa"])}" class="mono">{e(g["flight"])}</a>')
-                 + tdl("Departs (airport local)", f'{e(g["frm"])}<br><span class="mono">{e(g["dep"])}</span>')
-                 + tdl("Arrives (airport local)", f'{e(g["to"])}<br><span class="mono">{e(g["arr"])}</span>')
-                 + tdl("Recent on-time record", f'{e(g["stats"])}', "meta") + '</tr>')
+        row = (tdl("Date · flight", f'{e(g["date"])}<br><a href="{url(g["fa"])}" class="mono">{e(g["flight"])}</a>')
+               + tdl("Departs (airport local)", f'{e(g["frm"])}<br><span class="mono">{e(g["dep"])}</span>')
+               + tdl("Arrives (airport local)", f'{e(g["to"])}<br><span class="mono">{e(g["arr"])}</span>'))
+        if show_stats:
+            row += tdl("Recent on-time record", e(g.get("stats") or "not available"), "meta")
+        o.append('<tr>' + row + '</tr>')
     o.append(f'</tbody></table></div><div class="cap">{e(FLIGHTS["note"])}</div></div></section>')
     o.append(f'<section><h2><span class="num">5.</span> VoIP voicemails &amp; texts <span class="sub">searched by the configured provider senders + Google Voice, Twilio, OpenPhone, Grasshopper, RingCentral, Dialpad</span></h2><div class="card"><div class="nothing">{e(VOIP["headline"])}</div><ul>{li_lead(VOIP["last_msg"])}{li_lead(VOIP["last_acct"])}</ul></div></section>')
     # 5 USPS
@@ -349,6 +359,14 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
                  + tdl("1D", f'<span class="{c24} mono">{e(p24)} pts · {v24:+.2f}% {w24}</span>{bar_div(v24, MKT_24)}')
                  + tdl("1W", f'<span class="{c7} mono">{e(p7)} pts · {v7:+.2f}% {w7}</span>{bar_div(v7, MKT_7D)}') + '</tr>')
     o.append(f'</tbody></table></div>{axis_foot(MKT_24, "1D move, % of prior close")}{axis_foot(MKT_7D, "1W move, % over 5 sessions")}<div class="cap">1D = close→close vs the prior session; 1W = trailing 5 sessions (one trading week). Both in index points and %. {axis_note(MKT_24, "1D axis")}; {axis_note(MKT_7D, "1W axis")}.</div>')
+    o.append(f'<h3>Vanguard funds</h3><div class="tbl-wrap"><table><thead><tr><th>Fund</th><th style="text-align:right">NAV</th><th>1D{axis_div(FUND_1D)}</th><th>As of · YTD</th></tr></thead><tbody>')
+    for tk, nm, nav, amt, pct, asof, ytd, note in FUNDS:
+        cls = "dir-pos" if pct >= 0 else "dir-neg"; word = "Up" if pct >= 0 else "Down"
+        o.append('<tr>' + tdl("Fund", f'<span class="lead">{e(tk)}</span><br><span class="meta">{e(nm)}</span>', "mono")
+                 + tdl("NAV", e(nav), "num mono")
+                 + tdl("1D", f'<span class="{cls} mono">{e(amt)} · {pct:+.2f}% {word}</span>{bar_div(pct, FUND_1D)}')
+                 + tdl("As of · YTD", f'{e(asof)}<br><span class="meta">YTD {e(ytd)}</span>') + '</tr>')
+    o.append(f'</tbody></table></div>{axis_foot(FUND_1D, "1D NAV change, %")}<div class="cap">1D = change from the prior published NAV, in $ and %. {axis_note(FUND_1D, "1D axis")}. ' + e(" ".join(f"{tk}: {note}" for tk, nm, nav, amt, pct, asof, ytd, note in FUNDS)) + '</div>')
     o.append(f'<div class="card wide"><h2>Cryptocurrency</h2><div class="tbl-wrap"><table><thead><tr><th>Asset</th><th style="text-align:right">Price</th><th>1D{axis_div(CRY_24)}</th><th>1W{axis_div(CRY_7D)}</th></tr></thead><tbody>')
     for n, pr, v24, a24, v7, a7 in CRYPTO_ROWS:
         c24 = "dir-pos" if v24 >= 0 else "dir-neg"; c7 = "dir-pos" if v7 >= 0 else "dir-neg"
@@ -363,7 +381,7 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
     for t, d, link in AI_ITEMS:
         o.append(f'<li><span class="lead">{e(t)}</span> — {e(d)} <a href="{url(link)}">source</a></li>')
     o.append('</ul></div>')
-    o.append('<div class="card"><h2>New publications</h2><ul>')
+    o.append('<div class="card"><h2>Research and publications</h2><ul>')
     for j, t, au, d, tk, link in JOURNAL_ITEMS:
         o.append(f'<li><span class="lead">{e(j)}</span> — <b>{e(t)}</b> ({e(au)}, {e(d)}). {e(tk)} <a href="{url(link)}">paper</a></li>')
     o.append(f'</ul><div class="cap">Journals scanned: {e(JOURNALS)}; items newly published since the previous run.</div></div>')
@@ -526,10 +544,18 @@ def email_html():
     inner = h2(f'{sp("4.", L["accent"])} Upcoming flights', "carried forward until the trip date passes")
     inner += f'<p>{lead(FLIGHTS["airline"] + ", confirmation " + FLIGHTS["conf"])} — {e(FLIGHTS["pax"])}</p>'
     inner += f'<p style="font-size:13px;color:{L["ink3"]}">{e(FLIGHTS["booked"])}</p>'
-    rws = [[td(f'{e(g["date"])}<br><a href="{url(g["fa"])}" style="color:{L["accent"]};font-family:{F_M};font-weight:600">{e(g["flight"])}</a>'),
-            td(f'{e(g["frm"])} <span style="font-family:{F_M}">{e(g["dep"])}</span><br>→ {e(g["to"])} <span style="font-family:{F_M}">{e(g["arr"])}</span>'),
-            td(small(e(g["stats"])))] for g in FLIGHTS["legs"]]
-    inner += tbl(["Date · flight", "Route (airport local times)", "On-time record"], rws, ["26%", "44%", "30%"])
+    show_stats = any(g.get("stats") for g in FLIGHTS["legs"])
+    rws = []
+    for g in FLIGHTS["legs"]:
+        row = [td(f'{e(g["date"])}<br><a href="{url(g["fa"])}" style="color:{L["accent"]};font-family:{F_M};font-weight:600">{e(g["flight"])}</a>'),
+               td(f'{e(g["frm"])} <span style="font-family:{F_M}">{e(g["dep"])}</span><br>→ {e(g["to"])} <span style="font-family:{F_M}">{e(g["arr"])}</span>')]
+        if show_stats:
+            row.append(td(small(e(g.get("stats") or "not available"))))
+        rws.append(row)
+    if show_stats:
+        inner += tbl(["Date · flight", "Route (airport local times)", "On-time record"], rws, ["26%", "44%", "30%"])
+    else:
+        inner += tbl(["Date · flight", "Route (airport local times)"], rws, ["32%", "68%"])
     inner += cap(FLIGHTS["note"])
     o.append(card(inner))
     inner = h2(f'{sp("5.", L["accent"])} VoIP voicemails &amp; texts', "searched by the configured provider senders + Google Voice, Twilio, OpenPhone, Grasshopper, RingCentral, Dialpad")
@@ -559,10 +585,13 @@ def email_html():
     inner += tbl(["Index · close", th_axis("1D", pct_labels(MKT_24)), th_axis("1W", pct_labels(MKT_7D))], rws, ["28%", "36%", "36%"]) + cap(f"1D = close→close vs the prior session; 1W = trailing 5 sessions (one trading week). Both in index points and %. {axis_note(MKT_24, '1D axis')}; {axis_note(MKT_7D, '1W axis')}.")
     inner += h3("Vanguard funds")
     rws = []
-    for tk, nm, nav, chg, asof, ytd, note in FUNDS:
-        up = "+" in chg.split("·")[0]; col = L["pos"] if up else L["neg"]
-        rws.append([td(f'{lead(tk)}<br>{small(e(nm))}', mono=True), td(f'{e(nav)}<br>{sp(e(chg), col)}', mono=True), td(f'{e(asof)}<br>{small("YTD " + e(ytd))}')])
-    inner += tbl(["Fund", "NAV · 1-day change", "As of · YTD"], rws) + cap(" ".join(f"{tk}: {note}" for tk, nm, nav, chg, asof, ytd, note in FUNDS))
+    rws = []
+    for tk, nm, nav, amt, pct, asof, ytd, note in FUNDS:
+        col = L["pos"] if pct >= 0 else L["neg"]; word = "Up" if pct >= 0 else "Down"
+        rws.append([td(f'{lead(tk)}<br>{small(e(nm))}', mono=True),
+                    td(f'{e(nav)}<br>{sp(f"{e(amt)} · {pct:+.2f}% {word}", col)}{em_bar_div(pct, FUND_1D)}', mono=True),
+                    td(f'{e(asof)}<br>{small("YTD " + e(ytd))}')])
+    inner += tbl(["Fund", th_axis("NAV · 1D", pct_labels(FUND_1D)), "As of · YTD"], rws, ["26%", "44%", "30%"]) + cap("1D = change from the prior published NAV, in $ and %. " + " ".join(f"{tk}: {note}" for tk, nm, nav, amt, pct, asof, ytd, note in FUNDS))
     inner += '<ul style="margin:8px 0 0;padding-left:20px">' + "".join(em_li(b) for b in MKT_BULLETS) + "</ul>"
     o.append(card(inner))
     # crypto
@@ -580,7 +609,7 @@ def email_html():
     # ai
     inner = h2("AI &amp; programming") + ul([f'{lead(t_)} — {e(d)} <a href="{url(l)}" style="color:{L["accent"]}">source</a>' for t_, d, l in AI_ITEMS])
     o.append(card(inner))
-    inner = h2("New publications") + ul([f'{lead(j)} — <b>{e(t_)}</b> ({e(au)}, {e(d)}). {e(tk)} <a href="{url(l)}" style="color:{L["accent"]}">paper</a>' for j, t_, au, d, tk, l in JOURNAL_ITEMS]) + cap(f"Journals scanned: {JOURNALS}; items newly published since the previous run.")
+    inner = h2("Research and publications") + ul([f'{lead(j)} — <b>{e(t_)}</b> ({e(au)}, {e(d)}). {e(tk)} <a href="{url(l)}" style="color:{L["accent"]}">paper</a>' for j, t_, au, d, tk, l in JOURNAL_ITEMS]) + cap(f"Journals scanned: {JOURNALS}; items newly published since the previous run.")
     o.append(card(inner))
     # 7 retail — lowest priority, so it sits last, after the research sections
     inner = h2(f'{sp("8.", L["accent"])} Retail sales', RETAIL["sub"])
@@ -628,7 +657,8 @@ def plain_text():
     A(f"  {FLIGHTS['booked']}")
     for g in FLIGHTS["legs"]:
         A(f"  - {g['date']}: {g['flight']} · {g['frm']} {g['dep']} -> {g['to']} {g['arr']}")
-        A(f"    on-time: {g['stats']}")
+        if g.get("stats"):
+            A(f"    on-time: {g['stats']}")
         A(f"    {g['fa']}")
     A(f"  {FLIGHTS['note']}")
     A(""); A("5. VOIP VOICEMAILS & TEXTS"); A(VOIP["headline"]); A("  - " + VOIP["last_msg"]); A("  - " + VOIP["last_acct"]); A("")
@@ -644,7 +674,9 @@ def plain_text():
     A("  " + "1D = close→close vs the prior session; 1W = trailing 5 sessions (one trading week). Both in index points and %.")
     A(f"  (1D axis ±{MKT_24[1]:g}%, step {MKT_24[0]:g}%; 1W axis ±{MKT_7D[1]:g}%, step {MKT_7D[0]:g}%.)")
     A("  Vanguard funds:")
-    for tk, nm, nav, chg, asof, ytd, note in FUNDS: A(f"    {tk} ({nm}): NAV {nav} · {chg} · as of {asof} · YTD {ytd}. {note}")
+    for tk, nm, nav, amt, pct, asof, ytd, note in FUNDS:
+        A(f"    {tk} ({nm}): NAV {nav} · 1D {amt} · {pct:+.2f}% {'Up' if pct>=0 else 'Down'} · as of {asof} · YTD {ytd}. {note}")
+    A(f"    (1D axis ±{FUND_1D[1]:g}%, step {FUND_1D[0]:g}%.)")
     for b in MKT_BULLETS: A(f"  - {b}")
     A(""); A("CRYPTOCURRENCY")
     for n, pr, v24, a24, v7, a7 in CRYPTO_ROWS:
@@ -656,7 +688,7 @@ def plain_text():
     for b in CRYPTO_BULLETS: A(f"  - {b}")
     A(""); A("AI & PROGRAMMING")
     for t, d, l in AI_ITEMS: A(f"  - {t} — {d}\n    {l}")
-    A(""); A("NEW PUBLICATIONS (" + JOURNALS + ")")
+    A(""); A("RESEARCH AND PUBLICATIONS (" + JOURNALS + ")")
     for j, t, au, d, tk, l in JOURNAL_ITEMS: A(f"  - {j}: {t} ({au}, {d}) — {tk}\n    {l}")
     A(""); A("8. RETAIL SALES (lowest priority — configured retailers)")
     A("  - " + RETAIL["rewards"])
