@@ -83,14 +83,14 @@ class TestLinkedIn(unittest.TestCase):
 
 class TestFlightAware(unittest.TestCase):
     def test_iata_to_icao(self):
-        for flight, ident in (("NW 412", "NWA412"), ("DL2200", "NWA412"),
-                              ("dl 2200", "NWA412"), ("UA 55", "UAL55"),
+        for flight, ident in (("DL 2200", "DAL2200"), ("DL2200", "DAL2200"),
+                              ("dl 2200", "DAL2200"), ("UA 55", "UAL55"),
                               ("AA 100", "AAL100"), ("WN 44", "SWA44"),
                               ("B6 20", "JBU20"), ("AS 3", "ASA3")):
             self.assertEqual(flight_ident(flight), ident, flight)
 
     def test_leading_zeros_are_dropped(self):
-        self.assertEqual(flight_ident("DL 0410"), "NWA987")
+        self.assertEqual(flight_ident("DL 0410"), "DAL410")
 
     def test_unknown_carrier_returns_none_rather_than_a_wrong_url(self):
         """Guessing an ident would link to somebody else's flight."""
@@ -99,8 +99,8 @@ class TestFlightAware(unittest.TestCase):
             self.assertIsNone(flightaware_url(unknown))
 
     def test_url_shape(self):
-        self.assertEqual(flightaware_url("NW 412"),
-                         "https://www.flightaware.com/live/flight/NWA412")
+        self.assertEqual(flightaware_url("DL 2200"),
+                         "https://www.flightaware.com/live/flight/DAL2200")
 
 
 class TestGenericAddressee(unittest.TestCase):
