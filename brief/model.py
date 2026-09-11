@@ -59,6 +59,11 @@ FIT_TIERS = ("strong", "related", "")
 # the end of is not a brief. 25 is the ceiling; there is no floor.
 MAX_RANKED_LEADS = 25
 
+# A movement's detail may be tiered across up to three lines: what it was, the
+# account and restrictions, then the breakdown and FX. Critical detail should be
+# formatted rather than dropped — but a fourth line is a paragraph, not a cell.
+MAX_DETAIL_LINES = 3
+
 FLIGHT_LEG_KEYS = ("date", "flight", "ident", "frm", "dep", "to", "arr", "fa")
 # "stats" (the flight's recent on-time record) is OPTIONAL: when the source is
 # unreachable the run omits the field, and the renderer drops the whole column
@@ -118,6 +123,18 @@ def validate(payload):
             _fail("FLIGHTS", f"leg {n} missing field(s): {', '.join(absent)}")
 
     for n, row in enumerate(payload["FIN_MOVES"]):
+        if not isinstance(row[2], (str, list)):
+            _fail("FIN_MOVES", f"row {n}: detail must be a string, or a list of up to "
+                               f"{MAX_DETAIL_LINES} lines (what it was / account and "
+                               "restrictions / breakdown and FX), got "
+                               f"{type(row[2]).__name__}")
+        if isinstance(row[2], list):
+            if len(row[2]) > MAX_DETAIL_LINES:
+                _fail("FIN_MOVES", f"row {n}: {len(row[2])} detail lines, maximum is "
+                                   f"{MAX_DETAIL_LINES} — a fourth line is a paragraph, "
+                                   "not a table cell")
+            if not all(isinstance(x, str) for x in row[2]):
+                _fail("FIN_MOVES", f"row {n}: every detail line must be a string")
         if not isinstance(row[3], (int, float)):
             _fail("FIN_MOVES", f"row {n}: amount must be a number, got {row[3]!r} — "
                                "bars cannot be drawn from a formatted string")

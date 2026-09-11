@@ -213,7 +213,11 @@
   [
    "Tue Mar 3, 8:12 AM EST",
    "Aerolinea Example",
-   "Flight ticket · card ···1234 · non-refundable",
+   [
+    "Flight + exit-row seat · conf SAMPLE7",
+    "Sample Bank Visa ···1234 · non-refundable/no changes",
+    "9,800.00 fare+taxes + 400.00 seat MXN · FX 18.50 MXN/USD (investing.com, Mar 3)"
+   ],
    10200.0,
    "MXN",
    551.35,
