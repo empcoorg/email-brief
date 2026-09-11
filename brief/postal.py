@@ -75,6 +75,30 @@ def _initial_match(a, b):
     return False
 
 
+def name_forms(owner):
+    """The accepted spellings of the owner's name.
+
+    Senders do not agree on what to call someone: a bank prints the legal name,
+    a shop prints the nickname it was given at signup, a magazine prints a
+    maiden name. Demanding one exact string means the owner's own mail gets
+    filed under "someone else" and reduced to a count.
+
+    So the owner may list several forms, separated by SEMICOLONS:
+
+        "Alexander Q. Sample; Lex Sample; A. Sample"
+
+    A comma cannot be the separator because a mailpiece itself often reads
+    "Sample, Alexander". Each form is still matched strictly - first name and
+    surname both - so listing forms widens what counts as the owner without
+    ever widening it to a different person.
+    """
+    if isinstance(owner, (list, tuple)):
+        forms = list(owner)
+    else:
+        forms = str(owner or "").split(";")
+    return [f.strip() for f in forms if f.strip()]
+
+
 def addressee_matches(printed, owner):
     """Does the printed addressee name the owner?
 
@@ -91,7 +115,13 @@ def addressee_matches(printed, owner):
     False
     >>> addressee_matches("Alex", "Alex Q. Sample")
     False
+    >>> addressee_matches("Lex Sample", "Alex Q. Sample; Lex Sample")
+    True
     """
+    return any(_matches_one(printed, form) for form in name_forms(owner))
+
+
+def _matches_one(printed, owner):
     want, got = _tokens(owner), _tokens(printed)
     if len(want) < 2 or len(got) < 2:
         # a single token can never be an identification - "Alex" or "Sample"

@@ -411,6 +411,7 @@ class TestTemplate(unittest.TestCase):
             "WORK DOWN THIS CHAIN",               # fund NAV fallback sources
             "QUOTE THAT MARKER",                  # proof the renderer ran
             "MAY LIST SEVERAL MAILBOXES",         # one address or many
+            "LENIENT about how a name is written and STRICT about whose it is",
             "ONE merged report, never one report per mailbox",
             "keep a shipment in the payload until the carrier reports it delivered",
             "stooq.com",                          # the most robust fund source

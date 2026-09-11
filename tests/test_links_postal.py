@@ -149,3 +149,40 @@ class TestAddresseeMatching(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class TestMultipleNameForms(unittest.TestCase):
+    """Senders disagree about what to call someone. Listing forms widens what
+    counts as the owner without ever widening it to a different person."""
+
+    OWNER = "Alexander Q. Sample; Lex Sample"
+
+    def test_each_listed_form_matches(self):
+        for printed in ("ALEXANDER Q SAMPLE", "Sample, Alexander", "A. Sample",
+                        "Lex Sample", "LEX SAMPLE", "Mr. Lex Sample"):
+            self.assertTrue(addressee_matches(printed, self.OWNER), printed)
+
+    def test_an_unlisted_variant_does_not_match(self):
+        """"Jimmy" is not "Lex" — add it as a form if a sender uses it, rather
+        than having the matcher guess at diminutives."""
+        self.assertFalse(addressee_matches("Lexington Sample", self.OWNER))
+
+    def test_a_different_person_never_matches(self):
+        for printed in ("Dana Liu", "Jim Halpert", "Sample", "Lex",
+                        "Jordan Sample"):
+            self.assertFalse(addressee_matches(printed, self.OWNER), printed)
+
+    def test_forms_accept_a_list_too(self):
+        self.assertTrue(addressee_matches("Lex Sample", ["Alex Q. Sample", "Lex Sample"]))
+
+    def test_a_comma_is_not_a_separator(self):
+        """Mail reads "Sample, Alex" — splitting on commas would turn one name
+        into two half-names and match far too much."""
+        from brief.postal import name_forms
+        self.assertEqual(name_forms("Sample, Alex Q"), ["Sample, Alex Q"])
+        self.assertTrue(addressee_matches("Alex Q Sample", "Sample, Alex Q"))
+        self.assertFalse(addressee_matches("Alex Johnson", "Sample, Alex Q"))
+
+    def test_single_form_behaviour_is_unchanged(self):
+        self.assertTrue(addressee_matches("ALEX SAMPLE", "Alex Q. Sample"))
+        self.assertFalse(addressee_matches("Jordan Sample", "Alex Q. Sample"))
