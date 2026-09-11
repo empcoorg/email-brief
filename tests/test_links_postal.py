@@ -17,8 +17,9 @@ sys.path.insert(0, ROOT)
 
 from brief.links import (canonical_job_url, flight_ident, flightaware_url,
                          indeed_job_url, linkedin_job_url)
-from brief.postal import (GENERIC, OTHER_NAMED, RECIPIENT, addressee_matches,
-                          classify_addressee, counts, is_generic_addressee)
+from brief.postal import (GENERIC, LIKELY, OTHER_NAMED, RECIPIENT,
+                          addressee_matches, classify_addressee, counts,
+                          is_generic_addressee)
 
 OWNER = "Alex Q. Sample"
 
@@ -144,7 +145,7 @@ class TestAddresseeMatching(unittest.TestCase):
     def test_counts_bucket_a_whole_run(self):
         got = counts(["Alex Q Sample", "ALEX SAMPLE", "Dana Liu",
                       "Current Resident", "Homeowner"], OWNER)
-        self.assertEqual(got, {RECIPIENT: 2, OTHER_NAMED: 1, GENERIC: 2})
+        self.assertEqual(got, {RECIPIENT: 2, LIKELY: 0, OTHER_NAMED: 1, GENERIC: 2})
 
 
 if __name__ == "__main__":
@@ -158,18 +159,18 @@ class TestMultipleNameForms(unittest.TestCase):
     OWNER = "Alexander Q. Sample; Lex Sample"
 
     def test_each_listed_form_matches(self):
-        for printed in ("ALEXANDER Q SAMPLE", "Russell, James", "J. Russell",
-                        "Lex Sample", "JIM RUSSELL", "Mr. Lex Sample"):
+        for printed in ("ALEXANDER Q SAMPLE", "Sample, Alexander", "A. Sample",
+                        "Lex Sample", "LEX SAMPLE", "Mr. Lex Sample"):
             self.assertTrue(addressee_matches(printed, self.OWNER), printed)
 
     def test_an_unlisted_variant_does_not_match(self):
-        """"Jimmy" is not "Jim" — add it as a form if a sender uses it, rather
-        than having the matcher guess at diminutives."""
+        """An unlisted spelling is not assumed — add it as a form if a sender
+        uses it."""
         self.assertFalse(addressee_matches("Lexington Sample", self.OWNER))
 
     def test_a_different_person_never_matches(self):
-        for printed in ("Dana Russell", "Jim Halpert", "Russell", "Jim",
-                        "James Sample"):
+        for printed in ("Dana Sample", "Lex Johnson", "Sample", "Lex",
+                        "Alexander Johnson"):
             self.assertFalse(addressee_matches(printed, self.OWNER), printed)
 
     def test_forms_accept_a_list_too(self):
@@ -186,3 +187,70 @@ class TestMultipleNameForms(unittest.TestCase):
     def test_single_form_behaviour_is_unchanged(self):
         self.assertTrue(addressee_matches("ALEX SAMPLE", "Alex Q. Sample"))
         self.assertFalse(addressee_matches("Jordan Sample", "Alex Q. Sample"))
+
+
+class TestLikelyVariants(unittest.TestCase):
+    """A third outcome between "yours" and "someone else's".
+
+    Losing your own mail to a spelling variant is a real cost, and the old
+    binary filter did exactly that: "Alex Sample" was reduced to a bare count.
+    But a shared surname alone cannot mean "yours" — a relative at the same
+    address has that too — so a probable match is INCLUDED and LABELLED rather
+    than silently claimed or silently dropped.
+    """
+
+    OWNER = "Alexander Q. Sample"
+
+    def test_exact_forms_are_the_recipient(self):
+        for printed in ("ALEXANDER Q SAMPLE", "Sample, Alexander", "A. Sample",
+                        "Alexander Quentin Sample", "Sample, Alexander Quentin",
+                        "Alexander Q Sample", "Mr. Alexander Sample Jr."):
+            self.assertEqual(classify_addressee(printed, self.OWNER), RECIPIENT, printed)
+
+    def test_variants_are_likely_not_lost(self):
+        for printed in ("Alex Sample", "Xander Sample", "Alexandr Sample",
+                        "Alex Quentin Sample"):
+            self.assertEqual(classify_addressee(printed, self.OWNER), LIKELY, printed)
+
+    def test_a_different_first_name_is_still_someone_else(self):
+        """The whole point of the filter. A relative shares the surname."""
+        for printed in ("Dana Sample", "Maria Sample", "Quentin Sample",
+                        "Robert Sample", "Susan Sample"):
+            self.assertEqual(classify_addressee(printed, self.OWNER), OTHER_NAMED, printed)
+
+    def test_surname_is_always_the_anchor(self):
+        """A matching first name with a different surname is never included —
+        otherwise everyone sharing a first name qualifies."""
+        for printed in ("Alexander Johnson", "Alex Smith", "Alexander Q Public"):
+            self.assertEqual(classify_addressee(printed, self.OWNER), OTHER_NAMED, printed)
+
+    def test_first_name_relation_cases(self):
+        from brief.postal import first_name_relation as rel
+        self.assertEqual(rel("alexander", "alexander"), "exact")
+        self.assertEqual(rel("alexander", "a"), "exact")
+        self.assertEqual(rel("alexander", "alex"), "likely")   # nickname table
+        self.assertEqual(rel("alexander", "xander"), "likely") # nickname table
+        self.assertEqual(rel("alexander", "alexandr"), "likely")  # spelling variant
+        self.assertEqual(rel("katherine", "kate"), "likely")
+        self.assertEqual(rel("alexander", "dana"), "different")
+        self.assertEqual(rel("robert", "richard"), "different")
+
+    def test_short_names_do_not_collapse_into_each_other(self):
+        """Edit distance is only trusted on names long enough for it to mean
+        something: "Ann" and "Dan" are two letters apart and two people."""
+        from brief.postal import first_name_relation as rel
+        self.assertEqual(rel("ann", "dan"), "different")
+        self.assertEqual(rel("jon", "ron"), "different")
+
+    def test_counts_report_the_likely_bucket_separately(self):
+        got = counts(["Alexander Q Sample", "Alex Sample", "Dana Sample",
+                      "Current Resident"], self.OWNER)
+        self.assertEqual(got, {RECIPIENT: 1, LIKELY: 1, OTHER_NAMED: 1, GENERIC: 1})
+
+    def test_listing_a_form_promotes_a_variant_to_exact(self):
+        """If a sender always uses the nickname, list it and it stops being a
+        guess."""
+        self.assertEqual(classify_addressee("Alex Sample", self.OWNER), LIKELY)
+        self.assertEqual(
+            classify_addressee("Alex Sample", "Alexander Q. Sample; Alex Sample"),
+            RECIPIENT)
