@@ -26,6 +26,9 @@ def main(argv=None):
     r.add_argument("--date", default=None, help="date stamp for the file name (YYYY-MM-DD)")
     v = sub.add_parser("validate", help="check a payload without rendering")
     v.add_argument("payload")
+    g = sub.add_parser("significant",
+                       help="does this payload justify an extra send? exit 0 yes, 3 no")
+    g.add_argument("payload")
     a = ap.parse_args(argv)
 
     try:
@@ -33,6 +36,17 @@ def main(argv=None):
     except PayloadError as ex:
         print(f"payload invalid: {ex}", file=sys.stderr)
         return 2
+
+    if a.cmd == "significant":
+        from .significance import reasons
+        why = reasons(payload)
+        if why:
+            print(f"SEND — {len(why)} reason(s):")
+            for r in why:
+                print(f"  · {r}")
+            return 0
+        print("SKIP — nothing in this window meets the bar for an extra send.")
+        return 3
 
     if a.cmd == "validate":
         print(f"{a.payload}: valid ({len(payload)} keys)")

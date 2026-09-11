@@ -98,9 +98,17 @@ The split is deliberate: **Claude decides what is true, the code decides what it
 If the payload is malformed the renderer refuses and names the offending key and row, so a bad brief fails loudly instead of arriving looking plausible. To change how the brief looks, change the code and its tests — never the prompt.
 
 ```
-python3 -m brief validate payload.json     # check without rendering
+python3 -m brief validate payload.json      # check without rendering
 python3 -m brief render payload.json --out-dir out --date 2026-09-07
+python3 -m brief significant payload.json   # exit 0 = worth sending, 3 = skip
 ```
+
+`significant` decides whether an extra send (an evening update, say) has earned
+someone's attention: an urgent action or high-priority item, a past-due bill, a
+movement at or above $500 **measured in USD**, an application-status change, a
+shipment event, a travel change, mail for the intended recipient, or a
+voicemail. Ordinary transit updates and informational notes do not clear the
+bar. It is a rule with tests, not a judgement made fresh each evening.
 
 ## Themes
 

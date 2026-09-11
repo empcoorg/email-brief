@@ -169,3 +169,83 @@ class TestCli(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class TestEveningSignificance(unittest.TestCase):
+    """The evening send happens only when something earned it.
+
+    This was going to be a sentence in the prompt ("only if there are important
+    updates"). A second email that says nothing teaches the reader to ignore the
+    sender, so the bar is a rule with tests rather than a judgement call made
+    fresh each evening.
+    """
+
+    def setUp(self):
+        from brief.significance import is_significant, reasons
+        self.is_significant, self.reasons = is_significant, reasons
+        self.quiet = json.load(open(SAMPLE, encoding="utf-8"))
+        for key in ("ACTIONS", "HIPRI", "FIN_MOVES", "JOBS_STATUS", "PKG"):
+            self.quiet[key] = []
+        self.quiet["USPS"]["pieces"] = []
+        self.quiet["VOIP"]["messages"] = []
+        self.quiet["FLIGHTS"]["legs"] = []
+
+    def test_a_quiet_window_is_skipped(self):
+        self.assertFalse(self.is_significant(self.quiet))
+        self.assertEqual(self.reasons(self.quiet), [])
+
+    def test_urgent_action_or_high_priority_sends(self):
+        for key in ("ACTIONS", "HIPRI"):
+            for sev in ("neg", "warn"):
+                p = copy.deepcopy(self.quiet)
+                p[key] = [[sev, "Something", ["detail"] if key == "HIPRI" else "detail"]]
+                self.assertTrue(self.is_significant(p), f"{key} [{sev}] must send")
+
+    def test_informational_severities_do_not_send(self):
+        for sev in ("info", "ok"):
+            p = copy.deepcopy(self.quiet)
+            p["ACTIONS"] = [[sev, "FYI", "detail"]]
+            self.assertFalse(self.is_significant(p), f"[{sev}] must not send")
+
+    def test_past_due_always_sends(self):
+        p = copy.deepcopy(self.quiet)
+        p["FIN_MOVES"] = [["t", "Utility", "d", 12.0, "USD", 12.0, "Past due", "−"]]
+        self.assertTrue(self.is_significant(p), "a past-due bill sends at any size")
+
+    def test_money_threshold(self):
+        from brief.significance import MATERIAL_USD
+        for usd, expect in ((MATERIAL_USD - 0.01, False), (MATERIAL_USD, True),
+                            (5000.0, True)):
+            p = copy.deepcopy(self.quiet)
+            p["FIN_MOVES"] = [["t", "Someone", "d", usd, "USD", usd, "In", "+"]]
+            self.assertEqual(self.is_significant(p), expect, f"${usd}")
+
+    def test_foreign_charge_judged_on_its_usd_value(self):
+        """10,000 MXN is ~$540 — material. The raw number must not decide it."""
+        p = copy.deepcopy(self.quiet)
+        p["FIN_MOVES"] = [["t", "Shop", "d", 10000.0, "MXN", 540.0, "Out", "−"]]
+        self.assertTrue(self.is_significant(p))
+        p["FIN_MOVES"] = [["t", "Shop", "d", 10000.0, "MXN", 54.0, "Out", "−"]]
+        self.assertFalse(self.is_significant(p), "a small charge in a big-number currency")
+
+    def test_status_changes_and_events_send(self):
+        cases = [("JOBS_STATUS", [["Acme", "offer", "detail"]]),
+                 ("PKG", [["UPS", "1Z", "item", "me", "Delivered 4:02 PM", "today"]])]
+        for key, rows in cases:
+            p = copy.deepcopy(self.quiet); p[key] = rows
+            self.assertTrue(self.is_significant(p), key)
+
+    def test_routine_shipment_progress_does_not_send(self):
+        p = copy.deepcopy(self.quiet)
+        p["PKG"] = [["UPS", "1Z", "item", "me", "In transit", "Fri"]]
+        self.assertFalse(self.is_significant(p), "ordinary transit is not news")
+
+    def test_cli_exit_codes(self):
+        import subprocess, sys, tempfile
+        for payload_obj, expect in ((json.load(open(SAMPLE, encoding="utf-8")), 0),
+                                    (self.quiet, 3)):
+            with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as fh:
+                json.dump(payload_obj, fh)
+            r = subprocess.run([sys.executable, "-m", "brief", "significant", fh.name],
+                               cwd=ROOT, capture_output=True, text=True)
+            self.assertEqual(r.returncode, expect, r.stdout + r.stderr)
