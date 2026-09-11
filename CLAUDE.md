@@ -51,6 +51,15 @@ Rewriting history fixes the commits that exist; the next commit picks the real
 identity straight back up from git config unless this is set. That happened
 here, twice, minutes after a history rewrite. `tests/test_privacy.py` checks it.
 
+`test_authors_are_anonymous` inspects every commit's author, but skips in CI
+because `actions/checkout` is shallow by default. To make it run there, add to
+`.github/workflows/tests.yml` under the checkout step (needs a token with
+`workflow` scope):
+
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
 ### What enforces it
 
 - `tests/test_privacy.py` — booking references must carry a fiction marker;
