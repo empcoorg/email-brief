@@ -177,7 +177,7 @@
  "FIN_SUMMARY": [
   [
    "In from outside",
-   "$2,450.00",
+   "$5,280.00",
    "1 deposit"
   ],
   [
@@ -196,9 +196,9 @@
    "Mon Mar 2, 9:04 AM EST",
    "Acme Consulting → checking",
    "Invoice #241 paid · ACH deposit · First Meridian ···1234",
-   2450.0,
+   5280.0,
    "USD",
-   2450.0,
+   5280.0,
    "In",
    "+"
   ],
@@ -224,11 +224,11 @@
   ],
   [
    "Tue Mar 3, 8:12 AM EST",
-   "Aerolinea Example",
+   "Mercado Ejemplo",
    [
-    "Flight + exit-row seat · conf SAMPLE7",
+    "Conference ticket · order MX-4471",
     "Sample Bank Visa ···1234 · non-refundable/no changes",
-    "9,800.00 fare+taxes + 400.00 seat MXN · FX 18.50 MXN/USD (investing.com, Mar 3)"
+    "9,800.00 fee + 400.00 service MXN · FX 18.50 MXN/USD (example rate source, Mar 3)"
    ],
    10200.0,
    "MXN",
@@ -284,7 +284,7 @@
   ]
  ],
  "FLIGHTS": {
-  "airline": "Delta",
+  "airline": "Northwind Air",
   "conf": "SAMPLE7",
   "pax": "ALEX Q SAMPLE",
   "booked": "Confirmation received Feb 11 — carried forward each run until the trip date passes.",
@@ -294,9 +294,9 @@
     "flight": "NW 412",
     "ident": "NWA412",
     "frm": "Denver (DEN)",
-    "dep": "1:29 PM CST",
+    "dep": "8:05 AM MDT",
     "to": "Chicago (ORD)",
-    "arr": "7:19 PM EDT",
+    "arr": "11:42 AM CDT",
     "fa": "https://www.flightaware.com/live/flight/NWA412",
     "stats": "71% on time · avg delay 18 min (last 30 days, FlightAware)"
    },
@@ -305,9 +305,9 @@
     "flight": "NW 987",
     "ident": "NWA987",
     "frm": "Chicago (ORD)",
-    "dep": "9:55 PM EDT",
+    "dep": "1:15 PM CDT",
     "to": "Boston (BOS)",
-    "arr": "11:51 PM EDT",
+    "arr": "4:28 PM EDT",
     "fa": "https://www.flightaware.com/live/flight/NWA987",
     "stats": "84% on time · avg delay 9 min (last 30 days, FlightAware)"
    }

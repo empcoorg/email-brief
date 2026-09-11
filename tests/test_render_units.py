@@ -208,7 +208,7 @@ class TestCurrencyOnOneAxis(unittest.TestCase):
 
     def test_usd_rows_show_no_redundant_conversion(self):
         f, _, _ = render_all(payload())
-        self.assertNotIn("$2,450.00 (≈", f, "a USD row needs no conversion note")
+        self.assertNotIn("$5,280.00 (≈", f, "a USD row needs no conversion note")
 
     def test_unconverted_foreign_amount_is_rejected(self):
         from brief.model import PayloadError, validate
@@ -231,9 +231,9 @@ class TestTieredDetail(unittest.TestCase):
     """Critical detail gets FORMATTED, not deleted: three tiers that stay
     scannable, rather than one sentence that reads as a wall."""
 
-    THREE = ["Flight + exit-row seat · conf SAMPLE7",
+    THREE = ["Conference ticket · order MX-4471",
              "Sample Bank Visa ···1234 · non-refundable/no changes",
-             "9,800.00 fare+taxes + 400.00 seat MXN · FX 18.50 MXN/USD (investing.com, Mar 3)"]
+             "9,800.00 fee + 400.00 service MXN · FX 18.50 MXN/USD (example rate source, Mar 3)"]
 
     def _row(self, detail):
         p = payload()
@@ -260,7 +260,7 @@ class TestTieredDetail(unittest.TestCase):
         self.assertIn('class="meta"', cell, "tier 2 must be muted")
         self.assertIn("font-size:12px", cell, "tier 3 must be smaller still")
         # the email has no classes, so it uses the inline muted style
-        ecell = em.split("Flight + exit-row")[1][:400]
+        ecell = em.split("Conference ticket")[1][:400]
         self.assertIn("font-size:12.5px", ecell)
 
     def test_plain_text_indents_the_tiers(self):
