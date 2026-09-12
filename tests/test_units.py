@@ -171,6 +171,42 @@ class TestCli(unittest.TestCase):
         self.assertIn("body budget", r.stdout)
 
 
+class TestAttachmentHeadroom(unittest.TestCase):
+    """Passing every per-file check did not stop a scan arriving corrupt.
+
+    2026-09-11: a 9,824 B scan (13,100 base64 chars) came back as 9,177 B and
+    would not decode. It was 53% of CEILING_B64_CHARS and 62% of the safe
+    limit, so no per-file rule could have caught it. What was unusual was the
+    WHOLE call: 121,654 B against a 122,880 budget, 99.0% full, attachment
+    last. Truncation takes the tail, so the tail must never be the thing that
+    matters most.
+    """
+
+    def test_the_corrupting_send_is_now_rejected(self):
+        from brief.attachments import call_limit
+        self.assertGreater(121_654, call_limit(1),
+                           "the call that corrupted an attachment must not pass")
+
+    def test_attachments_buy_headroom(self):
+        from brief.attachments import call_limit, ATTACHMENT_RESERVE_BYTES
+        self.assertEqual(call_limit(0) - call_limit(1), ATTACHMENT_RESERVE_BYTES)
+        self.assertEqual(call_limit(1), call_limit(3),
+                         "the reserve is a flat headroom, not per file")
+
+    def test_size_checks_never_claim_delivery(self):
+        """The module promised survival it cannot verify; words matter here.
+
+        A run that reads "will survive" has no reason to do the read-back, and
+        the read-back is the only thing that detects a silent truncation.
+        """
+        import brief.attachments as A
+        self.assertNotIn("will survive", A.fits.__doc__ or "")
+        self.assertIn("not", (A.fits.__doc__ or "").lower())
+        r = subprocess.run([sys.executable, "-m", "brief", "attachment", "--help"],
+                           cwd=ROOT, capture_output=True, text=True)
+        self.assertNotIn("will this file survive", r.stdout)
+
+
 class TestWholeSendCallBudget(unittest.TestCase):
     """The send is ONE tool call; per-file checks never saw the total.
 
