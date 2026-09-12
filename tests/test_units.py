@@ -186,7 +186,10 @@ class TestTextPartIsBudgeted(unittest.TestCase):
         full = render_all(payload_obj)[2]
         small = shed_text(full, 10 * 1024)
         self.assertLess(len(small.encode("utf-8")), len(full.encode("utf-8")))
-        self.assertIn("TRIMMED", small, "the reader must be told")
+        self.assertIn("SHORTENED", small, "the reader must be told")
+        self.assertLess(small.index("SHORTENED"), 200,
+                        "the notice must come BEFORE the brief — a plain-text "
+                        "reader cannot see the HTML part they are pointed at")
         # least actionable goes first, exactly as the HTML does
         first, last = SHED_ORDER[0].upper(), "NEEDS YOU TODAY"
         self.assertNotIn(first, small)
@@ -200,7 +203,7 @@ class TestTextPartIsBudgeted(unittest.TestCase):
                         "--out-dir", td, "--date", "2026-09-07"],
                        cwd=ROOT, check=True, capture_output=True)
         with open(os.path.join(td, "email.txt"), encoding="utf-8") as fh:
-            self.assertNotIn("TRIMMED", fh.read(),
+            self.assertNotIn("SHORTENED", fh.read(),
                              "no attachments, room to spare - nothing should be cut")
 
     def test_the_text_is_sacrificed_before_the_brief(self):
@@ -214,8 +217,8 @@ class TestTextPartIsBudgeted(unittest.TestCase):
                             "--out-dir", td, "--date", "2026-09-07",
                             "--scans", jpg, "--send-budget", "60000"],
                            cwd=ROOT, check=True, capture_output=True, text=True)
-        self.assertIn("trimming the plain-text part first", r.stdout)
-        self.assertLess(r.stdout.index("plain-text part first"),
+        self.assertIn("trimming the plain-text part", r.stdout)
+        self.assertLess(r.stdout.index("plain-text part"),
                         r.stdout.index("wrote"),
                         "text must be reconsidered before the HTML is shed")
 

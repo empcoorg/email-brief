@@ -19,7 +19,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 from brief import render_all
-from brief.render import money_side
+from brief.render import EMAIL_BUDGET_BYTES as R_EMAIL_BUDGET, money_side
 from brief.theme import attr, e, url
 
 SAMPLE = os.path.join(ROOT, "sample_payload.json")
@@ -434,9 +434,16 @@ class TestDeterminismAndIsolation(unittest.TestCase):
 
 
 class TestCliBudget(unittest.TestCase):
-    def test_over_budget_email_warns_and_exits_nonzero(self):
-        """The send budget is a real Gmail limit, so exceeding it must fail the
-        command rather than quietly producing a brief that gets clipped."""
+    def test_over_gmails_clip_threshold_says_so_and_still_succeeds(self):
+        """Clipping is a link, not a loss, so it is a NOTE and not a failure.
+
+        This used to exit 1 and shedding was on by default, which made the
+        clip threshold the binding constraint: a real run landed at 99.9% of
+        the body budget with seven cards shed while the send call sat at 84%.
+        Gmail shows "[Message clipped] View entire message" - the reader is one
+        click from everything - so the brief outranks it now, and --clip-guard
+        restores the old trade for anyone who wants it.
+        """
         p = payload()
         p["FIN_NOTES"] = ["padding " * 2000] * 40
         with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as fh:
@@ -445,8 +452,25 @@ class TestCliBudget(unittest.TestCase):
         r = subprocess.run([sys.executable, "-m", "brief", "render", fh.name,
                             "--out-dir", td, "--date", "2026-09-07"],
                            cwd=ROOT, capture_output=True, text=True)
-        self.assertEqual(r.returncode, 1, "an over-budget email must exit non-zero")
-        self.assertIn("over budget", r.stderr)
+        self.assertEqual(r.returncode, 0, "clipping must not fail the render")
+        with open(os.path.join(td, "email.html"), encoding="utf-8") as eh:
+            default_size = len(eh.read().encode("utf-8"))
+        self.assertIn("clip threshold", r.stdout)
+        self.assertIn("Nothing was dropped", r.stdout)
+        # Compare the two policies on a payload that CAN shed - the padded one
+        # above is all non-droppable notes, so neither policy can move it.
+        sizes = {}
+        for flag in ([], ["--clip-guard"]):
+            d = tempfile.mkdtemp()
+            subprocess.run([sys.executable, "-m", "brief", "render", SAMPLE,
+                            "--out-dir", d, "--date", "2026-09-07"] + flag,
+                           cwd=ROOT, check=True, capture_output=True)
+            with open(os.path.join(d, "email.html"), encoding="utf-8") as eh:
+                sizes["guard" if flag else "default"] = len(eh.read().encode("utf-8"))
+        self.assertLess(sizes["guard"], sizes["default"],
+                        "--clip-guard must shed where the default keeps everything")
+        self.assertLessEqual(sizes["guard"], R_EMAIL_BUDGET,
+                             "--clip-guard must land under the clip threshold")
 
     def test_date_defaults_when_not_given(self):
         td = tempfile.mkdtemp()
@@ -589,7 +613,7 @@ class TestSectionsAsTables(unittest.TestCase):
         self.assertTrue(all(c <= 3 for c in counts), f"saw {max(counts or [0])} columns")
 
     def test_email_stays_within_the_send_budget(self):
-        _, em, _ = render_all(payload())
+        _, em, _ = render_all(payload(), R_EMAIL_BUDGET)
         size = len(em.encode("utf-8"))
         self.assertLess(size, 85 * 1024, f"email is {size:,} B, over the Gmail budget")
 
@@ -687,7 +711,7 @@ class TestThreeHorizons(unittest.TestCase):
             self.assertIn(probe, tx)
 
     def test_email_stays_within_budget_with_three_horizons(self):
-        _, em, _ = render_all(payload())
+        _, em, _ = render_all(payload(), R_EMAIL_BUDGET)
         size = len(em.encode("utf-8"))
         self.assertLess(size, 85 * 1024, f"email is {size:,} B, over the Gmail budget")
 
@@ -717,7 +741,7 @@ class TestEmailBudgetShedding(unittest.TestCase):
         original = R.EMAIL_BUDGET_BYTES
         try:
             R.EMAIL_BUDGET_BYTES = budget
-            f, em, tx = R.render_all(payload())
+            f, em, tx = R.render_all(payload(), budget)
         finally:
             R.EMAIL_BUDGET_BYTES = original
         return f, em, tx

@@ -839,7 +839,10 @@ def _assemble_email(parts, droppable, budget=None):
     why = ("The whole message had to fit one send, and the attached scans took "
            "part of the room." if budget and budget < EMAIL_BUDGET_BYTES
            else "Gmail clips a message past ~102 KB.")
-    budget = budget or EMAIL_BUDGET_BYTES
+    # None means DO NOT SHED. The brief outranks the Gmail-clip threshold: a
+    # clip is a link the reader can follow, a shed card is gone. The caller
+    # decides, because only the caller knows the whole send call.
+    budget = budget if budget else float("inf")
     while len(("\n".join(parts)).encode("utf-8")) > budget:
         nxt = next((n for n in SHED_ORDER if n in droppable and parts[droppable[n]]), None)
         if nxt is None:
@@ -1120,10 +1123,17 @@ def shed_text(text, budget=None):
         text = text[:a_].rstrip("\n") + "\n\n" + text[b_:].lstrip("\n")
         dropped.append(name)
     if dropped:
-        text += ("\n\nTRIMMED — " + ", ".join(dropped) +
-                 " are in the HTML part and the attached brief file, not in this "
-                 "plain-text version. Whole sections were dropped, least "
-                 "actionable first; nothing was shortened.\n")
+        # At the TOP. A reader on a plain-text client is exactly the reader who
+        # cannot see the HTML part, so a note at the foot tells them what they
+        # were missing only after they have finished reading and concluded the
+        # brief was complete. Say it before the brief, not after.
+        head, sep, rest = text.partition("\n")
+        text = (head + sep +
+                "\nSHORTENED — this plain-text copy does not include: " +
+                ", ".join(dropped) + ". They ARE in the HTML part of this same "
+                "email and in the attached brief file. Whole sections were "
+                "dropped, least actionable first; nothing was shortened or "
+                "summarized.\n" + rest)
     return text
 
 
