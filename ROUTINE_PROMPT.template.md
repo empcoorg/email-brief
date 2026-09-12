@@ -180,7 +180,9 @@ STEP 3 — render and check:
 
 STEP 4 — deliver:
   * Send the standalone file, /mnt/user-data/outputs/morning-brief-<date>.html, with SendUserFile using display: "render".
-  * Email the brief to {{DELIVERY_EMAIL}} exactly once, subject "Morning Brief — <Day Mon D, YYYY> ({{RUN_TIME}} run)", with email.html as the htmlBody and email.txt as the plain-text body, both read verbatim from the files the renderer produced. Do not edit them, reformat them, or "improve" them on the way out.
+  * Email {{DELIVERY_EMAIL}} exactly once, subject "Morning Brief — <Day Mon D, YYYY> ({{RUN_TIME}} run)", with email.txt as the plain-text body, read verbatim. Do not edit it, reformat it, or "improve" it on the way out.
+    DO NOT SEND email.html AS htmlBody, AND DO NOT ATTACH IT. It cannot be done and attempting it burns the run. The send tool takes the body only as an inline string, so the HTML would have to pass through your context and be retyped verbatim as a tool argument. Gmail strips <style> blocks, so every rule in that file is an inline style= attribute: ~85 KB of markup carrying ~14 KB of text, about 39,000 tokens to read and as many again to emit. It exceeds the read cap outright. A partial or drifted copy sends a corrupted brief and you only get one send.
+    THE HTML BRIEF IS ALREADY DELIVERED — by SendUserFile in the step above, which renders it in full. The email is the plain-text channel. That is the design, not a degradation, and not something to work around.
   * Attach every valid new intended-recipient mailpiece scan as a JPG named usps-YYYY-MM-DD-<n>.jpg. CHECK EACH ONE BEFORE SENDING — the send path truncates an oversized attachment SILENTLY, shipping the top of the image and solid grey below with no error:
       cd /tmp/eb && python3 -m brief attachment /path/to/scan1.jpg /path/to/scan2.jpg
     Exit 0 means every file will survive. Exit 4 names the offenders and the size they must come down to (~15 KB each, roughly 414x271 px, which keeps names and addresses readable). Re-encode and check again until it exits 0. The HTML FILE still embeds the full-resolution version, so nothing is lost there.
