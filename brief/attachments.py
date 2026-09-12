@@ -15,6 +15,42 @@ import os
 # Verified by RAW read-back: the point at which the send path starts truncating.
 CEILING_B64_CHARS = 24_600
 
+# THE WHOLE SEND IS ONE TOOL CALL. htmlBody, the plain-text body and every
+# attachment's base64 are all inline string arguments, so the run has to emit
+# them together in a single response. That response has a token ceiling, and it
+# is the binding limit here - far tighter than anything Gmail imposes (25 MB of
+# attachments, ~102 KB before it clips the body).
+#
+# Observed: a call totalling ~145 KB was refused as too large to send in one
+# call. At roughly 2.2 bytes per token for this markup that is ~66,000 output
+# tokens, which is the ceiling. 120 KB keeps ~17% margin, and base64 tokenizes
+# worse than markup, so the margin is not generous.
+#
+# Budget arithmetic, so it is never guessed:
+#     SEND_CALL_BYTES - len(email.txt) - sum(b64_chars(scan)) = room for HTML
+# When the scans do not leave room, the EMAIL sheds cards (SHED_ORDER) rather
+# than the send failing - the standalone file always carries everything.
+SEND_CALL_BYTES = 120 * 1024
+
+
+def call_bytes(html_bytes, text_bytes, scan_sizes=()):
+    """Total inline size of one send call, in bytes.
+
+    >>> call_bytes(1000, 100, [300])          # 300 B -> 400 b64 chars
+    1500
+    """
+    return html_bytes + text_bytes + sum(b64_chars(n) for n in scan_sizes)
+
+
+def html_room(text_bytes, scan_sizes=(), limit=SEND_CALL_BYTES):
+    """How many bytes of HTML body the send call can still carry.
+
+    >>> html_room(15_508, [15_000, 15_000]) == SEND_CALL_BYTES - 15_508 - 2 * 20_000
+    True
+    """
+    return limit - text_bytes - sum(b64_chars(n) for n in scan_sizes)
+
+
 # What to aim for. The margin covers MIME header overhead and any re-encoding
 # between here and the wire; ~15 KB of JPEG (about 414x271 px) stays legible.
 SAFE_B64_CHARS = 21_000

@@ -168,6 +168,61 @@ class TestCli(unittest.TestCase):
         self.assertIn("send budget", r.stdout)
 
 
+class TestWholeSendCallBudget(unittest.TestCase):
+    """The send is ONE tool call; per-file checks never saw the total.
+
+    A run reported a ~145 KB payload as too large to send in one call. Each
+    attachment was individually fine - the arithmetic that was missing is that
+    htmlBody, the text body and every base64 attachment are emitted together.
+    """
+
+    def test_call_bytes_counts_base64_not_raw(self):
+        from brief.attachments import call_bytes, b64_chars
+        self.assertEqual(call_bytes(1000, 100, [3000]),
+                         1000 + 100 + b64_chars(3000))
+        self.assertGreater(call_bytes(0, 0, [3000]), 3000,
+                           "base64 inflates ~4/3; counting raw bytes understates")
+
+    def test_the_reported_failure_is_reproduced(self):
+        """The shape that failed must now be caught before the send."""
+        from brief.attachments import call_bytes, SEND_CALL_BYTES
+        total = call_bytes(84_989, 15_508, [15_002, 15_002])
+        self.assertGreater(total, SEND_CALL_BYTES,
+                           "the combination that was refused must not pass")
+        self.assertAlmostEqual(total / 1024, 137, delta=6)
+
+    def test_scans_shrink_the_email_budget_enough_to_fit(self):
+        from brief.attachments import call_bytes, html_room, SEND_CALL_BYTES
+        from brief.render import render_all
+        payload_obj = json.load(open(SAMPLE, encoding="utf-8"))
+        _, _, pt = render_all(payload_obj)
+        sizes = [15_002, 15_002]
+        room = html_room(len(pt.encode("utf-8")), sizes)
+        _, eh, pt2 = render_all(payload_obj, room)
+        total = call_bytes(len(eh.encode("utf-8")),
+                           len(pt2.encode("utf-8")), sizes)
+        self.assertLessEqual(total, SEND_CALL_BYTES,
+                             "re-rendering against the room left must fit")
+
+    def test_cli_reports_over_and_names_the_fix(self):
+        import tempfile
+        td = tempfile.mkdtemp(prefix="brief-call-")
+        subprocess.run([sys.executable, "-m", "brief", "render", SAMPLE,
+                        "--out-dir", td, "--date", "2026-09-07"],
+                       cwd=ROOT, check=True, capture_output=True)
+        jpgs = []
+        for i in (1, 2):
+            j = os.path.join(td, f"scan{i}.jpg")
+            with open(j, "wb") as fh:
+                fh.write(b"\xff\xd8" + b"x" * 15_000)
+            jpgs.append(j)
+        r = subprocess.run([sys.executable, "-m", "brief", "attachment"] + jpgs
+                           + ["--out-dir", td], cwd=ROOT, capture_output=True,
+                           text=True)
+        self.assertEqual(r.returncode, 4, "an oversize call must fail loudly")
+        self.assertIn("--scans", r.stderr, "must name the way out")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
 

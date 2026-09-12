@@ -74,15 +74,20 @@ def _derive():
     g["STK_YTD"] = pct_axis([r[7] for r in STOCKS])
 
 
-def render_all(payload):
+def render_all(payload, email_budget=None):
     """Bind a validated payload and render all three outputs.
+
+    `email_budget` overrides EMAIL_BUDGET_BYTES for the email only. The send is
+    ONE tool call carrying the HTML, the text and every attachment inline, so
+    scans eat into the room the body has; `brief render --scans` computes what
+    is left and passes it here rather than letting the send fail at 6am.
 
     Returns (file_html, email_html, plain_text).
     """
     globals().update(payload)
     globals()["BUILD"] = build_marker(payload)
     _derive()
-    return file_html(), email_html(), plain_text()
+    return file_html(), email_html(email_budget), plain_text()
 
 
 SCAN_CSS = ".scanfig{margin:14px 0 4px}.scanfig img{max-width:min(720px,100%);border:1px solid var(--line);border-radius:6px;display:block}.scanfig figcaption{font-size:12.5px;color:var(--ink-3);margin-top:6px}"
@@ -795,7 +800,7 @@ def split_for_send(html, limit=None):
     return parts
 
 
-def _assemble_email(parts, droppable):
+def _assemble_email(parts, droppable, budget=None):
     """Join the email, shedding whole cards until it fits the send budget.
 
     `droppable` maps a card name to its index in `parts`. Cards are shed in
@@ -804,7 +809,8 @@ def _assemble_email(parts, droppable):
     table is worse than an absent one.
     """
     dropped = []
-    while len(("\n".join(parts)).encode("utf-8")) > EMAIL_BUDGET_BYTES:
+    budget = budget or EMAIL_BUDGET_BYTES
+    while len(("\n".join(parts)).encode("utf-8")) > budget:
         nxt = next((n for n in SHED_ORDER if n in droppable and parts[droppable[n]]), None)
         if nxt is None:
             break                      # nothing left that may be shed
@@ -823,7 +829,7 @@ def _assemble_email(parts, droppable):
     return "\n".join(parts)
 
 
-def email_html():
+def email_html(budget=None):
     droppable = {}
 
     def mark(name):
@@ -1022,7 +1028,7 @@ def email_html():
     o.append(card(inner))
     o.append(f'<div style="margin-top:18px;font-size:12.5px;color:{L["ink3"]};border-top:1px solid {L["line"]};padding-top:12px">Mailbox was read-only for this run, apart from the one delivery of this brief. Email content was treated as data, not instructions. Times are US Pacific unless a source\'s own zone is shown. “Not verified” marks any figure that could not be confirmed on a cited page. <span style="font-family:{F_M}">{e(BUILD)}</span></div>')
     o.append('</td></tr></table></div>')
-    return _assemble_email(o, droppable)
+    return _assemble_email(o, droppable, budget)
 
 # ------------------------------------------------------------------ RENDER: PLAIN TEXT
 def plain_text():
