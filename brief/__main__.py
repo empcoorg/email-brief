@@ -17,9 +17,17 @@ from .render import render_all, split_for_send
 EMAIL_BUDGET = 85 * 1024   # Gmail clips ~102 KB and its sanitizer inflates ~12%
 
 
-def _check_attachments(paths):
-    """Would each file survive the send path, or be silently truncated?"""
-    from .attachments import check, max_bytes
+def _check_attachments(paths, out_dir=None):
+    """Would each file survive the send path, and does the WHOLE call fit?
+
+    Two different limits. Each attachment must stay under the per-file ceiling
+    or the send path truncates it silently. Separately, htmlBody + the text body
+    + every attachment travel as inline arguments in ONE tool call, and that
+    call has its own ceiling - which is what a run means when it reports the
+    payload was "too large to send in one call".
+    """
+    from .attachments import (check, max_bytes, b64_chars, call_bytes,
+                              SEND_CALL_BYTES)
     bad = 0
     for path in paths:
         try:
@@ -34,6 +42,29 @@ def _check_attachments(paths):
         print(f"{bad} attachment(s) would be silently truncated by the send path. "
               f"Re-encode to at most {max_bytes():,} B each.", file=sys.stderr)
         return 4
+
+    if out_dir:
+        try:
+            html = os.path.getsize(os.path.join(out_dir, "email.html"))
+            text = os.path.getsize(os.path.join(out_dir, "email.txt"))
+        except OSError as ex:
+            print(f"cannot size the rendered email: {ex}", file=sys.stderr)
+            return 4
+        sizes = [os.path.getsize(p) for p in paths]
+        total = call_bytes(html, text, sizes)
+        print(f"\nwhole send call: htmlBody {html:,} + text {text:,} + "
+              f"{len(sizes)} attachment(s) {sum(b64_chars(n) for n in sizes):,} "
+              f"(base64) = {total:,} B of {SEND_CALL_BYTES:,}")
+        if total > SEND_CALL_BYTES:
+            over = total - SEND_CALL_BYTES
+            print(f"OVER BY {over:,} B — this call will be refused as too large "
+                  f"to send at once.\nRe-render with the scans accounted for:\n"
+                  f"  python3 -m brief render payload.json --out-dir {out_dir} "
+                  f"--scans {' '.join(paths)}\nThe email will shed its least "
+                  f"actionable cards to make room and say so; the standalone "
+                  f"file still carries everything.", file=sys.stderr)
+            return 4
+        print("OK   the whole call fits in one send")
     return 0
 
 
@@ -44,6 +75,9 @@ def main(argv=None):
     r.add_argument("payload")
     r.add_argument("--out-dir", default=".", help="where to write the three files")
     r.add_argument("--date", default=None, help="date stamp for the file name (YYYY-MM-DD)")
+    r.add_argument("--scans", nargs="*", default=[], metavar="JPG",
+                   help="mailpiece scans that will ride along in the same send "
+                        "call; the email body budget shrinks to make room")
     v = sub.add_parser("validate", help="check a payload without rendering")
     v.add_argument("payload")
     g = sub.add_parser("significant",
@@ -52,10 +86,12 @@ def main(argv=None):
     at = sub.add_parser("attachment",
                         help="will this file survive the send path? exit 0 yes, 4 no")
     at.add_argument("files", nargs="+")
+    at.add_argument("--out-dir", help="also check the whole send call against "
+                                      "the rendered email in this directory")
     a = ap.parse_args(argv)
 
     if a.cmd == "attachment":
-        return _check_attachments(a.files)
+        return _check_attachments(a.files, a.out_dir)
 
     try:
         payload = load(a.payload)
@@ -81,6 +117,19 @@ def main(argv=None):
     from .render import build_marker
     marker = build_marker(payload)
     fh, eh, pt = render_all(payload)
+
+    # The scans ride in the SAME send call as the body, so they take their room
+    # out of the HTML. Render once to learn the text size, then re-render the
+    # email against what is actually left. Shedding a card is recoverable; a
+    # send refused for being too large is not - the run gets one attempt.
+    if a.scans:
+        from .attachments import html_room
+        sizes = [os.path.getsize(s_) for s_ in a.scans]
+        room = html_room(len(pt.encode("utf-8")), sizes)
+        if len(eh.encode("utf-8")) > room:
+            print(f"{len(a.scans)} scan(s) leave {room:,} B for the HTML body; "
+                  f"re-rendering the email to fit.")
+            _, eh, _ = render_all(payload, room)
     os.makedirs(a.out_dir, exist_ok=True)
     stamp = a.date or payload["MAST"].get("file_date") or "brief"
     page = os.path.join(a.out_dir, f"morning-brief-{stamp}.html")
