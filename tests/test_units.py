@@ -165,7 +165,10 @@ class TestCli(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         for name in ("morning-brief-2026-09-07.html", "email.html", "email.txt"):
             self.assertTrue(os.path.isfile(os.path.join(td, name)), f"{name} not written")
-        self.assertIn("send budget", r.stdout)
+        # Two budgets exist now: the HTML BODY budget (Gmail clipping) and the
+        # SEND CALL budget (body + text + attachments in one tool call). The
+        # render line reports the first; naming it "send" conflated them.
+        self.assertIn("body budget", r.stdout)
 
 
 class TestWholeSendCallBudget(unittest.TestCase):

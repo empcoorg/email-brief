@@ -14,7 +14,7 @@ import sys
 from .model import PayloadError, load
 from .render import render_all, split_for_send
 
-EMAIL_BUDGET = 85 * 1024   # Gmail clips ~102 KB and its sanitizer inflates ~12%
+from .render import EMAIL_BUDGET_BYTES as EMAIL_BUDGET  # Gmail clips ~102 KB
 
 
 def _check_attachments(paths, out_dir=None):
@@ -75,6 +75,11 @@ def main(argv=None):
     r.add_argument("payload")
     r.add_argument("--out-dir", default=".", help="where to write the three files")
     r.add_argument("--date", default=None, help="date stamp for the file name (YYYY-MM-DD)")
+    r.add_argument("--email-budget", type=int, default=None, metavar="BYTES",
+                   help="max HTML body before cards are shed (default 85 KB; "
+                        "past ~85 KB Gmail clips rather than rejects)")
+    r.add_argument("--send-budget", type=int, default=None, metavar="BYTES",
+                   help="max total for one send call: HTML + text + attachments")
     r.add_argument("--scans", nargs="*", default=[], metavar="JPG",
                    help="mailpiece scans that will ride along in the same send "
                         "call; the email body budget shrinks to make room")
@@ -116,7 +121,9 @@ def main(argv=None):
 
     from .render import build_marker
     marker = build_marker(payload)
-    fh, eh, pt = render_all(payload)
+    if a.send_budget:
+        os.environ["BRIEF_SEND_CALL_BYTES"] = str(a.send_budget)
+    fh, eh, pt = render_all(payload, a.email_budget)
 
     # The scans ride in the SAME send call as the body, so they take their room
     # out of the HTML. Render once to learn the text size, then re-render the
@@ -125,7 +132,10 @@ def main(argv=None):
     if a.scans:
         from .attachments import html_room
         sizes = [os.path.getsize(s_) for s_ in a.scans]
-        room = html_room(len(pt.encode("utf-8")), sizes)
+        room = html_room(len(pt.encode("utf-8")), sizes,
+                         a.send_budget or None)
+        if a.email_budget:
+            room = min(room, a.email_budget)
         if len(eh.encode("utf-8")) > room:
             print(f"{len(a.scans)} scan(s) leave {room:,} B for the HTML body; "
                   f"re-rendering the email to fit.")
@@ -150,15 +160,16 @@ def main(argv=None):
 
     size = len(eh.encode("utf-8"))
     print(f"wrote {page}")
-    print(f"wrote {email}  ({size:,} B of the {EMAIL_BUDGET:,} B send budget)")
+    budget_used = a.email_budget or EMAIL_BUDGET
+    print(f"wrote {email}  ({size:,} B of the {budget_used:,} B body budget)")
     print(f"wrote {text}")
     print(f"wrote email.part01..{len(parts):02d}.html — read these in order and "
           f"concatenate them with no separator to rebuild the htmlBody exactly; "
           f"do not read {os.path.basename(email)} itself, it exceeds the read cap.")
     print(f"build {marker} — this marker appears in all three outputs. Quote it "
           "when you report the run; a brief without it did not come from here.")
-    if size > EMAIL_BUDGET:
-        print(f"WARNING: email body is {size - EMAIL_BUDGET:,} B over budget — "
+    if size > budget_used:
+        print(f"WARNING: email body is {size - budget_used:,} B over budget — "
               "Gmail will clip it. Shorten sections or drop embedded scans.",
               file=sys.stderr)
         return 1
