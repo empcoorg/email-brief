@@ -88,7 +88,26 @@ Colours and fonts live in `brief/theme.py`; no renderer may hardcode one.
 fails CI until the screenshots are regenerated deliberately. Change the look
 only when the owner explicitly asks.
 
-## 4. Verify, don't assert
+## 4. Documentation is part of the change
+
+A change is not finished when the tests pass. If it alters what the brief looks
+like, what it contains, what the CLI accepts, or what files exist, the README and
+the screenshots move with it, in the SAME commit.
+
+    python3 docs/render_screenshots.py     # after any visual change
+
+Two guards make this mechanical rather than remembered:
+
+- `docs/screenshots.lock` fingerprints the rendered HTML. A UI change cannot
+  merge while the README still shows the previous one.
+- `tests/test_docs_current.py` derives from the source what the README must
+  mention — every module, CLI command, test file and rendered section — so
+  adding any of them fails CI until the README says so.
+
+Neither can check whether the prose is *accurate*, only whether it is *complete*.
+That part is on you.
+
+## 5. Verify, don't assert
 
 Claims about behavior need evidence: run it, measure it, diff it. "Byte
 identical", "aligned", "under budget" are checkable — check them.
