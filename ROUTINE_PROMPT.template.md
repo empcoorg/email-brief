@@ -175,7 +175,7 @@ STEP 2 — write ONE payload file, /tmp/eb/payload.json, holding everything you 
 
 STEP 3 — render and check:
   cd /tmp/eb && python3 -m brief render payload.json --out-dir /mnt/user-data/outputs --date YYYY-MM-DD
-  If you have mailpiece scans to attach, add `--scans /path/to/scan1.jpg /path/to/scan2.jpg` — they ride in the same send call as the body, so the renderer shrinks the email's budget to fit them rather than letting the send be refused.
+  IF YOU HAVE MAILPIECE SCANS, ALWAYS PASS THEM: `--scans /path/to/scan1.jpg /path/to/scan2.jpg`. They ride in the same send call as the body, and the renderer allocates the whole call for you: it trims the plain-text part first (it is an alternative body, not the brief), and only sheds HTML cards if that is still not enough. Omitting --scans is what produces a corrupted attachment.
   It writes morning-brief-<date>.html, email.html and email.txt, prints the email's size against the 85 KB send budget, and prints a BUILD MARKER of the form brief-xxxxxxxxxxxx.
   QUOTE THAT MARKER in your chat reply. It is embedded in all three outputs, so it is the proof the renderer produced what you sent. If your reply has no marker, you hand-wrote HTML instead of rendering it — which silently breaks section order, escaping and link handling in ways the repo's tests cannot catch, because they test the renderer and a hand-written document never reaches it. Redo the run through the renderer. If it exits non-zero, READ THE ERROR — it names the key and row that is wrong — fix the payload and run it again. Never work around a validation error by hand-writing HTML.
 

@@ -171,6 +171,55 @@ class TestCli(unittest.TestCase):
         self.assertIn("body budget", r.stdout)
 
 
+class TestTextPartIsBudgeted(unittest.TestCase):
+    """The plain-text part is charged to the send call and was never bounded.
+
+    A real run's text edition measured 40,364 B - a third of the whole call,
+    and larger than the attachment plus its safety margin together. Nothing
+    budgeted it, so the HTML shed seven cards and the attachment lost its tail
+    while an unbounded alternative body sat beside them.
+    """
+
+    def test_shedding_drops_whole_sections_in_the_same_order_as_the_html(self):
+        from brief.render import shed_text, SHED_ORDER, render_all
+        payload_obj = json.load(open(SAMPLE, encoding="utf-8"))
+        full = render_all(payload_obj)[2]
+        small = shed_text(full, 10 * 1024)
+        self.assertLess(len(small.encode("utf-8")), len(full.encode("utf-8")))
+        self.assertIn("TRIMMED", small, "the reader must be told")
+        # least actionable goes first, exactly as the HTML does
+        first, last = SHED_ORDER[0].upper(), "NEEDS YOU TODAY"
+        self.assertNotIn(first, small)
+        self.assertIn(last, small, "an actionable section must never be shed")
+
+    def test_text_is_only_trimmed_when_the_call_is_over(self):
+        """Degrade nothing that does not need degrading."""
+        import tempfile
+        td = tempfile.mkdtemp(prefix="brief-txt-")
+        subprocess.run([sys.executable, "-m", "brief", "render", SAMPLE,
+                        "--out-dir", td, "--date", "2026-09-07"],
+                       cwd=ROOT, check=True, capture_output=True)
+        with open(os.path.join(td, "email.txt"), encoding="utf-8") as fh:
+            self.assertNotIn("TRIMMED", fh.read(),
+                             "no attachments, room to spare - nothing should be cut")
+
+    def test_the_text_is_sacrificed_before_the_brief(self):
+        """When something must give, it is the alternative body, not the brief."""
+        import tempfile
+        td = tempfile.mkdtemp(prefix="brief-order-")
+        jpg = os.path.join(td, "scan.jpg")
+        with open(jpg, "wb") as fh:
+            fh.write(b"\xff\xd8" + b"x" * 15_000)
+        r = subprocess.run([sys.executable, "-m", "brief", "render", SAMPLE,
+                            "--out-dir", td, "--date", "2026-09-07",
+                            "--scans", jpg],
+                           cwd=ROOT, check=True, capture_output=True, text=True)
+        self.assertIn("trimming the plain-text part first", r.stdout)
+        self.assertLess(r.stdout.index("plain-text part first"),
+                        r.stdout.index("wrote"),
+                        "text must be reconsidered before the HTML is shed")
+
+
 class TestAttachmentHeadroom(unittest.TestCase):
     """Passing every per-file check did not stop a scan arriving corrupt.
 

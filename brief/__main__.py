@@ -87,6 +87,9 @@ def main(argv=None):
                         "past ~85 KB Gmail clips rather than rejects)")
     r.add_argument("--send-budget", type=int, default=None, metavar="BYTES",
                    help="max total for one send call: HTML + text + attachments")
+    r.add_argument("--text-budget", type=int, default=None, metavar="BYTES",
+                   help="max plain-text body before sections are shed "
+                        "(default 10 KB; it is charged to the same send call)")
     r.add_argument("--scans", nargs="*", default=[], metavar="JPG",
                    help="mailpiece scans that will ride along in the same send "
                         "call; the email body budget shrinks to make room")
@@ -131,23 +134,33 @@ def main(argv=None):
     marker = build_marker(payload)
     if a.send_budget:
         os.environ["BRIEF_SEND_CALL_BYTES"] = str(a.send_budget)
-    fh, eh, pt = render_all(payload, a.email_budget)
 
-    # The scans ride in the SAME send call as the body, so they take their room
-    # out of the HTML. Render once to learn the text size, then re-render the
-    # email against what is actually left. Shedding a card is recoverable; a
-    # send refused for being too large is not - the run gets one attempt.
-    if a.scans:
-        from .attachments import html_room
-        sizes = [os.path.getsize(s_) for s_ in a.scans]
-        room = html_room(len(pt.encode("utf-8")), sizes,
-                         a.send_budget or None)
+    # Everything in the send call competes for the same room, so allocate once
+    # and degrade nothing unless the total is actually over. When it is, the
+    # TEXT part goes first: it is an alternative body, not the brief, and a real
+    # run's measured 40,364 B - a third of the whole call, more than the
+    # attachment and its safety margin together. Unbudgeted it cost the HTML
+    # seven cards and the attachment its tail.
+    from .attachments import call_bytes, call_limit, html_room
+    from .render import TEXT_BUDGET_BYTES, plain_text
+    sizes = [os.path.getsize(s_) for s_ in a.scans]
+    fh, eh, pt = render_all(payload, a.email_budget, a.text_budget)
+
+    limit = call_limit(len(sizes), a.send_budget or None)
+    total = call_bytes(len(eh.encode("utf-8")), len(pt.encode("utf-8")), sizes)
+    if total > limit:
+        print(f"send call would be {total:,} B of {limit:,} — trimming the "
+              f"plain-text part first, so the brief keeps its sections.")
+        pt = plain_text(a.text_budget or TEXT_BUDGET_BYTES)
+        total = call_bytes(len(eh.encode("utf-8")), len(pt.encode("utf-8")), sizes)
+    if total > limit:
+        room = html_room(len(pt.encode("utf-8")), sizes, a.send_budget or None)
         if a.email_budget:
             room = min(room, a.email_budget)
-        if len(eh.encode("utf-8")) > room:
-            print(f"{len(a.scans)} scan(s) leave {room:,} B for the HTML body; "
-                  f"re-rendering the email to fit.")
-            _, eh, _ = render_all(payload, room)
+        print(f"still {total:,} B of {limit:,}; the HTML must shed to {room:,} B.")
+        _, eh, _ = render_all(payload, room, a.text_budget)
+        pt = plain_text(a.text_budget or TEXT_BUDGET_BYTES)
+
     os.makedirs(a.out_dir, exist_ok=True)
     stamp = a.date or payload["MAST"].get("file_date") or "brief"
     page = os.path.join(a.out_dir, f"morning-brief-{stamp}.html")
