@@ -304,6 +304,21 @@ def money_bar(amt, dirw, sign=""):
     ticks = "".join(f'<i style="left:{50 + sgn * s * 50 / n:g}%"></i>'
                     for sgn in (-1, 1) for s in range(1, n + 1))
     return f'<div class="dbar money" aria-hidden="true">{ticks}<div class="fill {fcls} {side}" style="width:{max(w, 1.5):.1f}%"></div></div>'
+def money_head(label_left="Out \u2190", label_right="\u2192 In, USD"):
+    """The column heading, with its "0" pinned to the axis centre.
+
+    It used to be the plain string "Out <- 0 -> In, USD". The ruler under it
+    positions its own 0 at 50%, but a run of text puts its characters wherever
+    the glyphs fall - 30px to the left of the bars' zero, which is exactly the
+    misreading a diverging chart cannot afford: the word "0" sat over negative
+    territory. Same track width as the ruler and the bars, so all three agree.
+    """
+    return ('<div class="dhead" aria-hidden="true">'
+            f'<span class="l">{e(label_left)}</span>'
+            '<span class="c">0</span>'
+            f'<span class="r">{e(label_right)}</span></div>')
+
+
 def money_axis():
     """Minimal ticks: a notch at every even step, labels only at \u2212top, 0, +top."""
     mode, a, b = FIN_AXIS
@@ -394,6 +409,9 @@ td.num{{text-align:right;white-space:nowrap}}
 .dbar .fill.right{{left:50%}} .dbar .fill.left{{right:50%}} .dbar .fill.center{{left:50%;transform:translateX(-50%)}} .fill.pos{{background:var(--positive)}} .fill.neg{{background:var(--negative)}} .fill.neu{{background:var(--ink-3)}}
 .daxis{{position:relative;height:16px;width:150px;margin-top:3px;box-sizing:border-box;border:1px solid transparent}}
 .dbar.money,.daxis.money{{width:100%;min-width:150px;max-width:280px}}
+.dhead{{position:relative;height:13px;width:150px;min-width:150px;max-width:280px}}
+.dhead span{{position:absolute;top:0;white-space:nowrap}}
+.dhead .l{{right:50%;margin-right:7px}} .dhead .c{{left:50%;transform:translateX(-50%)}} .dhead .r{{left:50%;margin-left:7px}}
 .daxis i{{position:absolute;top:0;height:3px;width:1px;background:var(--line)}}
 .daxis i.mj{{height:5px;background:var(--line-strong)}}
 .daxis span{{position:absolute;top:5px;font:500 8.5px 'JetBrains Mono',monospace;letter-spacing:0;text-transform:none;color:var(--ink-3);transform:translateX(-50%)}}
@@ -486,12 +504,12 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
     o.append(f'<section><h2><span class="num">{num()}.</span> Deposits &amp; finances</h2><div class="card"><div class="tiles">')
     for l, v, d in FIN_SUMMARY:
         o.append(f'<div class="tile"><div class="lbl">{e(l)}</div><div class="v mono">{e(v)}</div><div class="d">{e(d)}</div></div>')
-    o.append('</div><h3 style="margin-top:0">Money movements (outside → you / you → outside)</h3><div class="tbl-wrap"><table><thead><tr><th>When</th><th>Payee / source</th><th>Detail</th><th>Direction</th><th style="text-align:right">Amount</th><th>Out ← 0 → In, USD {axis_html}</th></tr></thead><tbody>'.format(axis_html=money_axis()))
+    o.append('</div><h3 style="margin-top:0">Money movements (outside → you / you → outside)</h3><div class="tbl-wrap"><table><thead><tr><th>When</th><th>Payee / source</th><th>Detail</th><th>Direction</th><th style="text-align:right">Amount</th><th>{head_html}{axis_html}</th></tr></thead><tbody>'.format(head_html=money_head(), axis_html=money_axis()))
     for when, payee, det, amt, cur, usd, dirw, sign in FIN_MOVES:
         cls = "dir-" + money_side(dirw, sign)[1]
         amt_s = money_amount(amt, cur, usd, sign)
         o.append('<tr>' + tdl("When", e(when), "mono") + tdl("Payee / source", e(payee)) + tdl("Detail", detail_html_file(det)) + tdl("Direction", f'<span class="{cls}">{e(sign)} {e(dirw)}</span>') + tdl("Amount", f'<span class="{cls}">{amt_s}</span>', "num mono") + tdl("Out ← 0 → In, USD", money_bar(usd, dirw, sign)) + '</tr>')
-    o.append(f'</tbody></table></div><div class="daxis-foot">{money_axis()}<div class="meta">Out ← 0 → In, USD — {money_axis_note()}</div></div><div class="cap">Bar axis, in USD: {money_axis_note()}. Amounts are shown in their original currency; bars are plotted from the USD equivalent. Money in = green on the right, out / past due = red on the left, no direction = neutral grey straddling zero (magnitude only — an internal or unclassified move has no side). The sign and direction word state it too.</div>')
+    o.append(f'</tbody></table></div><div class="daxis-foot">{money_head()}{money_axis()}<div class="meta">{money_axis_note()}</div></div><div class="cap">Bar axis, in USD: {money_axis_note()}. Amounts are shown in their original currency; bars are plotted from the USD equivalent. Money in = green on the right, out / past due = red on the left, no direction = neutral grey straddling zero (magnitude only — an internal or unclassified move has no side). The sign and direction word state it too.</div>')
     o.append('<h3>Transfers between your own accounts</h3><div class="nothing">' + e(FIN_INTERNAL) + '</div><h3>Bills, statements &amp; notices</h3><ul>')
     for n in FIN_NOTES: o.append(li_lead(n))
     o.append('</ul></div></section>')
