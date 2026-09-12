@@ -4,8 +4,10 @@
     python3 -m brief validate payload.json
 
 `render` writes morning-brief-<date>.html, email.html and email.txt, then
-prints the paths and the email's size against the 85 KB send budget.
-`validate` checks the payload and says what is wrong, without rendering.
+prints the paths, the email's size against the 85 KB send budget, and what one
+send call would have to carry. `validate` checks the payload and says what is
+wrong, without rendering. `carry` answers the question that actually blocks a
+send: does the whole message fit in a single tool call?
 """
 import argparse
 import os
@@ -37,6 +39,28 @@ def _check_attachments(paths):
     return 0
 
 
+def _check_carry(out_dir, files):
+    """Would one send call fit? The body budget alone does not answer that."""
+    from .attachments import CARRY_BUDGET_CHARS, carry_cost
+    try:
+        html = open(os.path.join(out_dir, "email.html"), encoding="utf-8").read()
+        text = open(os.path.join(out_dir, "email.txt"), encoding="utf-8").read()
+    except OSError as ex:
+        print(f"{ex} \u2014 run `render --out-dir {out_dir}` first", file=sys.stderr)
+        return 2
+    total, rows, ok = carry_cost(html, text, files)
+    for label, n in rows:
+        print(f"  {n:>9,}  {label}")
+    print(f"  {total:>9,}  TOTAL for one send call (budget {CARRY_BUDGET_CHARS:,})")
+    if ok:
+        return 0
+    print(f"OVER by {total - CARRY_BUDGET_CHARS:,} characters. One send call has to carry all of "
+          "this at once, and the brief sends exactly once \u2014 a truncated send cannot be corrected. "
+          "Shed cards, shorten the payload, or send fewer scans, and say in the chat reply what "
+          "was left out. Do NOT downgrade the HTML to plain text.", file=sys.stderr)
+    return 5
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="python3 -m brief", description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -49,6 +73,10 @@ def main(argv=None):
     g = sub.add_parser("significant",
                        help="does this payload justify an extra send? exit 0 yes, 3 no")
     g.add_argument("payload")
+    cr = sub.add_parser("carry",
+                        help="does the whole message fit one send call? exit 0 yes, 5 no")
+    cr.add_argument("--out-dir", default=".", help="directory holding email.html and email.txt")
+    cr.add_argument("files", nargs="*", help="attachments the send will include")
     at = sub.add_parser("attachment",
                         help="will this file survive the send path? exit 0 yes, 4 no")
     at.add_argument("files", nargs="+")
@@ -56,6 +84,9 @@ def main(argv=None):
 
     if a.cmd == "attachment":
         return _check_attachments(a.files)
+
+    if a.cmd == "carry":
+        return _check_carry(a.out_dir, a.files)
 
     try:
         payload = load(a.payload)
@@ -80,9 +111,11 @@ def main(argv=None):
 
     from .render import build_marker
     marker = build_marker(payload)
-    fh, eh, pt = render_all(payload)
-    os.makedirs(a.out_dir, exist_ok=True)
+    # The stamp is decided before rendering: the email names the standalone
+    # file, so that name has to be the file actually written.
     stamp = a.date or payload["MAST"].get("file_date") or "brief"
+    fh, eh, pt = render_all(payload, stamp=stamp)
+    os.makedirs(a.out_dir, exist_ok=True)
     page = os.path.join(a.out_dir, f"morning-brief-{stamp}.html")
     email = os.path.join(a.out_dir, "email.html")
     text = os.path.join(a.out_dir, "email.txt")
@@ -106,6 +139,12 @@ def main(argv=None):
     print(f"wrote email.part01..{len(parts):02d}.html — read these in order and "
           f"concatenate them with no separator to rebuild the htmlBody exactly; "
           f"do not read {os.path.basename(email)} itself, it exceeds the read cap.")
+    from .attachments import CARRY_BUDGET_CHARS, carry_cost
+    carried, _rows, _ok = carry_cost(eh, pt)
+    print(f"one send call must carry {carried:,} chars before attachments "
+          f"(htmlBody {len(eh):,} + plain text {len(pt):,}) of the "
+          f"{CARRY_BUDGET_CHARS:,} carry budget; each scan adds its base64 length. "
+          f"Check the real total with: python3 -m brief carry --out-dir {a.out_dir} <scan.jpg>")
     print(f"build {marker} — this marker appears in all three outputs. Quote it "
           "when you report the run; a brief without it did not come from here.")
     if size > EMAIL_BUDGET:

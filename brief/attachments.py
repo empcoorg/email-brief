@@ -38,6 +38,45 @@ def max_bytes(limit=SAFE_B64_CHARS):
     return (limit // 4) * 3
 
 
+# THE SEND CALL IS ONE CALL, AND THE RUN HAS TO EMIT ALL OF IT.
+#
+# The connector's send tool takes the HTML body, the plain-text alternative and
+# every attachment as inline strings in a SINGLE invocation. Splitting the body
+# into email.partNN.html fixed READING it; nothing fixed emitting it. So the
+# binding limit is not Gmail's 85 KB body budget but how much one tool call can
+# carry, and that limit counts the text alternative and the base64 of every
+# scan too.
+#
+# Measured on the run that hit it: an 86,085-char body, a 27,623-char text
+# alternative and one 15,435 B scan (20,580 chars of base64) came to 134,288
+# characters in one call - past what the run could emit, and the brief sends
+# exactly once, so a truncated send cannot be corrected. The budget below sits
+# under that observed failure. Base64 is the worst of it: a JPEG has no
+# redundancy, so unlike prose it cannot be re-emitted approximately.
+#
+# Check this BEFORE carrying anything, not at send time.
+CARRY_BUDGET_CHARS = 120_000
+
+
+def carry_cost(html, text="", attachment_paths=()):
+    """What one send call must carry, in characters.
+
+    Returns (total, rows, ok): `rows` is [(label, chars), ...] so the caller can
+    show where the weight is, and `ok` is whether it fits CARRY_BUDGET_CHARS.
+
+    >>> total, rows, ok = carry_cost("<p>hi</p>", "hi")
+    >>> total, ok
+    (11, True)
+    """
+    rows = [("htmlBody", len(html))]
+    if text:
+        rows.append(("plain-text body", len(text)))
+    for path in attachment_paths:
+        rows.append((os.path.basename(path), b64_chars(os.path.getsize(path))))
+    total = sum(n for _label, n in rows)
+    return total, rows, total <= CARRY_BUDGET_CHARS
+
+
 def check(path_or_size, limit=SAFE_B64_CHARS):
     """Report how an attachment stands against the ceiling.
 
