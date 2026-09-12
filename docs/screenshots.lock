@@ -11,4 +11,4 @@
 # This hashes the rendered HTML, not the pixels, because font rasterisation
 # differs between macOS and the Linux CI runner - a pixel comparison would fail
 # on every run regardless of whether anything actually changed.
-sha256 = 971c21a3f8a296fb2ebaaf5a241ebd0365771c6b7ac54a8308f6289302af97ff
+sha256 = bb7cc9dc376a5c45bc8d4eb3aeeb42ad401b86cc1a4ba6af92a38b5c3de4191a

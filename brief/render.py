@@ -250,27 +250,51 @@ def money_amount(amt, cur, usd, sign):
     return shown
 
 
-def money_side(dirw):
+def money_side(dirw, sign=""):
     """Which side of zero a movement sits on, and in which color.
 
-    Left/red for money leaving, right/green for money arriving, neutral grey for
-    a transfer between the owner's own accounts (magnitude only — an internal
-    move has no direction, so color must not imply one).
+    Left/red for money leaving, right/green for money arriving, centered grey
+    for a movement with no direction - a transfer between the owner's own
+    accounts, or one the run could not classify. A centered bar reads as
+    magnitude only, which is the honest drawing when direction is unknown.
 
-    ANYTHING UNRECOGNISED IS NEUTRAL, never positive. The prompt tells the run to
-    label an ambiguous movement "unclassified" rather than guess; drawing that as
-    a green inflow would make the chart assert income the data does not support.
+    DIRECTION IS FREE TEXT and the run coins new words for it - "Receipt",
+    "Refund", "Pending". An earlier version matched only "Out"/"Past due"/"In"
+    and sent everything else to the RIGHT of zero, which is the inflow side, so
+    a charge labelled "Receipt" drew a bar into positive territory while its own
+    amount was printed in red. SIGN is the fallback precisely because it is the
+    field that cannot be coined: the payload states it as + or the minus sign.
+
+    Nothing unrecognised is ever drawn as an inflow.
+
+    >>> money_side("Out"), money_side("In"), money_side("Internal")
+    (('left', 'neg'), ('right', 'pos'), ('center', 'neu'))
+    >>> money_side("Receipt", "\u2212")      # coined word, definite sign
+    ('left', 'neg')
+    >>> money_side("Receipt")                 # coined word, no sign
+    ('center', 'neu')
     """
     if dirw in ("Out", "Past due"):
         return "left", "neg"
     if dirw == "In":
         return "right", "pos"
-    return "right", "neu"
+    if dirw == "Internal":
+        return "center", "neu"
+    if sign in ("\u2212", "-"):
+        return "left", "neg"
+    if sign == "+":
+        return "right", "pos"
+    return "center", "neu"
 
 
-def money_bar(amt, dirw):
+MONEY_COLORS = {"pos": "pos", "neg": "neg", "neu": "ink2"}
+
+
+def money_bar(amt, dirw, sign=""):
     w = _money_frac(amt) * 50           # half-track either side of center
-    side, fcls = money_side(dirw)
+    side, fcls = money_side(dirw, sign)
+    if side == "center":
+        w /= 2                          # straddles zero: half each side
     n = _money_steps()
     ticks = "".join(f'<i style="left:{50 + sgn * s * 50 / n:g}%"></i>'
                     for sgn in (-1, 1) for s in range(1, n + 1))
@@ -356,13 +380,13 @@ th{{text-align:left;font-family:Archivo,sans-serif;font-size:10.5px;letter-spaci
 td{{padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}} tr:last-child td{{border-bottom:0}}
 td.num{{text-align:right;white-space:nowrap}}
 .dir-pos,.c-pos{{color:var(--positive);font-weight:600}} .dir-neg,.c-neg{{color:var(--negative);font-weight:600}} .dir-neu{{color:var(--ink-2);font-weight:600}} .c-accent{{color:var(--accent);font-weight:600}} .c-warn{{color:var(--warning);font-weight:600}} .muted{{color:var(--ink-3)}}
-.badge{{display:inline-block;font-family:Archivo,sans-serif;font-size:10px;letter-spacing:.06em;text-transform:uppercase;padding:1px 6px;border-radius:4px;border:1px solid currentColor;margin-left:6px;vertical-align:middle;font-weight:600}}
+.badge{{display:inline-block;font-family:Archivo,sans-serif;font-size:10px;letter-spacing:.06em;text-transform:uppercase;padding:1px 6px;border-radius:4px;border:1px solid currentColor;margin-left:6px;vertical-align:middle;font-weight:600;white-space:nowrap}}
 .legend{{font-size:12.5px;color:var(--ink-3);margin-top:8px}} .legend span{{margin-right:14px;white-space:nowrap;display:inline-block}}
 .dbar{{position:relative;height:14px;width:150px;background:var(--surface-2);border:1px solid var(--line);border-radius:3px;box-sizing:border-box}}
 .dbar i{{position:absolute;top:0;height:3px;width:1px;background:var(--line)}}
 .dbar::before{{content:"";position:absolute;left:50%;top:0;bottom:0;width:1px;background:var(--line-strong);z-index:1}}
 .dbar .fill{{position:absolute;top:3px;bottom:3px;min-width:3px;border-radius:2px}}
-.dbar .fill.right{{left:50%}} .dbar .fill.left{{right:50%}} .fill.pos{{background:var(--positive)}} .fill.neg{{background:var(--negative)}} .fill.neu{{background:var(--ink-3)}}
+.dbar .fill.right{{left:50%}} .dbar .fill.left{{right:50%}} .dbar .fill.center{{left:50%;transform:translateX(-50%)}} .fill.pos{{background:var(--positive)}} .fill.neg{{background:var(--negative)}} .fill.neu{{background:var(--ink-3)}}
 .daxis{{position:relative;height:16px;width:150px;margin-top:3px;box-sizing:border-box;border:1px solid transparent}}
 .dbar.money,.daxis.money{{width:100%;min-width:150px;max-width:280px}}
 .daxis i{{position:absolute;top:0;height:3px;width:1px;background:var(--line)}}
@@ -459,10 +483,10 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
         o.append(f'<div class="tile"><div class="lbl">{e(l)}</div><div class="v mono">{e(v)}</div><div class="d">{e(d)}</div></div>')
     o.append('</div><h3 style="margin-top:0">Money movements (outside → you / you → outside)</h3><div class="tbl-wrap"><table><thead><tr><th>When</th><th>Payee / source</th><th>Detail</th><th>Direction</th><th style="text-align:right">Amount</th><th>Out ← 0 → In, USD {axis_html}</th></tr></thead><tbody>'.format(axis_html=money_axis()))
     for when, payee, det, amt, cur, usd, dirw, sign in FIN_MOVES:
-        cls = "dir-neg" if dirw in ("Out", "Past due") else ("dir-pos" if dirw == "In" else "dir-neu")
+        cls = "dir-" + money_side(dirw, sign)[1]
         amt_s = money_amount(amt, cur, usd, sign)
-        o.append('<tr>' + tdl("When", e(when), "mono") + tdl("Payee / source", e(payee)) + tdl("Detail", detail_html_file(det)) + tdl("Direction", f'<span class="{cls}">{e(sign)} {e(dirw)}</span>') + tdl("Amount", f'<span class="{cls}">{amt_s}</span>', "num mono") + tdl("Out ← 0 → In, USD", money_bar(usd, dirw)) + '</tr>')
-    o.append(f'</tbody></table></div><div class="daxis-foot">{money_axis()}<div class="meta">Out ← 0 → In, USD — {money_axis_note()}</div></div><div class="cap">Bar axis, in USD: {money_axis_note()}. Amounts are shown in their original currency; bars are plotted from the USD equivalent. Money in = green on the right, out / past due = red on the left, internal transfer = neutral grey (magnitude only — an internal move has no direction). The sign and direction word state it too.</div>')
+        o.append('<tr>' + tdl("When", e(when), "mono") + tdl("Payee / source", e(payee)) + tdl("Detail", detail_html_file(det)) + tdl("Direction", f'<span class="{cls}">{e(sign)} {e(dirw)}</span>') + tdl("Amount", f'<span class="{cls}">{amt_s}</span>', "num mono") + tdl("Out ← 0 → In, USD", money_bar(usd, dirw, sign)) + '</tr>')
+    o.append(f'</tbody></table></div><div class="daxis-foot">{money_axis()}<div class="meta">Out ← 0 → In, USD — {money_axis_note()}</div></div><div class="cap">Bar axis, in USD: {money_axis_note()}. Amounts are shown in their original currency; bars are plotted from the USD equivalent. Money in = green on the right, out / past due = red on the left, no direction = neutral grey straddling zero (magnitude only — an internal or unclassified move has no side). The sign and direction word state it too.</div>')
     o.append('<h3>Transfers between your own accounts</h3><div class="nothing">' + e(FIN_INTERNAL) + '</div><h3>Bills, statements &amp; notices</h3><ul>')
     for n in FIN_NOTES: o.append(li_lead(n))
     o.append('</ul></div></section>')
@@ -687,7 +711,14 @@ def _em_bar(frac, col, right):
     fill = f"border-top:5px solid {col};border-bottom:5px solid {col}"
     line = f'border-bottom:1px solid {L["line"]}'
     center = f';border-right:1px solid {L["lineS"]}'
-    if right:
+    if right is None:
+        # No direction: straddle zero so the bar states magnitude and nothing
+        # more. Drawing it on either side would assert a direction the data
+        # does not carry.
+        h = p / 2
+        cells = (_em_cell(50 - h, line) + _em_cell(h, fill + center)
+                 + _em_cell(h, fill) + _em_cell(50 - h, line))
+    elif right:
         cells = (_em_cell(50, line + center)
                  + _em_cell(p, fill) + _em_cell(50 - p, line))
     else:
@@ -700,10 +731,11 @@ def _em_bar(frac, col, right):
 
 def em_bar_div(pct, ax):
     return _em_bar(min(abs(pct) / ax[1], 1.0), L["pos"] if pct >= 0 else L["neg"], pct >= 0)
-def em_bar_money(amt, dirw):
-    side, cls = money_side(dirw)
+def em_bar_money(amt, dirw, sign=""):
+    side, cls = money_side(dirw, sign)
     col = {"pos": L["pos"], "neg": L["neg"], "neu": L["ink3"]}[cls]
-    return _em_bar(_money_frac(amt), col, side == "right")
+    return _em_bar(_money_frac(amt), col,
+                   None if side == "center" else side == "right")
 def cap(t): return f'<div style="font-size:12px;color:{L["ink3"]};padding:6px 2px">{e(t)}</div>'
 def stripe_row(color, title_html, det_html):
     return f'<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid {L["line"]};border-left:6px solid {color};margin-top:6px"><tr><td style="padding:10px 12px"><div style="font:600 15px {F_H};color:{L["ink"]}">{title_html}</div><div style="font-size:14px;color:{L["ink2"]};margin-top:2px">{det_html}</div></td></tr></table>'
@@ -831,7 +863,7 @@ def email_html():
     rws = []
     for r, c, comp, loc, src, tier, link in JOBS_TOP:
         fit, fcls = job_fit(tier); lcls, _ = loc_tier(loc); fitc = L["pos"] if fcls == "pos" else L["accent"]
-        badge = (f' <span style="font:600 10px {F_H};text-transform:uppercase;border:1px solid {fitc};color:{fitc};padding:0 5px;border-radius:4px">{fit}</span>' if fit else "")
+        badge = (f' <span style="font:600 10px {F_H};text-transform:uppercase;border:1px solid {fitc};color:{fitc};padding:0 5px;border-radius:4px;white-space:nowrap">{fit}</span>' if fit else "")
         compc = sp(e(comp), L["pos"]) if comp != "not stated" else muted(e(comp))
         locc = sp(e(loc), L["accent"]) if lcls else e(loc)
         rws.append([td(f'<b>{e(r)}</b>{badge}<br>{small(e(c))}'), td(f'<span style="font-family:{F_M}">{compc}</span><br>{locc}'), td(f'<a href="{url(link)}" style="color:{L["accent"]};font-weight:600">open</a><br>{small(e(src))}')])
@@ -846,9 +878,10 @@ def email_html():
     inner += h3("Money movements (outside → you / you → outside)")
     rws = []
     for when, payee, det, amt, cur, usd, dirw, sign in FIN_MOVES:
-        col = L["pos"] if dirw == "In" else (L["ink2"] if dirw == "Internal" else L["neg"])
+        _, _mcls = money_side(dirw, sign)
+        col = {"pos": L["pos"], "neg": L["neg"], "neu": L["ink2"]}[_mcls]
         amt_s = money_amount(amt, cur, usd, sign)
-        rws.append([td(f'<span style="font-family:{F_M}">{e(when)}</span><br>{e(payee)}'), td(detail_html_email(det)), td(f'{sp(e(sign+" "+dirw), col)} {sp(amt_s, col)}<br>{em_bar_money(usd, dirw)}')])
+        rws.append([td(f'<span style="font-family:{F_M}">{e(when)}</span><br>{e(payee)}'), td(detail_html_email(det)), td(f'{sp(e(sign+" "+dirw), col)} {sp(amt_s, col)}<br>{em_bar_money(usd, dirw, sign)}')])
     inner += tbl(["When · payee", "Detail", th_axis("Direction · amount", money_labels(FIN_AXIS))], rws, ["30%", "32%", "38%"]) + cap(f"Bar axis, in USD: {money_axis_note()}. Amounts shown in their original currency; bars plotted from the USD equivalent. In = green right of 0, out / past due = red left of 0, internal = grey (magnitude only) — sign and word state it too.")
     inner += h3("Transfers between your own accounts") + f'<div style="color:{L["ink3"]};font-style:italic">{e(FIN_INTERNAL)}</div>'
     inner += h3("Bills, statements & notices") + '<ul style="margin:8px 0 0;padding-left:20px">' + "".join(em_li(n) for n in FIN_NOTES) + "</ul>"
