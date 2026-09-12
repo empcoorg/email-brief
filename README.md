@@ -104,6 +104,7 @@ python3 -m brief validate payload.json      # check without rendering
 python3 -m brief render payload.json --out-dir out --date 2026-09-07
 python3 -m brief significant payload.json   # exit 0 = worth sending, 3 = skip
 python3 -m brief attachment scan.jpg        # exit 0 = survives the send path, 4 = would truncate
+python3 -m brief carry --out-dir out scan.jpg   # exit 0 = fits one send call, 5 = does not
 ```
 
 `significant` decides whether an extra send (an evening update, say) has earned
@@ -142,6 +143,32 @@ the run through the parts rather than the whole file.
 The chunked read plus the re-emission costs roughly 39,000 tokens each way. That
 is the real price of a connector-only architecture, and the prompt says so
 plainly so a run budgets for it instead of downgrading the send.
+
+#### The carry budget — what one send call has to hold
+
+Splitting the body fixed **reading** it. It did not fix **emitting** it, and that
+is a separate ceiling: the connector's send tool takes the `htmlBody`, the
+plain-text alternative and every attachment as inline strings in a **single
+call**, so the run has to produce all of it at once.
+
+A brief can sit inside the 85 KB body budget and still be uncarryable. One did:
+
+| Part of the one send call | Characters |
+|---|---|
+| `htmlBody` | 86,085 |
+| plain-text alternative | 27,623 |
+| one 15,435 B mailpiece scan, base64 | 20,580 |
+| **total for a single tool call** | **134,288** |
+
+Base64 is the unforgiving part — a JPEG has no redundancy, so unlike prose it
+cannot be re-emitted approximately. And the brief sends **once**, so a truncated
+send cannot be corrected.
+
+`render` therefore prints what the call will have to carry, and
+`python3 -m brief carry` gives the real total once the attachments are known —
+exit 5 when it will not fit. Check it **before** carrying anything. When it does
+not fit, shed cards or send fewer scans and say in the chat reply what was left
+out; never downgrade the HTML to plain text.
 
 ## Themes
 

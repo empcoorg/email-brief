@@ -323,6 +323,72 @@ class TestAttachmentCeiling(unittest.TestCase):
         self.assertIn("missing.jpg", r.stderr)
 
 
+class TestCarryBudget(unittest.TestCase):
+    """The body budget answers "will Gmail clip it?". It does not answer the
+    question that actually stopped a send: the connector takes the body, the
+    plain-text alternative and every attachment as inline strings in ONE call,
+    so the run has to emit all of it at once. A brief inside the 85 KB body
+    budget still came to 134,288 characters across that one call.
+    """
+
+    def test_cost_sums_body_text_and_each_attachment(self):
+        from brief.attachments import b64_chars, carry_cost
+        jpg = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
+        jpg.write(b"x" * 15_000); jpg.close()
+        total, rows, _ok = carry_cost("<p>" + "a" * 500 + "</p>", "b" * 200, [jpg.name])
+        self.assertEqual(total, 507 + 200 + b64_chars(15_000))
+        self.assertEqual([label for label, _n in rows][:2], ["htmlBody", "plain-text body"])
+        self.assertTrue(rows[-1][0].endswith(".jpg"), "each attachment is named, not lumped in")
+
+    def test_text_and_attachments_are_optional(self):
+        from brief.attachments import carry_cost
+        total, rows, ok = carry_cost("<p>hi</p>")
+        self.assertEqual((total, len(rows), ok), (9, 1, True))
+
+    def test_verdict_flips_at_the_budget(self):
+        from brief.attachments import CARRY_BUDGET_CHARS, carry_cost
+        self.assertTrue(carry_cost("x" * CARRY_BUDGET_CHARS)[2])
+        self.assertFalse(carry_cost("x" * (CARRY_BUDGET_CHARS + 1))[2])
+
+    def test_the_measured_failure_would_be_caught(self):
+        """The real send that could not be emitted: 86,085 + 27,623 + one 15,435 B
+        scan. It passed the 85 KB body check and still could not be carried."""
+        from brief.attachments import carry_cost
+        jpg = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
+        jpg.write(b"x" * 15_435); jpg.close()
+        total, _rows, ok = carry_cost("x" * 86_085, "y" * 27_623, [jpg.name])
+        self.assertEqual(total, 134_288)
+        self.assertFalse(ok, "the send that failed must not pass the check")
+
+    def test_cli_reports_the_breakdown_and_exit_code(self):
+        out = tempfile.mkdtemp()
+        r = subprocess.run([sys.executable, "-m", "brief", "render", SAMPLE,
+                            "--out-dir", out, "--date", "2026-03-03"],
+                           cwd=ROOT, capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("one send call must carry", r.stdout)
+
+        r = subprocess.run([sys.executable, "-m", "brief", "carry", "--out-dir", out],
+                           cwd=ROOT, capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("htmlBody", r.stdout)
+        self.assertIn("TOTAL for one send call", r.stdout)
+
+        big = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
+        big.write(b"x" * 200_000); big.close()
+        r = subprocess.run([sys.executable, "-m", "brief", "carry", "--out-dir", out, big.name],
+                           cwd=ROOT, capture_output=True, text=True)
+        self.assertEqual(r.returncode, 5, "an uncarryable message must fail the command")
+        self.assertIn("OVER by", r.stderr)
+        self.assertIn("downgrade", r.stderr, "the fix is never to send plain text instead")
+
+    def test_cli_says_what_to_run_first_when_the_outputs_are_missing(self):
+        r = subprocess.run([sys.executable, "-m", "brief", "carry", "--out-dir", "/nope"],
+                           cwd=ROOT, capture_output=True, text=True)
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("render", r.stderr)
+
+
 class TestSpecCoversWhatTheRendererReads(unittest.TestCase):
     """The payload SPEC is advertised to the run as THE contract. It was not:
     render.py read MAST["revised"] and VOIP["last_msg"]/["last_acct"], none of

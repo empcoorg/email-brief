@@ -74,13 +74,18 @@ def _derive():
     g["STK_YTD"] = pct_axis([r[7] for r in STOCKS])
 
 
-def render_all(payload):
+def render_all(payload, stamp=None):
     """Bind a validated payload and render all three outputs.
+
+    `stamp` is the date the standalone file is written under. The email names
+    that file, so the name has to be the real one; it used to be a frozen
+    literal and went stale the day after it was written.
 
     Returns (file_html, email_html, plain_text).
     """
     globals().update(payload)
     globals()["BUILD"] = build_marker(payload)
+    globals()["FILE_STAMP"] = stamp or payload["MAST"].get("file_date") or "brief"
     _derive()
     return file_html(), email_html(), plain_text()
 
@@ -418,7 +423,7 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
 <div class="stamp"><div class="lbl">Window covered</div><div class="val mono">{e(MAST['window'])}</div></div>
 <div class="stamp"><div class="lbl">Run stamp</div><div class="val mono">{e(MAST['run'])}</div></div>
 </div></header>""")
-    o.append('<section><h2>Needs you today <span class="sub">ranked; nothing expires before tomorrow\'s run</span></h2><div class="actions">')
+    o.append(f'<section><h2>Needs you today <span class="sub">{e(actions_sub())}</span></h2><div class="actions">')
     tagmap = {"warn": "Check", "neg": "Urgent", "info": "Note", "ok": "Clear"}
     for sev, t, d in ACTIONS:
         o.append(f'<div class="act {sev}"><div class="stripe"></div><div class="body"><div class="act-title"><span class="tag">{tagmap[sev]}</span>{e(t)}</div><div class="det">{e(d)}</div></div></div>')
@@ -495,8 +500,12 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
                      + tdl("To \u00b7 type", f'<span class="mono">{e(to)}</span><br><span class="meta">{e(kind)}</span>')
                      + tdl("Message", e(text)) + '</tr>')
         o.append('</tbody></table></div>')
-    if VOIP["notes"]:
-        o.append("<ul>" + "".join(li_lead(n) for n in VOIP["notes"]) + "</ul>")
+    # last_msg and last_acct answer "is the line actually alive?" on a quiet
+    # day, which is exactly the day the section is otherwise empty. Only the
+    # plain-text body carried them; the file and the email dropped them.
+    tail = list(VOIP["notes"]) + [x for x in (VOIP["last_msg"], VOIP["last_acct"]) if x]
+    if tail:
+        o.append("<ul>" + "".join(li_lead(n) for n in tail) + "</ul>")
     o.append('</div></section>')
     # 5 USPS
     o.append(f'<section><h2><span class="num">{num()}.</span> USPS Informed Delivery <span class="sub">mail addressed to the intended recipient only; everyone else counted, never named</span></h2><div class="card"><div class="nothing">{e(USPS["headline"])}</div>')
@@ -533,13 +542,16 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
                  + tdl("YTD", horizon_cell_file(ay, vy, FUND_YTD))
                  + tdl("As of", f'<span class="meta">{e(asof)}</span>') + '</tr>')
     o.append(f'</tbody></table></div>{axis_foot(FUND_1D, "1D NAV change, %")}{axis_foot(FUND_1W, "1W NAV change, %")}{axis_foot(FUND_YTD, "YTD NAV change, %")}<div class="cap">Change from the prior published NAV (1D), over one trading week (1W), and since the previous year-end (YTD) - each in $ and %. {axis_note(FUND_1D, "1D axis")}; {axis_note(FUND_1W, "1W axis")}; {axis_note(FUND_YTD, "YTD axis")}. ' + e(" ".join(f"{tk}: {note}" for tk, nm, nav, a1, v1, a7, v7, ay, vy, asof, note in FUNDS)) + '</div>')
-    o.append(f'<h3>Large caps</h3><div class="tbl-wrap"><table><thead><tr><th>Ticker</th><th style="text-align:right">Price</th><th>1D{axis_div(STK_1D)}</th><th>1W{axis_div(STK_1W)}</th><th>YTD{axis_div(STK_YTD)}</th></tr></thead><tbody>')
-    for tk, pr, a1, v1, a7, v7, ay, vy in STOCKS:
-        o.append('<tr>' + tdl("Ticker", f'<span class="lead">{e(tk)}</span>', "mono") + tdl("Price", e(pr), "num mono")
-                 + tdl("1D", horizon_cell_file(a1, v1, STK_1D))
-                 + tdl("1W", horizon_cell_file(a7, v7, STK_1W))
-                 + tdl("YTD", horizon_cell_file(ay, vy, STK_YTD)) + '</tr>')
-    o.append(f'</tbody></table></div>{axis_foot(STK_1D, "1D move, %")}{axis_foot(STK_1W, "1W move, %")}{axis_foot(STK_YTD, "YTD move, %")}<div class="cap">Same horizons as the indexes, each in $ per share and %. {axis_note(STK_1D, "1D axis")}; {axis_note(STK_1W, "1W axis")}; {axis_note(STK_YTD, "YTD axis")}.</div>')
+    # An empty list means the run had nothing to report, so the section is
+    # omitted rather than rendered as a table with a header and no rows.
+    if STOCKS:
+        o.append(f'<h3>Large caps</h3><div class="tbl-wrap"><table><thead><tr><th>Ticker</th><th style="text-align:right">Price</th><th>1D{axis_div(STK_1D)}</th><th>1W{axis_div(STK_1W)}</th><th>YTD{axis_div(STK_YTD)}</th></tr></thead><tbody>')
+        for tk, pr, a1, v1, a7, v7, ay, vy in STOCKS:
+            o.append('<tr>' + tdl("Ticker", f'<span class="lead">{e(tk)}</span>', "mono") + tdl("Price", e(pr), "num mono")
+                     + tdl("1D", horizon_cell_file(a1, v1, STK_1D))
+                     + tdl("1W", horizon_cell_file(a7, v7, STK_1W))
+                     + tdl("YTD", horizon_cell_file(ay, vy, STK_YTD)) + '</tr>')
+        o.append(f'</tbody></table></div>{axis_foot(STK_1D, "1D move, %")}{axis_foot(STK_1W, "1W move, %")}{axis_foot(STK_YTD, "YTD move, %")}<div class="cap">Same horizons as the indexes, each in $ per share and %. {axis_note(STK_1D, "1D axis")}; {axis_note(STK_1W, "1W axis")}; {axis_note(STK_YTD, "YTD axis")}.</div>')
     o.append(f'<div class="card wide"><h2>Cryptocurrency</h2><div class="tbl-wrap"><table><thead><tr><th>Asset</th><th style="text-align:right">Price</th><th>1D{axis_div(CRY_24)}</th><th>1W{axis_div(CRY_7D)}</th><th>YTD{axis_div(CRY_YTD)}</th></tr></thead><tbody>')
     for n, pr, v1, a1, v7, a7, vy, ay in CRYPTO_ROWS:
         o.append('<tr>' + tdl("Asset", f'<span class="lead">{e(n)}</span>', "mono") + tdl("Price", e(pr), "num mono")
@@ -556,26 +568,34 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
                  + tdl("Change · context", e(context))
                  + tdl("As of", f'<span class="meta">{e(asof)}</span>') + '</tr>')
     o.append('</tbody></table></div>')
-    o.append('<h3>Jobs by sector</h3><div class="tbl-wrap"><table><thead><tr><th>Sector</th><th style="text-align:right">Payrolls</th><th>Context</th><th>As of</th></tr></thead><tbody>')
-    for sector, change, context, asof in JOBS_SECTORS:
-        cls = "dir-pos" if not str(change).lstrip().startswith(("\u2212", "-")) else "dir-neg"
-        o.append('<tr>' + tdl("Sector", e(sector))
-                 + tdl("Payrolls", f'<span class="{cls} mono">{e(change)}</span>', "num")
-                 + tdl("Context", e(context))
-                 + tdl("As of", f'<span class="meta">{e(asof)}</span>') + '</tr>')
-    o.append(f'</tbody></table></div><div class="cap">{e(MACRO_NOTE)}</div></div>')
+    # Same: a heading over an empty table reads as missing data, not as
+    # nothing to say.
+    if JOBS_SECTORS:
+        o.append('<h3>Jobs by sector</h3><div class="tbl-wrap"><table><thead><tr><th>Sector</th><th style="text-align:right">Payrolls</th><th>Context</th><th>As of</th></tr></thead><tbody>')
+        for sector, change, context, asof in JOBS_SECTORS:
+            cls = "dir-pos" if not str(change).lstrip().startswith(("\u2212", "-")) else "dir-neg"
+            o.append('<tr>' + tdl("Sector", e(sector))
+                     + tdl("Payrolls", f'<span class="{cls} mono">{e(change)}</span>', "num")
+                     + tdl("Context", e(context))
+                     + tdl("As of", f'<span class="meta">{e(asof)}</span>') + '</tr>')
+        o.append('</tbody></table></div>')
+    # The caption and the card's closing tag belong to the card, not to the
+    # jobs table, so they are emitted whether or not that table was rendered.
+    o.append(f'<div class="cap">{e(MACRO_NOTE)}</div></div>')
     o.append('<div class="card"><h2>AI &amp; programming</h2><div class="tbl-wrap"><table><thead><tr><th>Item</th><th>What it means</th><th>Source</th></tr></thead><tbody>')
     for t, d, link in AI_ITEMS:
         o.append('<tr>' + tdl("Item", f'<span class="lead">{e(t)}</span>')
                  + tdl("What it means", e(d))
                  + tdl("Source", f'<a href="{url(link)}">open</a>') + '</tr>')
     o.append('</tbody></table></div></div>')
-    o.append('<div class="card"><h2>Research &amp; publications</h2><div class="tbl-wrap"><table><thead><tr><th>Journal \u00b7 date</th><th>Paper</th><th>Takeaway</th></tr></thead><tbody>')
-    for j, t, au, d, tk, link in JOURNAL_ITEMS:
-        o.append('<tr>' + tdl("Journal \u00b7 date", f'<span class="lead">{e(j)}</span><br><span class="meta">{e(d)}</span>')
-                 + tdl("Paper", f'<a href="{url(link)}"><b>{e(t)}</b></a><br><span class="meta">{e(au)}</span>')
-                 + tdl("Takeaway", e(tk)) + '</tr>')
-    o.append(f'</tbody></table></div><div class="cap">Journals scanned: {e(JOURNALS)}; items newly published since the previous run.</div></div>')
+    # No papers means no card - it used to print "Journals scanned: ;".
+    if JOURNAL_ITEMS:
+        o.append('<div class="card"><h2>Research &amp; publications</h2><div class="tbl-wrap"><table><thead><tr><th>Journal \u00b7 date</th><th>Paper</th><th>Takeaway</th></tr></thead><tbody>')
+        for j, t, au, d, tk, link in JOURNAL_ITEMS:
+            o.append('<tr>' + tdl("Journal \u00b7 date", f'<span class="lead">{e(j)}</span><br><span class="meta">{e(d)}</span>')
+                     + tdl("Paper", f'<a href="{url(link)}"><b>{e(t)}</b></a><br><span class="meta">{e(au)}</span>')
+                     + tdl("Takeaway", e(tk)) + '</tr>')
+        o.append(f'</tbody></table></div><div class="cap">Journals scanned: {e(JOURNALS)}; items newly published since the previous run.</div></div>')
     o.append('</div></section>')
     # 7 retail (low priority)
     o.append(f'<section><h2><span class="num">{num()}.</span> Retail sales <span class="sub">{e(RETAIL["sub"])}</span></h2><div class="card">')
@@ -608,6 +628,19 @@ F_B = "'Source Sans 3',Arial"
 F_M = "'JetBrains Mono',Menlo"
 BODY_FS = "15px"
 def lbl(t): return f'<div style="font:600 10.5px {F_H};text-transform:uppercase;color:{L["ink3"]}">{e(t)}</div>'
+def actions_sub():
+    """Subtitle for the action bar, derived from the rows it sits above.
+
+    It read "nothing expires before tomorrow's run" unconditionally, so a bar
+    whose top row was a deadline expiring that night contradicted its own
+    heading - and "tomorrow" is wrong on any cadence but daily.
+    """
+    urgent = sum(1 for sev, _t, _d in ACTIONS if sev == "neg")
+    if not urgent:
+        return "ranked; nothing here expires before the next run"
+    return f"ranked; {urgent} expire{'s' if urgent == 1 else ''} before the next run"
+
+
 def h2(t, sub=""):
     s_ = (f' <span style="font-family:{F_B};font-weight:400;font-size:13px;color:{L["ink3"]}">{e(sub)}</span>') if sub else ""
     return f'<div style="font-family:{F_H};font-size:19px;font-weight:700;color:{L["ink"]};margin:0 0 10px">{t}{s_}</div>'
@@ -708,9 +741,11 @@ def cap(t): return f'<div style="font-size:12px;color:{L["ink3"]};padding:6px 2p
 def stripe_row(color, title_html, det_html):
     return f'<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid {L["line"]};border-left:6px solid {color};margin-top:6px"><tr><td style="padding:10px 12px"><div style="font:600 15px {F_H};color:{L["ink"]}">{title_html}</div><div style="font-size:14px;color:{L["ink2"]};margin-top:2px">{det_html}</div></td></tr></table>'
 
-LAYOUT_NOTE = ("Layout: one fluid layout for phone and desktop (the mail path strips stylesheets, so the email cannot adapt itself). "
-               "The standalone file <b>morning-brief-2026-09-07.html</b> — full desktop tables, mobile cards, dark mode, collapsible sources, "
-               "and embedded USPS scans — is delivered in the Claude session alongside this email.")
+def layout_note():
+    """Names the standalone file the run actually wrote, not an example date."""
+    return ("Layout: one fluid layout for phone and desktop (the mail path strips stylesheets, so the email cannot adapt itself). "
+            f"The standalone file <b>morning-brief-{e(FILE_STAMP)}.html</b> — full desktop tables, mobile cards, dark mode, collapsible sources, "
+            "and embedded USPS scans — is delivered in the Claude session alongside this email.")
 
 # Gmail clips a message past ~102 KB and its sanitizer inflates the HTML ~12%,
 # so the body is budgeted at 85 KB. When the brief outgrows that, the EMAIL sheds
@@ -804,12 +839,12 @@ def email_html():
              f'<div style="font-family:{F_H};font-size:28px;font-weight:700;color:{L["ink"]}">{e(MAST["title"])}</div>'
              f'<div style="font-size:16px;font-weight:600;color:{L["ink2"]};margin-top:2px">{e(MAST["dateline"])}</div>{stamps}'
              f'<div style="font-size:13px;color:{L["ink3"]};margin-top:10px">{e(MAST["note"])}</div>'
-             f'<div style="font-size:12.5px;color:{L["ink3"]};margin-top:6px;border-top:1px solid {L["line"]};padding-top:6px">{LAYOUT_NOTE}</div>'
+             f'<div style="font-size:12.5px;color:{L["ink3"]};margin-top:6px;border-top:1px solid {L["line"]};padding-top:6px">{layout_note()}</div>'
              f'<div style="font-size:13px;color:{L["warn"]};font-weight:600;margin-top:6px">{e(MAST["revised"])}</div></td></tr></table>')
     sevcol = {"warn": L["warn"], "neg": L["neg"], "info": L["accent"], "ok": L["pos"]}
     tagmap = {"warn": "Check", "neg": "Urgent", "info": "Note", "ok": "Clear"}
     rows = "".join(stripe_row(sevcol[sev], f'<span style="font-size:10.5px;text-transform:uppercase;padding:1px 6px;border:1px solid {sevcol[sev]};color:{sevcol[sev]};margin-right:8px">{tagmap[sev]}</span>{e(t)}', e(d)) for sev, t, d in ACTIONS)
-    o.append('<div style="margin-top:18px">' + h2("Needs you today", "ranked; nothing expires before tomorrow's run") + rows + '</div>')
+    o.append('<div style="margin-top:18px">' + h2("Needs you today", actions_sub()) + rows + '</div>')
     # 4 hipri
     num = SectionNumber()
     inner = h2(f'{sp(f"{num()}.", L["accent"])} High priority', "ranked by severity · act on these first")
@@ -879,8 +914,12 @@ def email_html():
                 td(f'<span style="font-family:{F_M}">{e(to)}</span><br>{small(e(kind))}'),
                 td(e(text))] for w, frm, to, kind, text in VOIP["messages"]]
         inner += tbl(["When · from", "To · type", "Message"], rws, ["30%", "24%", "46%"])
-    if VOIP["notes"]:
-        inner += '<ul style="margin:8px 0 0;padding-left:20px">' + "".join(em_li(n) for n in VOIP["notes"]) + "</ul>"
+    # last_msg and last_acct answer "is the line actually alive?" on a quiet
+    # day, which is exactly the day the section is otherwise empty. Only the
+    # plain-text body carried them; the file and the email dropped them.
+    tail = list(VOIP["notes"]) + [x for x in (VOIP["last_msg"], VOIP["last_acct"]) if x]
+    if tail:
+        inner += '<ul style="margin:8px 0 0;padding-left:20px">' + "".join(em_li(n) for n in tail) + "</ul>"
     o.append(card(inner))
     # 5 USPS
     inner = h2(f'{sp(f"{num()}.", L["accent"])} USPS Informed Delivery', "mail addressed to the intended recipient only; everyone else counted, never named")
@@ -919,27 +958,34 @@ def email_html():
     mark("US market")
     # large caps — its own card; appending to `inner` here re-emitted the whole
     # market card, silently doubling ~25 KB of the email
-    inner = h2("Large caps")
-    rws = []
-    for tk, pr, a1, v1, a7, v7, ay, vy in STOCKS:
-        ky = L["pos"] if vy >= 0 else L["neg"]
-        rws.append([td(f'{lead(tk)}<br>{small(e(pr))}<br>{sp(f"YTD {pct_str(vy)} {arrow(vy)}", ky)}', mono=True),
-                    td(f'<div style="text-align:center">{sp(f"{e(a1)} · {pct_str(v1)} {arrow(v1)}", L["pos"] if v1 >= 0 else L["neg"])}</div>{em_bar_div(v1, STK_1D)}', mono=True),
-                    td(f'<div style="text-align:center">{sp(f"{e(a7)} · {pct_str(v7)} {arrow(v7)}", L["pos"] if v7 >= 0 else L["neg"])}</div>{em_bar_div(v7, STK_1W)}', mono=True)])
-    inner += tbl(["Ticker · price · YTD", th_axis("1D", pct_labels(STK_1D)), th_axis("1W", pct_labels(STK_1W))], rws, ["30%", "35%", "35%"])
-    o.append(card(inner))
-    mark("Large caps")
+    # Empty list -> no card at all, rather than a header row with no rows
+    # under it. Skipping the append also skips mark(), so the shed order
+    # never points at a card that was never emitted.
+    if STOCKS:
+        inner = h2("Large caps")
+        rws = []
+        for tk, pr, a1, v1, a7, v7, ay, vy in STOCKS:
+            ky = L["pos"] if vy >= 0 else L["neg"]
+            rws.append([td(f'{lead(tk)}<br>{small(e(pr))}<br>{sp(f"YTD {pct_str(vy)} {arrow(vy)}", ky)}', mono=True),
+                        td(f'<div style="text-align:center">{sp(f"{e(a1)} · {pct_str(v1)} {arrow(v1)}", L["pos"] if v1 >= 0 else L["neg"])}</div>{em_bar_div(v1, STK_1D)}', mono=True),
+                        td(f'<div style="text-align:center">{sp(f"{e(a7)} · {pct_str(v7)} {arrow(v7)}", L["pos"] if v7 >= 0 else L["neg"])}</div>{em_bar_div(v7, STK_1W)}', mono=True)])
+        inner += tbl(["Ticker · price · YTD", th_axis("1D", pct_labels(STK_1D)), th_axis("1W", pct_labels(STK_1W))], rws, ["30%", "35%", "35%"])
+        o.append(card(inner))
+        mark("Large caps")
     # Fed and labor market
     inner = h2("Fed &amp; labor market")
     inner += tbl(["Indicator", "Latest", "Change · context"],
                  [[td(lead(n)), td(f"<b>{e(v)}</b>", mono=True), td(f"{e(c)}<br>{small(e(a))}")]
                   for n, v, c, a in MACRO_ROWS], ["28%", "22%", "50%"])
-    inner += h3("Jobs by sector")
-    inner += tbl(["Sector", "Payrolls", "Context"],
-                 [[td(e(sec)),
-                   td(sp(e(ch), L["neg"] if str(ch).lstrip().startswith(("\u2212", "-")) else L["pos"]), mono=True),
-                   td(f"{e(ctx)}<br>{small(e(a))}")]
-                  for sec, ch, ctx, a in JOBS_SECTORS], ["30%", "18%", "52%"])
+    # The Fed card keeps its caption and closing tag either way; only the
+    # jobs sub-table is conditional.
+    if JOBS_SECTORS:
+        inner += h3("Jobs by sector")
+        inner += tbl(["Sector", "Payrolls", "Context"],
+                     [[td(e(sec)),
+                       td(sp(e(ch), L["neg"] if str(ch).lstrip().startswith(("\u2212", "-")) else L["pos"]), mono=True),
+                       td(f"{e(ctx)}<br>{small(e(a))}")]
+                      for sec, ch, ctx, a in JOBS_SECTORS], ["30%", "18%", "52%"])
     inner += cap(MACRO_NOTE)
     o.append(card(inner))
     mark("Fed & labor market")
@@ -962,15 +1008,17 @@ def email_html():
          for t_, d, l in AI_ITEMS], ["30%", "56%", "14%"])
     o.append(card(inner))
     mark("AI & programming")
-    inner = h2("Research &amp; publications") + tbl(
-        ["Journal · date", "Paper", "Takeaway"],
-        [[td(f'{lead(j)}<br>{small(e(d))}'),
-          td(f'<a href="{url(l)}" style="color:{L["accent"]};font-weight:600">{e(t_)}</a><br>{small(e(au))}'),
-          td(e(tk))]
-         for j, t_, au, d, tk, l in JOURNAL_ITEMS], ["20%", "40%", "40%"]) + cap(
-        f"Journals scanned: {JOURNALS}; items newly published since the previous run.")
-    o.append(card(inner))
-    mark("Research & publications")
+    # No papers -> no card; it used to render "Journals scanned: ;".
+    if JOURNAL_ITEMS:
+        inner = h2("Research &amp; publications") + tbl(
+            ["Journal · date", "Paper", "Takeaway"],
+            [[td(f'{lead(j)}<br>{small(e(d))}'),
+              td(f'<a href="{url(l)}" style="color:{L["accent"]};font-weight:600">{e(t_)}</a><br>{small(e(au))}'),
+              td(e(tk))]
+             for j, t_, au, d, tk, l in JOURNAL_ITEMS], ["20%", "40%", "40%"]) + cap(
+            f"Journals scanned: {JOURNALS}; items newly published since the previous run.")
+        o.append(card(inner))
+        mark("Research & publications")
     # 7 retail — lowest priority, so it sits last, after the research sections
     inner = h2(f'{sp(f"{num()}.", L["accent"])} Retail sales', RETAIL["sub"])
     inner += '<ul style="margin:8px 0 0;padding-left:20px">' + em_li(RETAIL["rewards"]) + "</ul>"
@@ -1055,15 +1103,19 @@ def plain_text():
           f" | YTD {ay}, {pct_str(vy)} | as of {asof}. {note}")
     A(f"    (1D axis ±{FUND_1D[1]:g}%, step {FUND_1D[0]:g}%.)")
     for b in MKT_BULLETS: A(f"  - {b}")
-    A(""); A("LARGE CAPS")
-    for tk, pr, a1, v1, a7, v7, ay, vy in STOCKS:
-        A(f"  {tk}: {pr} | 1D {a1}, {pct_str(v1)} | 1W {a7}, {pct_str(v7)} | YTD {ay}, {pct_str(vy)}")
+    # Mirrors the HTML: an empty section is omitted, not left as a bare heading.
+    if STOCKS:
+        A(""); A("LARGE CAPS")
+        for tk, pr, a1, v1, a7, v7, ay, vy in STOCKS:
+            A(f"  {tk}: {pr} | 1D {a1}, {pct_str(v1)} | 1W {a7}, {pct_str(v7)} | YTD {ay}, {pct_str(vy)}")
     A(""); A("FED & LABOR MARKET")
     for n, v, c, a in MACRO_ROWS:
         A(f"  {n}: {v} — {c} ({a})")
-    A("  Jobs by sector:")
-    for sec, ch, ctx, a in JOBS_SECTORS:
-        A(f"    {sec}: {ch} — {ctx} ({a})")
+    #
+    if JOBS_SECTORS:
+        A("  Jobs by sector:")
+        for sec, ch, ctx, a in JOBS_SECTORS:
+            A(f"    {sec}: {ch} — {ctx} ({a})")
     A("  " + MACRO_NOTE)
     A(""); A("CRYPTOCURRENCY")
     for n, pr, v1, a1, v7, a7, vy, ay in CRYPTO_ROWS:
@@ -1075,8 +1127,10 @@ def plain_text():
     for b in CRYPTO_BULLETS: A(f"  - {b}")
     A(""); A("AI & PROGRAMMING")
     for t, d, l in AI_ITEMS: A(f"  - {t} — {d}\n    {l}")
-    A(""); A("RESEARCH & PUBLICATIONS (" + JOURNALS + ")")
-    for j, t, au, d, tk, l in JOURNAL_ITEMS: A(f"  - {j}: {t} ({au}, {d}) — {tk}\n    {l}")
+    #
+    if JOURNAL_ITEMS:
+        A(""); A("RESEARCH & PUBLICATIONS (" + JOURNALS + ")")
+        for j, t, au, d, tk, l in JOURNAL_ITEMS: A(f"  - {j}: {t} ({au}, {d}) — {tk}\n    {l}")
     A(""); A(f"{tnum()}. RETAIL SALES (lowest priority — configured retailers)")
     A("  - " + RETAIL["rewards"])
     for store, offer, det in RETAIL["items"]: A(f"  - {store}: {offer} — {det}")

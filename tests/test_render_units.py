@@ -771,3 +771,142 @@ class TestRangeDashSpacing(unittest.TestCase):
     def test_arrows_are_not_touched(self):
         from brief.theme import space_ranges
         self.assertEqual(space_ranges("close → close"), "close → close")
+
+
+class TestEmptySectionsAreOmitted(unittest.TestCase):
+    """An empty list means "nothing to report", and the model spec says so:
+    "Omit a section by giving it an empty list". Three sections ignored that and
+    rendered a heading over a table with no rows, which reads as missing data
+    rather than as a quiet day - and Research printed a bare "Journals scanned: ;".
+    """
+
+    QUIET = dict(STOCKS=[], JOBS_SECTORS=[], JOURNAL_ITEMS=[], JOURNALS="")
+
+    def setUp(self):
+        self.quiet = render_all(payload(**self.QUIET), stamp="2026-03-03")
+        self.full = render_all(payload(), stamp="2026-03-03")
+
+    def test_large_caps_omitted_from_every_output(self):
+        f, em, txt = self.quiet
+        self.assertNotIn("Large caps", f)
+        self.assertNotIn("Large caps", em)
+        self.assertNotIn("LARGE CAPS", txt)
+
+    def test_jobs_by_sector_omitted_from_every_output(self):
+        f, em, txt = self.quiet
+        self.assertNotIn("Jobs by sector", f)
+        self.assertNotIn("Jobs by sector", em)
+        self.assertNotIn("Jobs by sector:", txt)
+
+    def test_research_card_omitted_rather_than_showing_an_empty_scan_list(self):
+        f, em, txt = self.quiet
+        self.assertNotIn("Research &amp; publications", f)
+        self.assertNotIn("Research &amp; publications", em)
+        self.assertNotIn("RESEARCH & PUBLICATIONS", txt)
+        for doc in (f, em):
+            self.assertNotIn("Journals scanned: ;", doc)
+
+    def test_the_surrounding_card_still_closes(self):
+        """Jobs by sector sits inside the Fed card, whose caption and closing tag
+        must survive the section being dropped."""
+        f, em, _txt = self.quiet
+        self.assertIn("Fed &amp; labor market", em)
+        for doc in (f, em):
+            self.assertEqual(doc.count("<table"), doc.count("</table>"))
+        # the file's wrap div is unbalanced by one before and after this change,
+        # so compare against the populated render rather than against zero
+        self.assertEqual(self.quiet[0].count("<div") - self.quiet[0].count("</div>"),
+                         self.full[0].count("<div") - self.full[0].count("</div>"))
+
+    def test_populated_sections_still_render(self):
+        f, em, txt = self.full
+        for needle, doc in (("Large caps", f), ("Large caps", em), ("LARGE CAPS", txt),
+                            ("Jobs by sector", f), ("Jobs by sector", em),
+                            ("Research &amp; publications", f),
+                            ("Research &amp; publications", em)):
+            self.assertIn(needle, doc)
+
+
+class TestActionBarSubtitleIsDerived(unittest.TestCase):
+    """The subtitle claimed "nothing expires before tomorrow's run" no matter what
+    the bar said, so a brief whose top row was a deadline expiring that night
+    contradicted its own heading."""
+
+    def sub_of(self, actions):
+        return render_all(payload(ACTIONS=actions), stamp="2026-03-03")[0]
+
+    def test_no_urgent_rows_says_nothing_expires(self):
+        f = self.sub_of([["warn", "Check this", "detail"], ["info", "Note", "detail"]])
+        self.assertIn("nothing here expires before the next run", f)
+
+    def test_one_urgent_row_is_counted_and_singular(self):
+        f = self.sub_of([["neg", "Deadline tonight", "detail"], ["ok", "Clear", "detail"]])
+        self.assertIn("1 expires before the next run", f)
+        self.assertNotIn("nothing here expires", f)
+
+    def test_several_urgent_rows_are_counted_and_plural(self):
+        f = self.sub_of([["neg", "A", "d"], ["neg", "B", "d"], ["warn", "C", "d"]])
+        self.assertIn("2 expire before the next run", f)
+
+    def test_the_email_uses_the_same_derived_subtitle(self):
+        em = render_all(payload(ACTIONS=[["neg", "A", "d"]]), stamp="2026-03-03")[1]
+        self.assertIn("1 expires before the next run", em)
+
+    def test_the_old_hardcoded_subtitle_is_gone(self):
+        """It promised "tomorrow", which is wrong on any cadence but daily. The
+        phrase may still appear in PAYLOAD text - that is the run's words, not
+        the renderer's - so this pins the renderer's own string."""
+        for doc in render_all(payload(), stamp="2026-03-03"):
+            self.assertNotIn("ranked; nothing expires before tomorrow's run", doc)
+
+
+class TestEmailNamesTheFileThatWasWritten(unittest.TestCase):
+    """The email tells the reader to open the standalone file by name. That name
+    was a frozen literal and went stale the day after it was written."""
+
+    def test_email_names_the_render_stamp(self):
+        em = render_all(payload(), stamp="2026-09-11")[1]
+        self.assertIn("morning-brief-2026-09-11.html", em)
+
+    def test_no_hardcoded_example_date_survives(self):
+        em = render_all(payload(), stamp="2026-09-11")[1]
+        self.assertNotIn("morning-brief-2026-09-07.html", em)
+
+    def test_stamp_falls_back_to_the_payload_then_to_a_placeholder(self):
+        p = payload()
+        p["MAST"]["file_date"] = "2026-01-02"
+        self.assertIn("morning-brief-2026-01-02.html", render_all(p)[1])
+        p["MAST"].pop("file_date")
+        self.assertIn("morning-brief-brief.html", render_all(p)[1])
+
+    def test_the_stamp_is_escaped_like_any_other_payload_text(self):
+        em = render_all(payload(), stamp='"><script>x</script>')[1]
+        self.assertNotIn("<script>", em)
+
+
+class TestVoipTailReachesEveryOutput(unittest.TestCase):
+    """last_msg and last_acct answer "is the line actually alive?" - which matters
+    most on the quiet day when the section is otherwise empty. Only the
+    plain-text body carried them."""
+
+    def test_last_message_and_account_notice_in_all_three_outputs(self):
+        p = payload()
+        p["VOIP"]["last_msg"] = "Last inbound: Mon Mar 2 - from 555-010-7788"
+        p["VOIP"]["last_acct"] = "Last provider notice: Feb 26 - routine invoice"
+        for doc in render_all(p, stamp="2026-03-03"):
+            self.assertIn("555-010-7788", doc)
+            self.assertIn("Last provider notice", doc)
+
+    def test_they_survive_a_window_with_no_messages(self):
+        p = payload()
+        p["VOIP"]["messages"] = []
+        p["VOIP"]["last_msg"] = "Last inbound: Mon Mar 2 - from 555-010-7788"
+        for doc in render_all(p, stamp="2026-03-03")[:2]:
+            self.assertIn("555-010-7788", doc)
+
+    def test_an_empty_tail_adds_no_empty_bullet(self):
+        p = payload()
+        p["VOIP"].update(notes=[], last_msg="", last_acct="")
+        f, em, _t = render_all(p, stamp="2026-03-03")
+        self.assertNotIn("<ul></ul>", f)
+        self.assertNotIn('<ul style="margin:8px 0 0;padding-left:20px"></ul>', em)
