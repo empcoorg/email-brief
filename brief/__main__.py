@@ -18,7 +18,7 @@ from .render import EMAIL_BUDGET_BYTES as EMAIL_BUDGET  # Gmail clips ~102 KB
 
 
 def _check_attachments(paths, out_dir=None):
-    """Would each file survive the send path, and does the WHOLE call fit?
+    """Are the files within the size limits, and does the WHOLE call fit?
 
     Two different limits. Each attachment must stay under the per-file ceiling
     or the send path truncates it silently. Separately, htmlBody + the text body
@@ -27,7 +27,7 @@ def _check_attachments(paths, out_dir=None):
     payload was "too large to send in one call".
     """
     from .attachments import (check, max_bytes, b64_chars, call_bytes,
-                              SEND_CALL_BYTES)
+                              call_limit)
     bad = 0
     for path in paths:
         try:
@@ -52,19 +52,26 @@ def _check_attachments(paths, out_dir=None):
             return 4
         sizes = [os.path.getsize(p) for p in paths]
         total = call_bytes(html, text, sizes)
+        limit = call_limit(len(sizes))
         print(f"\nwhole send call: htmlBody {html:,} + text {text:,} + "
               f"{len(sizes)} attachment(s) {sum(b64_chars(n) for n in sizes):,} "
-              f"(base64) = {total:,} B of {SEND_CALL_BYTES:,}")
-        if total > SEND_CALL_BYTES:
-            over = total - SEND_CALL_BYTES
-            print(f"OVER BY {over:,} B — this call will be refused as too large "
-                  f"to send at once.\nRe-render with the scans accounted for:\n"
+              f"(base64) = {total:,} B of {limit:,}")
+        if total > limit:
+            over = total - limit
+            risk = ("the send path truncates the tail silently, and the tail "
+                    "is the attachment" if sizes else
+                    "the call is refused outright as too large to send at once")
+            print(f"OVER BY {over:,} B — {risk}.\n"
+                  f"Re-render with the scans accounted for:\n"
                   f"  python3 -m brief render payload.json --out-dir {out_dir} "
                   f"--scans {' '.join(paths)}\nThe email will shed its least "
                   f"actionable cards to make room and say so; the standalone "
                   f"file still carries everything.", file=sys.stderr)
             return 4
-        print("OK   the whole call fits in one send")
+        print(f"OK   the call is within budget ({100 * total / limit:.0f}% of "
+              f"{limit:,} B). This bounds the SIZE, it does not prove the "
+              "attachment arrives — read the sent message back in RAW form once "
+              "and compare the attachment's byte count against the source.")
     return 0
 
 
@@ -89,7 +96,8 @@ def main(argv=None):
                        help="does this payload justify an extra send? exit 0 yes, 3 no")
     g.add_argument("payload")
     at = sub.add_parser("attachment",
-                        help="will this file survive the send path? exit 0 yes, 4 no")
+                        help="is this file within the send-path size limits? "
+                             "exit 0 yes, 4 no (size only, not proof of delivery)")
     at.add_argument("files", nargs="+")
     at.add_argument("--out-dir", help="also check the whole send call against "
                                       "the rendered email in this directory")

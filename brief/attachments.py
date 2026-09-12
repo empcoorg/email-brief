@@ -1,18 +1,33 @@
 """The send path's attachment ceiling, as an enforced check.
 
-Gmail's send tool SILENTLY TRUNCATES any single attachment whose base64 exceeds
-roughly 24,600 characters: a 49,216-character attachment shipped as the top half
-of a JPEG with solid grey below, and no error anywhere. That was learned by
-sending a message and reading it back in RAW form, and it lived in the prompt as
-a number to remember and a rule to apply by eye.
+Gmail's send tool SILENTLY TRUNCATES attachments: a 49,216-character base64
+attachment shipped as the top half of a JPEG with solid grey below, and no error
+anywhere. That was learned by sending a message and reading it back in RAW form,
+and it lived in the prompt as a number to remember and a rule to apply by eye.
 
 A byte count is arithmetic. Check the file.
+
+But size alone does not predict survival, and this module used to imply it did.
+A scan at 53% of the per-file ceiling still arrived truncated when the WHOLE
+call was 99% full. The checks here are necessary, not sufficient: they say a
+file is not too big by itself. verify_sent, run against the message read back
+after sending, is the only thing that says it arrived.
 """
 import base64
 import math
 import os
 
-# Verified by RAW read-back: the point at which the send path starts truncating.
+# A NECESSARY LIMIT, NOT A SUFFICIENT ONE. This was read back off a real send
+# and it does bound a single attachment. It does NOT predict survival:
+#
+#   2026-09-11: a 9,824 B scan (13,100 base64 chars - 53% of this ceiling, and
+#   62% of the "safe" limit below) was delivered as 9,177 B and would not
+#   decode. Every per-file check had passed. The whole call was 121,654 B
+#   against a 122,880 budget: 99.0% full, with the attachment last.
+#
+# So truncation tracks the TOTAL call, not the individual file, and what gets
+# cut is the tail - which is the attachment. Passing every check here means the
+# file is not too big by itself. It does not mean the file arrives.
 CEILING_B64_CHARS = 24_600
 
 # THE WHOLE SEND IS ONE TOOL CALL. htmlBody, the plain-text body and every
@@ -36,6 +51,25 @@ CEILING_B64_CHARS = 24_600
 # is the worse trade.
 SEND_CALL_BYTES = int(os.environ.get("BRIEF_SEND_CALL_BYTES", 135 * 1024))
 
+# Extra headroom demanded whenever ANY attachment rides along. The one observed
+# corruption happened at 99.0% of budget; a body that gets clipped is visible
+# and recoverable, a scan that arrives as an undecodable prefix is neither, and
+# the one-send rule means there is no second try. 30 KB puts the effective
+# ceiling at 105 KB when attachments are present - comfortably under the
+# 121,654 B that failed. Override with BRIEF_ATTACHMENT_RESERVE_BYTES.
+ATTACHMENT_RESERVE_BYTES = int(
+    os.environ.get("BRIEF_ATTACHMENT_RESERVE_BYTES", 30 * 1024))
+
+
+def call_limit(n_attachments, limit=None):
+    """The ceiling for one send call, tightened when attachments ride along.
+
+    >>> call_limit(0) - call_limit(1) == ATTACHMENT_RESERVE_BYTES
+    True
+    """
+    base = limit or SEND_CALL_BYTES
+    return base - (ATTACHMENT_RESERVE_BYTES if n_attachments else 0)
+
 
 def call_bytes(html_bytes, text_bytes, scan_sizes=()):
     """Total inline size of one send call, in bytes.
@@ -49,10 +83,10 @@ def call_bytes(html_bytes, text_bytes, scan_sizes=()):
 def html_room(text_bytes, scan_sizes=(), limit=None):
     """How many bytes of HTML body the send call can still carry.
 
-    >>> html_room(15_508, [15_000, 15_000]) == SEND_CALL_BYTES - 15_508 - 2 * 20_000
+    >>> html_room(15_508, [15_000, 15_000]) == call_limit(2) - 15_508 - 2 * 20_000
     True
     """
-    limit = limit or SEND_CALL_BYTES
+    limit = call_limit(len(list(scan_sizes)), limit)
     return limit - text_bytes - sum(b64_chars(n) for n in scan_sizes)
 
 
@@ -100,7 +134,11 @@ def check(path_or_size, limit=SAFE_B64_CHARS):
 
 
 def fits(path_or_size, limit=SAFE_B64_CHARS):
-    """True when an attachment will survive the send path intact."""
+    """True when an attachment is within the per-file size limits.
+
+    NOT a survival guarantee - see CEILING_B64_CHARS. Only reading the sent
+    message back proves delivery; verify_sent does that comparison.
+    """
     return check(path_or_size, limit)[0]
 
 
