@@ -387,6 +387,32 @@ class TestTemplate(unittest.TestCase):
         self.fence = fences[0]
         self.doc = TEMPLATE.split("```")[0]
 
+    def test_send_instruction_matches_what_can_actually_be_sent(self):
+        """The prompt may only tell the run to send a body it can actually emit.
+
+        A connector-only run cannot pass a file to a send tool by reference: the
+        body becomes an inline string argument, so it costs a full read plus a
+        full verbatim re-emission. This asserts nothing about which file is
+        "right" - it measures both rendered bodies and requires the prompt to
+        name the one that fits. Shrink email.html below TOOL_ARG_BYTES some day
+        and this test stops demanding the prohibition on its own.
+        """
+        from brief.render import TOOL_ARG_BYTES
+        r = render_once()
+        html = len(r["email"].encode("utf-8"))
+        text = len(r["text"].encode("utf-8"))
+        if html > TOOL_ARG_BYTES:
+            self.assertLess(text, TOOL_ARG_BYTES,
+                            "neither rendered body fits a tool argument - there is "
+                            "nothing the Routine can send")
+            self.assertRegex(self.fence, r"email\.txt as the plain-text body",
+                             "email.html is too large to emit, so the prompt must "
+                             "send email.txt as the body")
+            self.assertRegex(self.fence, r"DO NOT SEND email\.html AS htmlBody",
+                             f"email.html is {html:,} B, over the {TOOL_ARG_BYTES:,} B "
+                             "a tool argument can carry; the prompt must forbid it "
+                             "outright or a run will burn its one send trying")
+
     def test_placeholders_documented_and_used(self):
         documented = set(re.findall(r"\{\{(\w+)\}\}", self.doc)) - {"PLACEHOLDER"}
         used = set(re.findall(r"\{\{(\w+)\}\}", self.fence))

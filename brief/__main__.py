@@ -4,7 +4,8 @@
     python3 -m brief validate payload.json
 
 `render` writes morning-brief-<date>.html, email.html and email.txt, then
-prints the paths and the email's size against the 85 KB send budget.
+prints the paths and email.html's size against the 85 KB Gmail send budget.
+(The Routine emails email.txt; see README, Delivery.)
 `validate` checks the payload and says what is wrong, without rendering.
 """
 import argparse
