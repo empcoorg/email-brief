@@ -86,7 +86,10 @@ class _BrowserCase(unittest.TestCase):
           const zero = [...ax.querySelectorAll('span')]
                          .find(s => s.textContent.trim() === '0');
           const z = zero.getBoundingClientRect();
+          const hz = document.querySelector('th .dhead .c');
+          const h = hz ? hz.getBoundingClientRect() : null;
           return {axis: box(ax), zeroCentre: z.left + z.width / 2,
+                  headZero: h ? h.left + h.width / 2 : null,
                   bars: bars.map(b => {
                     const f = b.querySelector('.fill').getBoundingClientRect();
                     return {box: box(b), fill: [f.left, f.right],
@@ -98,6 +101,14 @@ class _BrowserCase(unittest.TestCase):
         ax_l, ax_r, ax_c = r["axis"]
         self.assertAlmostEqual(r["zeroCentre"], ax_c, delta=1.0,
                                msg=f"{what}: the '0' label is not on the axis centre")
+        # The column HEADING carries a "0" too - "Out <- 0 -> In, USD". As plain
+        # text its glyphs landed 30px left of the bars' zero, so the word "0"
+        # sat over negative territory while the ruler beneath it was correct.
+        # Checking only the ruler is what let that ship.
+        self.assertIsNotNone(r["headZero"],
+                             f"{what}: the heading must pin its own '0' to the axis")
+        self.assertAlmostEqual(r["headZero"], ax_c, delta=1.0,
+                               msg=f"{what}: the heading's '0' is not over the bars' zero")
         for n, bar in enumerate(r["bars"]):
             b_l, b_r, b_c = bar["box"]
             self.assertAlmostEqual(b_l, ax_l, delta=1.0,
