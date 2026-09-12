@@ -120,9 +120,9 @@ def first_name_relation(a, b):
     two-character spelling variant on a name long enough for that to mean
     something. Everything else is a different person.
 
-    >>> first_name_relation("james", "jim")
+    >>> first_name_relation("alexander", "alex")
     'likely'
-    >>> first_name_relation("james", "dana")
+    >>> first_name_relation("alexander", "dana")
     'different'
     """
     if _initial_match(a, b):
