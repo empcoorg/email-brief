@@ -4,8 +4,7 @@
     python3 -m brief validate payload.json
 
 `render` writes morning-brief-<date>.html, email.html and email.txt, then
-prints the paths and email.html's size against the 85 KB Gmail send budget.
-(The Routine emails email.txt; see README, Delivery.)
+prints the paths and the email's size against the 85 KB send budget.
 `validate` checks the payload and says what is wrong, without rendering.
 """
 import argparse
@@ -13,7 +12,7 @@ import os
 import sys
 
 from .model import PayloadError, load
-from .render import render_all
+from .render import render_all, split_for_send
 
 EMAIL_BUDGET = 85 * 1024   # Gmail clips ~102 KB and its sanitizer inflates ~12%
 
@@ -91,10 +90,22 @@ def main(argv=None):
         with open(path, "w", encoding="utf-8") as f:
             f.write(body)
 
+    # The send tool takes the body as an inline string, so the run has to carry
+    # ~85 KB through its context. Split it here rather than leaving the run to
+    # invent a chunking scheme mid-send: parts concatenate back byte for byte.
+    parts = split_for_send(eh)
+    for n, part in enumerate(parts, 1):
+        with open(os.path.join(a.out_dir, f"email.part{n:02d}.html"), "w",
+                  encoding="utf-8") as f:
+            f.write(part)
+
     size = len(eh.encode("utf-8"))
     print(f"wrote {page}")
     print(f"wrote {email}  ({size:,} B of the {EMAIL_BUDGET:,} B send budget)")
     print(f"wrote {text}")
+    print(f"wrote email.part01..{len(parts):02d}.html — read these in order and "
+          f"concatenate them with no separator to rebuild the htmlBody exactly; "
+          f"do not read {os.path.basename(email)} itself, it exceeds the read cap.")
     print(f"build {marker} — this marker appears in all three outputs. Quote it "
           "when you report the run; a brief without it did not come from here.")
     if size > EMAIL_BUDGET:

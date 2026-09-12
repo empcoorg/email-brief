@@ -717,25 +717,50 @@ LAYOUT_NOTE = ("Layout: one fluid layout for phone and desktop (the mail path st
 # its least actionable cards in this order and says so; the standalone file
 # always carries everything. Shedding in a fixed order beats a human guessing
 # which section to cut at 6am, and beats Gmail truncating mid-table.
-# WHO SENDS THIS: not a Routine run. Gmail strips <style>, so every rule here is
-# an inline style= attribute - ~85 KB of markup around ~14 KB of text. A model
-# holding only an email CONNECTOR has to retype the whole body as a tool
-# argument, which costs ~39,000 tokens to read and as many to emit, and a single
-# drifted character sends a corrupted brief. So the Routine emails email.txt and
-# delivers this file with SendUserFile instead. email.html stays the canonical
-# Gmail-safe body for a sender that can post a file: see README, Delivery.
 EMAIL_BUDGET_BYTES = 85 * 1024
-
-# The ceiling on what a model can hand a send tool as an inline string argument.
-# A connector-only run has no way to pass a file by reference, so the body has to
-# pass through its context and be retyped verbatim. The observed rate for this
-# markup is ~2.2 bytes per token (a 70,094 B body measured at 31,727 tokens), and
-# the read cap that stopped it was 25,000 - so ~55 KB is the most that can be
-# read at all, before the same cost is paid again to emit it. email.html is over
-# this; email.txt is far under, which is why the Routine emails the text part.
-TOOL_ARG_BYTES = 55 * 1024
 SHED_ORDER = ("Retail sales", "Research & publications", "AI & programming",
               "Fed & labor market", "Large caps", "Cryptocurrency", "US market")
+
+# HOW IT REACHES THE INBOX. A Routine holds an email CONNECTOR, not credentials,
+# and a connector's send tool takes the body only as an inline string - there is
+# no way to hand it a file. So the body must pass through the run's context and
+# come back out as a tool argument. That works, and has for every brief sent so
+# far, but Gmail strips <style> (verified below), so every rule here is an inline
+# style= attribute and the body runs ~85 KB. One run tried to read it in a single
+# call, hit the tool's read cap partway through, and gave up - substituting a
+# placeholder and then breaking the one-send rule trying to correct itself.
+#
+# So the renderer splits the body itself. `render` writes email.partNN.html
+# alongside email.html; each part is under SEND_PART_BYTES and breaks only at a
+# tag boundary, so concatenating them in order reproduces email.html byte for
+# byte. The run reads parts, never the whole file, and never has to invent a
+# chunking scheme at 6am.
+SEND_PART_BYTES = 12 * 1024
+
+
+def split_for_send(html, limit=None):
+    """Split the email body into parts that concatenate back exactly.
+
+    Breaks only between tags, so every part starts with "<" and ends with ">"
+    and a truncated part is obvious on sight. `"".join(parts) == html` always -
+    that is the property the send depends on, and test_email_brief asserts it.
+
+    >>> "".join(split_for_send("<a>xx</a><b>yy</b>", limit=8)) == "<a>xx</a><b>yy</b>"
+    True
+    """
+    limit = limit or SEND_PART_BYTES
+    parts, start = [], 0
+    while start < len(html):
+        if len(html) - start <= limit:
+            parts.append(html[start:])
+            break
+        cut = html.rfind("><", start, start + limit)
+        # No tag boundary in range (one enormous tag): take the whole run to the
+        # next one rather than splitting inside an attribute.
+        cut = cut + 1 if cut > start else (html.find("><", start + limit) + 1 or len(html))
+        parts.append(html[start:cut])
+        start = cut
+    return parts
 
 
 def _assemble_email(parts, droppable):
