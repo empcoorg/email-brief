@@ -68,6 +68,53 @@ class _BrowserCase(unittest.TestCase):
         pg.wait_for_timeout(300)
         return pg
 
+    def _assert_axis_matches_bars(self, pg, what):
+        """The ruler in the header and the bars beneath it must share a scale.
+
+        A diverging bar is only readable against its axis, so "0" has to sit
+        where the bars start. Nothing checked that: the axis lives in a <th>
+        and the bars in <td>s, and any padding difference between them would
+        slide the whole scale without changing a single number. Measured in a
+        browser because that is the only place the answer exists.
+        """
+        r = pg.evaluate("""() => {
+          const ax = document.querySelector('th .daxis.money');
+          const bars = [...document.querySelectorAll('td .dbar.money')];
+          if (!ax || !bars.length) return null;
+          const box = el => { const b = el.getBoundingClientRect();
+                              return [b.left, b.right, b.left + b.width / 2]; };
+          const zero = [...ax.querySelectorAll('span')]
+                         .find(s => s.textContent.trim() === '0');
+          const z = zero.getBoundingClientRect();
+          return {axis: box(ax), zeroCentre: z.left + z.width / 2,
+                  bars: bars.map(b => {
+                    const f = b.querySelector('.fill').getBoundingClientRect();
+                    return {box: box(b), fill: [f.left, f.right],
+                            cls: b.querySelector('.fill').className};
+                  })};
+        }""")
+        if r is None:
+            self.skipTest("money table not present at this width")
+        ax_l, ax_r, ax_c = r["axis"]
+        self.assertAlmostEqual(r["zeroCentre"], ax_c, delta=1.0,
+                               msg=f"{what}: the '0' label is not on the axis centre")
+        for n, bar in enumerate(r["bars"]):
+            b_l, b_r, b_c = bar["box"]
+            self.assertAlmostEqual(b_l, ax_l, delta=1.0,
+                                   msg=f"{what}: bar {n} does not start where the axis does")
+            self.assertAlmostEqual(b_r, ax_r, delta=1.0,
+                                   msg=f"{what}: bar {n} does not end where the axis does")
+            f_l, f_r = bar["fill"]
+            if "right" in bar["cls"]:
+                self.assertAlmostEqual(f_l, b_c, delta=2.0,
+                                       msg=f"{what}: bar {n} grows right but does not leave zero")
+            elif "left" in bar["cls"]:
+                self.assertAlmostEqual(f_r, b_c, delta=2.0,
+                                       msg=f"{what}: bar {n} grows left but does not reach zero")
+            else:
+                self.assertAlmostEqual((f_l + f_r) / 2, b_c, delta=2.0,
+                                       msg=f"{what}: bar {n} has no direction and must straddle zero")
+
     def _assert_no_horizontal_overflow(self, pg, width, what):
         sw = pg.evaluate("document.documentElement.scrollWidth")
         self.assertLessEqual(sw, width + 1, f"{what}: horizontal overflow ({sw}px > {width}px viewport)")
@@ -81,6 +128,7 @@ class TestRendering(_BrowserCase):
     def test_desktop_renders_without_breaking(self):
         pg = self._page(1280)
         self._assert_no_horizontal_overflow(pg, 1280, "file @1280")
+        self._assert_axis_matches_bars(pg, "file @1280")
         self.assertEqual(pg.locator("section").count() >= 8, True)
         self.assertGreater(pg.evaluate("document.body.scrollHeight"), 3000,
                            "page suspiciously short — did a section fail to render?")
