@@ -754,7 +754,13 @@ LAYOUT_NOTE = ("Layout: one fluid layout for phone and desktop (the mail path st
 # its least actionable cards in this order and says so; the standalone file
 # always carries everything. Shedding in a fixed order beats a human guessing
 # which section to cut at 6am, and beats Gmail truncating mid-table.
-EMAIL_BUDGET_BYTES = 85 * 1024
+# Override with BRIEF_EMAIL_BUDGET_BYTES. Raising it past ~85 KB does not break
+# anything: Gmail CLIPS rather than rejects, showing "[Message clipped] View
+# entire message". That is a real option - a clip link beats seven missing
+# cards - but the clip point is ~102 KB of DELIVERED bytes and the send path
+# inflates the source ~12%, so 85 KB source lands near 95 KB delivered and is
+# already close to it.
+EMAIL_BUDGET_BYTES = int(os.environ.get("BRIEF_EMAIL_BUDGET_BYTES", 85 * 1024))
 SHED_ORDER = ("Retail sales", "Research & publications", "AI & programming",
               "Fed & labor market", "Large caps", "Cryptocurrency", "US market")
 
@@ -809,6 +815,12 @@ def _assemble_email(parts, droppable, budget=None):
     table is worse than an absent one.
     """
     dropped = []
+    # Say which limit actually bit. When scans ride along they take their room
+    # out of the body, and blaming Gmail for that sends the reader looking in
+    # the wrong place - and hides the lever that would have kept the cards.
+    why = ("The whole message had to fit one send, and the attached scans took "
+           "part of the room." if budget and budget < EMAIL_BUDGET_BYTES
+           else "Gmail clips a message past ~102 KB.")
     budget = budget or EMAIL_BUDGET_BYTES
     while len(("\n".join(parts)).encode("utf-8")) > budget:
         nxt = next((n for n in SHED_ORDER if n in droppable and parts[droppable[n]]), None)
@@ -823,7 +835,7 @@ def _assemble_email(parts, droppable, budget=None):
                 f'{sp("Trimmed to fit the inbox", L["warn"])} — '
                 f'{e(", ".join(dropped))} '
                 f'{"is" if len(dropped) == 1 else "are"} in the attached brief file but not in this '
-                'email, which Gmail clips past ~102 KB. Nothing was shortened; whole cards were '
+                f'email. {e(why)} Nothing was shortened; whole cards were '
                 'dropped, least actionable first.</td></tr></table>')
         parts.insert(-1, note)
     return "\n".join(parts)

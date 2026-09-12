@@ -30,7 +30,11 @@ CEILING_B64_CHARS = 24_600
 #     SEND_CALL_BYTES - len(email.txt) - sum(b64_chars(scan)) = room for HTML
 # When the scans do not leave room, the EMAIL sheds cards (SHED_ORDER) rather
 # than the send failing - the standalone file always carries everything.
-SEND_CALL_BYTES = 120 * 1024
+# Observed refusal at ~145 KB. 135 KB keeps ~7% margin. Override with
+# BRIEF_SEND_CALL_BYTES when a run proves it can carry more or less; raising it
+# past what the model will emit turns a trimmed brief into a failed send, which
+# is the worse trade.
+SEND_CALL_BYTES = int(os.environ.get("BRIEF_SEND_CALL_BYTES", 135 * 1024))
 
 
 def call_bytes(html_bytes, text_bytes, scan_sizes=()):
@@ -42,12 +46,13 @@ def call_bytes(html_bytes, text_bytes, scan_sizes=()):
     return html_bytes + text_bytes + sum(b64_chars(n) for n in scan_sizes)
 
 
-def html_room(text_bytes, scan_sizes=(), limit=SEND_CALL_BYTES):
+def html_room(text_bytes, scan_sizes=(), limit=None):
     """How many bytes of HTML body the send call can still carry.
 
     >>> html_room(15_508, [15_000, 15_000]) == SEND_CALL_BYTES - 15_508 - 2 * 20_000
     True
     """
+    limit = limit or SEND_CALL_BYTES
     return limit - text_bytes - sum(b64_chars(n) for n in scan_sizes)
 
 
