@@ -197,7 +197,7 @@ class TestGeneratorOutputs(unittest.TestCase):
         fin = page.split("Deposits &amp; finances")[1].split("</section>")[0]
         self.assertIn('class="dbar money"', fin, "money bars must ride the diverging track")
         self.assertNotIn('class="sbar"', fin, "single-direction money track is retired")
-        for fill in ('class="fill pos right"', 'class="fill neg left"', 'class="fill neu right"'):
+        for fill in ('class="fill pos right"', 'class="fill neg left"', 'class="fill neu center"'):
             self.assertIn(fill, fin, f"money bar missing {fill}")
         # even breaks: $2,450 of movement must yield round $1,000 steps to $3k,
         # never a data-derived $1,225 midpoint
@@ -289,6 +289,26 @@ class TestGeneratorOutputs(unittest.TestCase):
         unbadged = [re.sub("<[^>]+>", "", r)[:40] for r in rows if "badge" not in r]
         self.assertEqual(unbadged, [], f"ranked leads with no fit badge: {unbadged}")
 
+    def test_fit_badges_never_split_across_lines(self):
+        """A badge is a bordered chip; broken over two lines it reads as debris.
+
+        On a narrow column "STRONG FIT" wrapped between its two words, leaving
+        half a border on each line. The whole chip must move to the next line
+        instead - white-space:nowrap does that, and the space before the badge
+        stays an ordinary breaking space so the chip CAN move.
+        """
+        r = render_once()
+        chips = [m.group(0) for m in
+                 re.finditer(r'<span style="[^"]*border-radius:4px[^"]*">'
+                             r'(?:STRONG FIT|RELATED)</span>', r["email"])]
+        self.assertTrue(chips, "no fit chips found in the email")
+        for chip in chips:
+            self.assertIn("white-space:nowrap", chip,
+                          "email fit badge can split mid-chip")
+        css = r["page"][r["page"].index(".badge{"):]
+        self.assertIn("white-space:nowrap", css[:css.index("}")],
+                      "file .badge can split mid-chip")
+
     def test_fit_badges_are_bordered_chips_labelled_strong_fit_and_related(self):
         """Fit badges are chips with a thin border in their own color — never
         bare colored text — and the near-miss label is RELATED, not ADJACENT."""
@@ -324,7 +344,17 @@ class TestGeneratorOutputs(unittest.TestCase):
         self.assertNotIn("<style", em, "email must not rely on <style> blocks")
         self.assertNotIn(' class="', em, "email must not rely on class attributes")
         self.assertNotIn("<img", em, "email must not contain <img> tags")
-        self.assertNotIn("white-space:nowrap", em)
+        # nowrap is banned wherever it could force the fluid layout wider than
+        # a phone - a mono tracking number or a long payee would. The fit badge
+        # is the one exception: it is a bordered chip a few characters wide that
+        # reads as debris when the border breaks mid-word, and it cannot
+        # overflow anything. test_rendering.py enforces the real property (no
+        # horizontal overflow at 320-1280px) in a browser.
+        for m in re.finditer(r"white-space:nowrap", em):
+            tag_start = em.rfind("<", 0, m.start())
+            tag = em[tag_start:em.index(">", m.start()) + 1]
+            self.assertRegex(tag, r"border-radius:4px",
+                             "nowrap outside a fit badge risks overflow")
         self.assertIsNone(re.search(r"background\s*:", em),
                           "email must not use background CSS (stripped by Gmail)")
         self.assertIn("max-width:860px", em)

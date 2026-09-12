@@ -108,15 +108,55 @@ class TestMoneyDirection(unittest.TestCase):
         self.assertEqual(money_side("In"), ("right", "pos"))
         self.assertEqual(money_side("Out"), ("left", "neg"))
         self.assertEqual(money_side("Past due"), ("left", "neg"))
-        self.assertEqual(money_side("Internal"), ("right", "neu"))
+        self.assertEqual(money_side("Internal"), ("center", "neu"))
 
-    def test_unrecognised_direction_is_neutral_never_income(self):
-        """The prompt tells the run to write "unclassified" when the evidence is
-        ambiguous. Colouring that green would assert income the data does not
-        support — the chart must not claim more than the payload does."""
-        for unknown in ("Unclassified", "Refund", "", None, "in", "IN"):
+    def test_unrecognised_direction_is_never_drawn_as_income(self):
+        """Neutral colour was never enough: side matters as much as colour.
+
+        The old rule returned ("right", "neu") for anything it did not know,
+        which is the INFLOW side of zero. A charge the run labelled "Receipt"
+        was printed in red and then drawn extending to the right, so the bar
+        contradicted the number beside it. Assert the side, not just the class.
+        """
+        for unknown in ("Unclassified", "Refund", "Receipt", "", None, "in", "IN"):
             side, cls = money_side(unknown)
             self.assertEqual(cls, "neu", f"{unknown!r} must not be colored as income")
+            self.assertNotEqual(side, "right",
+                                f"{unknown!r} drawn on the inflow side of zero")
+
+    def test_sign_decides_when_the_direction_word_is_coined(self):
+        """DIRECTION is free text and the run invents words for it; SIGN is not.
+
+        "Receipt" is not in any list the renderer can keep, but the payload
+        still states the movement as minus. That is enough to place it.
+        """
+        self.assertEqual(money_side("Receipt", "\u2212"), ("left", "neg"))
+        self.assertEqual(money_side("Refund", "+"), ("right", "pos"))
+        self.assertEqual(money_side("Receipt"), ("center", "neu"))
+        self.assertEqual(money_side("Internal", "\u2212"), ("center", "neu"),
+                         "an explicit Internal outranks the sign")
+
+    def test_bar_and_amount_never_contradict_each_other(self):
+        """The colour beside the number and the colour of the bar are one call.
+
+        They used to be computed separately - the row said "anything not In or
+        Internal is red", the bar said "anything unrecognised is grey" - so a
+        coined direction produced a red amount above a grey bar pointing the
+        wrong way.
+        """
+        from brief.render import money_side as ms
+        p = payload()
+        p["FIN_MOVES"] = [["Fri 4:32 PM EST", "Nortech Store", "Invoice receipt",
+                           1806.15, "USD", 1806.15, "Receipt", "\u2212"]]
+        f, em, _ = render_all(p)
+        side, cls = ms("Receipt", "\u2212")
+        self.assertEqual((side, cls), ("left", "neg"))
+        self.assertIn(f"fill {cls} {side}", f)
+        # In the email the fill is a bordered cell; it must close before centre.
+        widths = [float(w) for w, st in
+                  re.findall(r'width="([\d.]+)%"[^>]*style="([^"]*)"', em)
+                  if "border-top:5px" in st and float(w) < 100]
+        self.assertTrue(widths, "no fill cell rendered for the movement")
 
     def test_unclassified_renders_with_the_neutral_fill(self):
         p = payload()
