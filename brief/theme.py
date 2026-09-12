@@ -29,7 +29,7 @@ import re as _re
 # A dash squeezed between characters reads as one token: "4.25–4.50%" looks like
 # a single figure, "Sep 15–16" like a date. Spacing it makes the range visible.
 # Only en/em dashes are touched — a hyphen in a compound word is left alone.
-_TIGHT_DASH = _re.compile(r"(?<=[\w%])([\u2013\u2014])(?=[\w$])")
+_TIGHT_DASH = _re.compile(r"(?<=[\w%])([\u2013\u2014\u2192\u2190])(?=[\w$])")
 
 
 def space_ranges(text):
@@ -41,6 +41,10 @@ def space_ranges(text):
     'Sep 15 \u2013 16, 2026'
     >>> space_ranges("close \u2192 close")
     'close \u2192 close'
+    >>> space_ranges("DTW\u2192LAX")
+    'DTW \u2192 LAX'
+    >>> space_ranges("DL 883 DTW\u2192LAX Wed Sep 23")
+    'DL 883 DTW \u2192 LAX Wed Sep 23'
     """
     return _TIGHT_DASH.sub(r" \1 ", str(text))
 

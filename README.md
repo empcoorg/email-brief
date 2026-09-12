@@ -103,7 +103,8 @@ If the payload is malformed the renderer refuses and names the offending key and
 python3 -m brief validate payload.json      # check without rendering
 python3 -m brief render payload.json --out-dir out --date 2026-09-07
 python3 -m brief significant payload.json   # exit 0 = worth sending, 3 = skip
-python3 -m brief attachment scan.jpg        # exit 0 = survives the send path, 4 = would truncate
+python3 -m brief attachment scan.jpg        # exit 0 = sizes are within budget, 4 = not
+python3 -m brief verify src.jpg back.jpg    # exit 0 = byte identical, 5 = corrupt or truncated
 ```
 
 `significant` decides whether an extra send (an evening update, say) has earned
@@ -112,6 +113,25 @@ movement at or above $500 **measured in USD**, an application-status change, a
 shipment event, a travel change, mail for the intended recipient, or a
 voicemail. Ordinary transit updates and informational notes do not clear the
 bar. It is a rule with tests, not a judgement made fresh each evening.
+
+### Attachments go through a draft
+
+An attachment's base64 is an inline string argument like everything else, so the
+run has to retype it. Base64 carries no redundancy: **one wrong character out of
+13,568 destroys the image**, and it does so at exactly the right length, where no
+size check can see it. That shipped — a scan with one wrong byte at offset 218.
+
+So scans are drafted, not sent: `create_draft`, then `get_draft` with
+`messageFormat: RAW`, decode each attachment and compare it with
+`brief verify`, and only then `send_message` with the `draftId`. Drafting is
+free and repeatable — the one-send rule binds *sending*, not drafting.
+
+`brief verify` separates the two failures, because they need opposite fixes:
+
+| read-back | meaning | fix |
+|---|---|---|
+| shorter, a clean prefix | the call ran out of room | make the message smaller |
+| same length, differing byte | the base64 was mistyped | rewrite the draft, same size |
 
 ### Delivery — how an 85 KB HTML body reaches the inbox
 

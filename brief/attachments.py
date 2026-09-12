@@ -51,14 +51,20 @@ CEILING_B64_CHARS = 24_600
 # is the worse trade.
 SEND_CALL_BYTES = int(os.environ.get("BRIEF_SEND_CALL_BYTES", 135 * 1024))
 
-# Extra headroom demanded whenever ANY attachment rides along. The one observed
-# corruption happened at 99.0% of budget; a body that gets clipped is visible
-# and recoverable, a scan that arrives as an undecodable prefix is neither, and
-# the one-send rule means there is no second try. 30 KB puts the effective
-# ceiling at 105 KB when attachments are present - comfortably under the
-# 121,654 B that failed. Override with BRIEF_ATTACHMENT_RESERVE_BYTES.
+# Headroom when attachments ride along. This was 30 KB, bought on the theory
+# that corruption was truncation under size pressure. The second failure
+# disproved that: the file came back the SAME LENGTH with one byte wrong at
+# offset 218 - a single mistyped base64 character, 1 in 13,568. No headroom
+# fixes that, because base64 carries no redundancy and one wrong character
+# destroys the file.
+#
+# What fixes it is not sending blind. create_draft, then get_draft with
+# messageFormat RAW, lets the attachment be read back and compared BEFORE the
+# send; a bad draft is rewritten at no cost, because the one-send rule binds
+# sending, not drafting. With that check in place headroom is a courtesy rather
+# than the defence, so 8 KB - and the room goes back to the brief.
 ATTACHMENT_RESERVE_BYTES = int(
-    os.environ.get("BRIEF_ATTACHMENT_RESERVE_BYTES", 30 * 1024))
+    os.environ.get("BRIEF_ATTACHMENT_RESERVE_BYTES", 8 * 1024))
 
 
 def call_limit(n_attachments, limit=None):
