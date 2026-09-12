@@ -387,31 +387,61 @@ class TestTemplate(unittest.TestCase):
         self.fence = fences[0]
         self.doc = TEMPLATE.split("```")[0]
 
-    def test_send_instruction_matches_what_can_actually_be_sent(self):
-        """The prompt may only tell the run to send a body it can actually emit.
+    def test_prompt_tells_the_run_how_to_carry_the_html_body(self):
+        """A body too big for one read must ship with a chunking scheme.
 
-        A connector-only run cannot pass a file to a send tool by reference: the
-        body becomes an inline string argument, so it costs a full read plus a
-        full verbatim re-emission. This asserts nothing about which file is
-        "right" - it measures both rendered bodies and requires the prompt to
-        name the one that fits. Shrink email.html below TOOL_ARG_BYTES some day
-        and this test stops demanding the prohibition on its own.
+        The send tool takes the body as an inline string, so ~85 KB of email
+        has to pass through the run's context. One run met the read cap
+        mid-file, gave up, and downgraded the send. The renderer answers that
+        by splitting the body itself; this asserts the prompt actually routes
+        the run through the parts and never through the whole file. If the
+        email ever shrinks under a single read, the requirement lapses.
         """
-        from brief.render import TOOL_ARG_BYTES
-        r = render_once()
-        html = len(r["email"].encode("utf-8"))
-        text = len(r["text"].encode("utf-8"))
-        if html > TOOL_ARG_BYTES:
-            self.assertLess(text, TOOL_ARG_BYTES,
-                            "neither rendered body fits a tool argument - there is "
-                            "nothing the Routine can send")
-            self.assertRegex(self.fence, r"email\.txt as the plain-text body",
-                             "email.html is too large to emit, so the prompt must "
-                             "send email.txt as the body")
-            self.assertRegex(self.fence, r"DO NOT SEND email\.html AS htmlBody",
-                             f"email.html is {html:,} B, over the {TOOL_ARG_BYTES:,} B "
-                             "a tool argument can carry; the prompt must forbid it "
-                             "outright or a run will burn its one send trying")
+        from brief.render import SEND_PART_BYTES, split_for_send
+        body = render_once()["email"]
+        if len(body.encode("utf-8")) <= SEND_PART_BYTES:
+            self.skipTest("email now fits one read; chunking no longer needed")
+        self.assertRegex(self.fence, r"email\.part01\.html",
+                         "the prompt must name the split parts")
+        self.assertRegex(self.fence, r"do NOT read email\.html",
+                         "the prompt must steer the run away from the whole file")
+        self.assertRegex(self.fence, r"htmlBody",
+                         "the HTML body is the point of the brief; the prompt "
+                         "must still send it")
+
+    def test_send_parts_rebuild_the_email_exactly(self):
+        """Concatenating the parts must reproduce the body byte for byte.
+
+        This is the property the whole send rests on: the run rebuilds the
+        htmlBody from parts, so any drift here ships a corrupted brief.
+        """
+        from brief.render import SEND_PART_BYTES, split_for_send
+        body = render_once()["email"]
+        parts = split_for_send(body)
+        self.assertEqual("".join(parts), body, "parts do not rebuild the email")
+        self.assertTrue(all(p.startswith("<") for p in parts),
+                        "a part starting mid-tag hides truncation")
+        self.assertTrue(all(p.endswith(">") for p in parts),
+                        "a part ending mid-tag hides truncation")
+        oversize = [len(p) for p in parts if len(p) > SEND_PART_BYTES * 1.1]
+        self.assertEqual(oversize, [], "a part is too large to read in one call")
+
+    def test_cli_writes_the_send_parts(self):
+        """`render` must emit the parts, or the prompt's procedure has no files."""
+        import tempfile
+        td = tempfile.mkdtemp(prefix="brief-parts-")
+        subprocess.run([sys.executable, "-m", "brief", "render",
+                        "sample_payload.json", "--out-dir", td,
+                        "--date", "2026-09-07"],
+                       cwd=ROOT, check=True, capture_output=True)
+        names = sorted(f for f in os.listdir(td) if f.startswith("email.part"))
+        self.assertTrue(names, "render wrote no email.partNN.html files")
+        joined = "".join(open(os.path.join(td, n), encoding="utf-8").read()
+                         for n in names)
+        with open(os.path.join(td, "email.html"), encoding="utf-8") as fh:
+            self.assertEqual(joined, fh.read(),
+                             "concatenating the written parts does not "
+                             "reproduce email.html")
 
     def test_placeholders_documented_and_used(self):
         documented = set(re.findall(r"\{\{(\w+)\}\}", self.doc)) - {"PLACEHOLDER"}

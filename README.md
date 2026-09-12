@@ -1,6 +1,6 @@
 # email-brief
 
-A template for an **automated, personalized email briefing**, run entirely by a [Claude](https://claude.ai) Routine with your own email connector(s) — Gmail, Outlook, or any other email connector available to your Claude account. Supports summarizing single or multiple email accounts, sent as a single report to your email address of choice. On your schedule (daily, Mon-Wed-Fri, weekly — any cadence, time and timezone) it reads everything since the previous run, researches markets/crypto/AI news on the web, and delivers one brief two ways: the full designed HTML document, rendered in the Claude session, and a plain-text edition emailed to an address you choose.
+A template for an **automated, personalized email briefing**, run entirely by a [Claude](https://claude.ai) Routine with your own email connector(s) — Gmail, Outlook, or any other email connector available to your Claude account. Supports summarizing single or multiple email accounts, sent as a single report to your email address of choice. On your schedule (daily, Mon-Wed-Fri, weekly — any cadence, time and timezone) it reads everything since the previous run, researches markets/crypto/AI news on the web, and delivers one designed brief two ways: a themed standalone HTML file in the Claude session, and a phone-friendly HTML email to an address you choose.
 
 No servers, no API keys, no code to deploy. Each run is a fresh Claude session with your email connector attached: it reads your mail, gathers the facts, and renders the brief with this repo's own generator — so the layout is tested code, not a design re-interpreted from prose every morning.
 
@@ -95,37 +95,9 @@ The split is deliberate: **Claude decides what is true, the code decides what it
 1. Claude reads your mailboxes and researches the web — judgement work: what matters, what ranks, what a scan says.
 2. It writes one `payload.json` — facts only, amounts and percentages as numbers, and its own judgement calls (a job's fit tier, a movement's direction) as explicit values rather than something the renderer guesses.
 3. It runs `python3 -m brief render payload.json --out-dir …`, which validates the payload and renders the themed HTML file, the sanitizer-safe email and the plain-text fallback.
-4. It delivers the HTML file in the session and emails the plain-text edition, verbatim as rendered.
+4. It delivers the file in the session and emails the brief, verbatim as rendered.
 
 If the payload is malformed the renderer refuses and names the offending key and row, so a bad brief fails loudly instead of arriving looking plausible. To change how the brief looks, change the code and its tests — never the prompt.
-
-### Delivery — why the email is plain text
-
-The run has an email **connector**, not API credentials, and a connector's send
-tool takes the body only as an inline string. There is no way to hand it a file
-by reference, so whatever gets sent has to pass through the model's context and
-be retyped, character for character, as a tool argument.
-
-That rules out `email.html`. Gmail strips `<style>` blocks, so every rule in it
-is an inline `style=` attribute: **~85 KB of markup carrying ~14 KB of text**,
-which measures around 39,000 tokens to read and as many again to emit — past the
-read cap before the send is even attempted. A partially copied body would ship a
-corrupted brief, and each run gets exactly one send.
-
-So the two channels split by what each can carry:
-
-| Output | How it is delivered | Carries |
-|---|---|---|
-| `morning-brief-<date>.html` | `SendUserFile`, rendered in the session | everything, full design, embedded scans |
-| `email.txt` | the email body | every section as structured text |
-| `email.html` | *not sent by a Routine* | the Gmail-safe body, for a sender that can post a file |
-
-`email.html` is still built, tested and screenshotted — it is the canonical email
-body for a sender holding real credentials, which is a separate project. Nothing
-about it is dead; it simply cannot travel through a tool argument.
-`TOOL_ARG_BYTES` in `brief/render.py` records the ceiling, and a test in
-`tests/test_email_brief.py` fails if the prompt ever again tells a run to send a
-body larger than it.
 
 ```
 python3 -m brief validate payload.json      # check without rendering
@@ -140,6 +112,36 @@ movement at or above $500 **measured in USD**, an application-status change, a
 shipment event, a travel change, mail for the intended recipient, or a
 voicemail. Ordinary transit updates and informational notes do not clear the
 bar. It is a rule with tests, not a judgement made fresh each evening.
+
+### Delivery — how an 85 KB HTML body reaches the inbox
+
+A Routine holds an email **connector**, not API credentials, and a connector's
+send tool takes the body only as an inline string — there is no way to hand it a
+file. So the rendered HTML must pass through the run's context and come back out
+as a tool argument. That works, and is how every brief is sent.
+
+The catch is size. Gmail strips `<style>` blocks, so every rule is an inline
+`style=` attribute: **~85 KB of markup carrying ~14 KB of text**, 805 style
+attributes in 73 distinct combinations. Reading that in one call exceeds the
+tool's read cap, and a run that meets the cap mid-file may improvise — one did,
+substituting a placeholder and then breaking the one-send rule trying to fix it.
+
+So the renderer splits the body itself. `render` writes `email.part01.html`,
+`email.part02.html`, … beside `email.html`, each under `SEND_PART_BYTES` (12 KB)
+and broken only at a tag boundary, so every part starts with `<` and ends with
+`>`. Concatenating them in order reproduces `email.html` **byte for byte** —
+`tests/test_email_brief.py` asserts exactly that, and asserts the prompt routes
+the run through the parts rather than the whole file.
+
+| Output | How it is delivered | Carries |
+|---|---|---|
+| `morning-brief-<date>.html` | `SendUserFile`, rendered in the session | everything, full design, embedded scans |
+| `email.html` (via `email.partNN.html`) | the `htmlBody` of the email | the full designed brief, sanitizer-safe |
+| `email.txt` | the plain-text alternative part | every section as structured text |
+
+The chunked read plus the re-emission costs roughly 39,000 tokens each way. That
+is the real price of a connector-only architecture, and the prompt says so
+plainly so a run budgets for it instead of downgrading the send.
 
 ## Themes
 
