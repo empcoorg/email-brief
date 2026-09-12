@@ -1045,6 +1045,16 @@ def email_html(budget=None):
 # ------------------------------------------------------------------ RENDER: PLAIN TEXT
 TEXT_BUDGET_BYTES = int(os.environ.get("BRIEF_TEXT_BUDGET_BYTES", 10 * 1024))
 
+# After SHED_ORDER is exhausted the text part can still be far too large - a
+# real run's floor was 32,377 B, because everything left was "non-droppable" in
+# the HTML's sense. But the text part is an ALTERNATIVE body: a reader whose
+# client shows HTML never sees it. So it keeps shedding, least actionable
+# first, and the three that carry the day's actions are never touched.
+TEXT_LAST_RESORT = ("SOURCES", "DOMAIN ALLOWLIST", "RETAIL", "PACKAGE TRACKING",
+                    "USPS INFORMED DELIVERY", "VOIP VOICEMAILS", "UPCOMING FLIGHTS",
+                    "RELEVANT JOB POSTS", "DEPOSITS & FINANCES")
+TEXT_NEVER_SHED = ("MORNING BRIEF", "NEEDS YOU TODAY", "HIGH PRIORITY")
+
 # Section headings in the text edition are bare uppercase lines.
 _TEXT_HEADING = _re.compile(r"^(?:\d+\. )?[A-Z][A-Z0-9 &,'()\u2014-]{3,}$", _re.M)
 
@@ -1071,10 +1081,13 @@ def shed_text(text, budget=None):
     dropped = []
     while len(text.encode("utf-8")) > budget:
         cut = None
-        for name in SHED_ORDER:
+        for name in tuple(SHED_ORDER) + TEXT_LAST_RESORT:
             head = name.upper()
             for m in _TEXT_HEADING.finditer(text):
-                if not m.group(0).startswith(head):
+                title = _re.sub(r"^\d+\. ", "", m.group(0))
+                if not title.startswith(head):
+                    continue
+                if any(title.startswith(k) for k in TEXT_NEVER_SHED):
                     continue
                 nxt = _TEXT_HEADING.search(text, m.end())
                 end = nxt.start() if nxt else len(text)

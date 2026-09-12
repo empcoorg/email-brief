@@ -212,7 +212,7 @@ class TestTextPartIsBudgeted(unittest.TestCase):
             fh.write(b"\xff\xd8" + b"x" * 15_000)
         r = subprocess.run([sys.executable, "-m", "brief", "render", SAMPLE,
                             "--out-dir", td, "--date", "2026-09-07",
-                            "--scans", jpg],
+                            "--scans", jpg, "--send-budget", "60000"],
                            cwd=ROOT, check=True, capture_output=True, text=True)
         self.assertIn("trimming the plain-text part first", r.stdout)
         self.assertLess(r.stdout.index("plain-text part first"),
@@ -231,10 +231,20 @@ class TestAttachmentHeadroom(unittest.TestCase):
     matters most.
     """
 
-    def test_the_corrupting_send_is_now_rejected(self):
-        from brief.attachments import call_limit
-        self.assertGreater(121_654, call_limit(1),
-                           "the call that corrupted an attachment must not pass")
+    def test_headroom_is_not_the_defence_any_more(self):
+        """The reserve shrank on purpose when the theory behind it collapsed.
+
+        30 KB of headroom was bought on the belief that corruption meant
+        truncation under size pressure. The second failure was the same LENGTH
+        with one wrong byte - a mistyped base64 character. Headroom cannot
+        catch that, so the defence moved to verifying a draft before sending,
+        and the room went back to the brief.
+        """
+        from brief.attachments import call_limit, ATTACHMENT_RESERVE_BYTES
+        self.assertLessEqual(ATTACHMENT_RESERVE_BYTES, 8 * 1024)
+        self.assertGreater(call_limit(1), 121_654,
+                           "a call this size is no longer blocked on size alone; "
+                           "brief verify against the draft is what blocks it")
 
     def test_attachments_buy_headroom(self):
         from brief.attachments import call_limit, ATTACHMENT_RESERVE_BYTES

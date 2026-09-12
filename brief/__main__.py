@@ -17,6 +17,40 @@ from .render import render_all, split_for_send
 from .render import EMAIL_BUDGET_BYTES as EMAIL_BUDGET  # Gmail clips ~102 KB
 
 
+def _verify(source, readback):
+    """Compare an attachment against what came back out of the message.
+
+    Size alone is not enough. The failure that shipped was byte-identical in
+    LENGTH: one wrong base64 character out of 13,568, one wrong byte at offset
+    218, an image that would not decode. So compare the bytes, and say where
+    they first differ - the offset tells you it was transcription rather than
+    truncation, which is the difference between "retype it" and "make it
+    smaller".
+    """
+    import hashlib
+    try:
+        a_ = open(source, "rb").read()
+        b_ = open(readback, "rb").read()
+    except OSError as ex:
+        print(f"cannot compare: {ex}", file=sys.stderr)
+        return 5
+    if a_ == b_:
+        print(f"OK   {os.path.basename(source)}: {len(a_):,} B, sha256 "
+              f"{hashlib.sha256(a_).hexdigest()[:16]} — byte identical.")
+        return 0
+    where = next((i for i, (x, y) in enumerate(zip(a_, b_)) if x != y), min(len(a_), len(b_)))
+    kind = ("TRUNCATED" if len(b_) < len(a_) and a_[:len(b_)] == b_
+            else "CORRUPTED")
+    print(f"{kind}: {os.path.basename(source)} is {len(a_):,} B, read back "
+          f"{len(b_):,} B, first difference at offset {where:,}.\n"
+          + ("The read-back is a clean prefix — the call ran out of room. Make "
+             "the message smaller.\n" if kind == "TRUNCATED" else
+             "Same length, different bytes — the base64 was mistyped, not cut. "
+             "Rewrite the draft with the attachment re-transcribed; do NOT make "
+             "it smaller, and do NOT send this draft.\n"), file=sys.stderr)
+    return 5
+
+
 def _check_attachments(paths, out_dir=None):
     """Are the files within the size limits, and does the WHOLE call fit?
 
@@ -69,9 +103,10 @@ def _check_attachments(paths, out_dir=None):
                   f"file still carries everything.", file=sys.stderr)
             return 4
         print(f"OK   the call is within budget ({100 * total / limit:.0f}% of "
-              f"{limit:,} B). This bounds the SIZE, it does not prove the "
-              "attachment arrives — read the sent message back in RAW form once "
-              "and compare the attachment's byte count against the source.")
+              f"{limit:,} B). This bounds the SIZE only. Size does not prove "
+              "an attachment arrives: one mistyped base64 character corrupts it "
+              "at exactly the right length. Draft it, read the draft back with "
+              "get_draft RAW, and run `brief verify` before sending.")
     return 0
 
 
@@ -98,6 +133,13 @@ def main(argv=None):
     g = sub.add_parser("significant",
                        help="does this payload justify an extra send? exit 0 yes, 3 no")
     g.add_argument("payload")
+    vf = sub.add_parser("verify",
+                        help="did an attachment survive? compare source against "
+                             "what was read back (exit 0 same, 5 differs)")
+    vf.add_argument("source", help="the file as it exists on disk")
+    vf.add_argument("readback", help="the same file decoded out of the draft "
+                                     "or sent message")
+
     at = sub.add_parser("attachment",
                         help="is this file within the send-path size limits? "
                              "exit 0 yes, 4 no (size only, not proof of delivery)")
@@ -105,6 +147,9 @@ def main(argv=None):
     at.add_argument("--out-dir", help="also check the whole send call against "
                                       "the rendered email in this directory")
     a = ap.parse_args(argv)
+
+    if a.cmd == "verify":
+        return _verify(a.source, a.readback)
 
     if a.cmd == "attachment":
         return _check_attachments(a.files, a.out_dir)
