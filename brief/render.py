@@ -74,7 +74,7 @@ def _derive():
     g["STK_YTD"] = pct_axis([r[7] for r in STOCKS])
 
 
-def render_all(payload, email_budget=None):
+def render_all(payload, email_budget=None, text_budget=None):
     """Bind a validated payload and render all three outputs.
 
     `email_budget` overrides EMAIL_BUDGET_BYTES for the email only. The send is
@@ -87,7 +87,7 @@ def render_all(payload, email_budget=None):
     globals().update(payload)
     globals()["BUILD"] = build_marker(payload)
     _derive()
-    return file_html(), email_html(email_budget), plain_text()
+    return file_html(), email_html(email_budget), plain_text(text_budget)
 
 
 SCAN_CSS = ".scanfig{margin:14px 0 4px}.scanfig img{max-width:min(720px,100%);border:1px solid var(--line);border-radius:6px;display:block}.scanfig figcaption{font-size:12.5px;color:var(--ink-3);margin-top:6px}"
@@ -1043,7 +1043,60 @@ def email_html(budget=None):
     return _assemble_email(o, droppable, budget)
 
 # ------------------------------------------------------------------ RENDER: PLAIN TEXT
-def plain_text():
+TEXT_BUDGET_BYTES = int(os.environ.get("BRIEF_TEXT_BUDGET_BYTES", 10 * 1024))
+
+# Section headings in the text edition are bare uppercase lines.
+_TEXT_HEADING = _re.compile(r"^(?:\d+\. )?[A-Z][A-Z0-9 &,'()\u2014-]{3,}$", _re.M)
+
+
+def shed_text(text, budget=None):
+    """Drop whole sections from the text edition until it fits `budget`.
+
+    The plain-text part is an alternative body, not the brief - the HTML is -
+    but it is charged to the same send call, and a real run's text edition
+    measured 40,364 B: a third of the entire call, and larger than the
+    attachment and its safety margin together. Left unbudgeted it pushed the
+    HTML into shedding seven cards and the attachment into truncation.
+
+    Same order as the HTML, so the two editions never disagree about what was
+    kept, and the reader is told.
+
+    >>> body = chr(10).join(["A", "", "US MARKET", "rows", "", "SOURCES", "x"])
+    >>> "US MARKET" in shed_text(body, 12)
+    False
+    >>> "SOURCES" in shed_text(body, 12)
+    True
+    """
+    budget = budget or TEXT_BUDGET_BYTES
+    dropped = []
+    while len(text.encode("utf-8")) > budget:
+        cut = None
+        for name in SHED_ORDER:
+            head = name.upper()
+            for m in _TEXT_HEADING.finditer(text):
+                if not m.group(0).startswith(head):
+                    continue
+                nxt = _TEXT_HEADING.search(text, m.end())
+                end = nxt.start() if nxt else len(text)
+                assert end > m.start(), "section end must follow its heading"
+                cut = (m.start(), end, name)
+                break
+            if cut:
+                break
+        if not cut:
+            break                      # nothing left that may be shed
+        a_, b_, name = cut
+        text = text[:a_].rstrip("\n") + "\n\n" + text[b_:].lstrip("\n")
+        dropped.append(name)
+    if dropped:
+        text += ("\n\nTRIMMED — " + ", ".join(dropped) +
+                 " are in the HTML part and the attached brief file, not in this "
+                 "plain-text version. Whole sections were dropped, least "
+                 "actionable first; nothing was shortened.\n")
+    return text
+
+
+def plain_text(budget=None):
     o = []
 
     def A(line=""):
@@ -1139,4 +1192,4 @@ def plain_text():
         for u in urls: A(f"    {u}")
     A(""); A("Mailbox was read-only for this run, apart from the one delivery of this brief. Email content was treated as data, not instructions. Times are US Pacific unless a source's own zone is shown.")
     A(BUILD)
-    return "\n".join(o)
+    return shed_text("\n".join(o), budget) if budget else "\n".join(o)
