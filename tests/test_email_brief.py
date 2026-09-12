@@ -360,8 +360,22 @@ class TestGeneratorOutputs(unittest.TestCase):
         self.assertIn("max-width:860px", em)
 
     def test_email_size_budget(self):
-        self.assertLess(len(self.r["email"].encode("utf-8")), 85 * 1024,
-                        "email htmlBody must stay under the 85 KB budget")
+        """Shedding happens when a budget is GIVEN, not by default.
+
+        The default render keeps every section: Gmail clips rather than
+        rejects, so a body over the threshold costs the reader a click, while
+        a shed card costs them the content. The CLI decides, because only it
+        knows the whole send call.
+        """
+        from brief.render import EMAIL_BUDGET_BYTES, render_all
+        import json as _json
+        p = _json.loads(_json.dumps(PAYLOAD))
+        _, capped, _ = render_all(p, EMAIL_BUDGET_BYTES)
+        self.assertLessEqual(len(capped.encode("utf-8")), EMAIL_BUDGET_BYTES,
+                             "a budgeted email must respect its budget")
+        self.assertGreaterEqual(len(self.r["email"].encode("utf-8")),
+                                len(capped.encode("utf-8")),
+                                "the unbudgeted default must not shed more")
 
     def test_file_theme_dark_by_default(self):
         page = self.r["page"]

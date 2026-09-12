@@ -12,6 +12,7 @@ import os
 import sys
 
 from .model import PayloadError, load
+from .attachments import b64_chars as b64
 from .render import render_all, split_for_send
 
 from .render import EMAIL_BUDGET_BYTES as EMAIL_BUDGET  # Gmail clips ~102 KB
@@ -122,6 +123,9 @@ def main(argv=None):
                         "past ~85 KB Gmail clips rather than rejects)")
     r.add_argument("--send-budget", type=int, default=None, metavar="BYTES",
                    help="max total for one send call: HTML + text + attachments")
+    r.add_argument("--clip-guard", action="store_true",
+                   help="shed HTML cards to stay under Gmail's clip threshold. "
+                        "Off by default: a clip is a link, a shed card is gone")
     r.add_argument("--text-budget", type=int, default=None, metavar="BYTES",
                    help="max plain-text body before sections are shed "
                         "(default 10 KB; it is charged to the same send call)")
@@ -181,30 +185,41 @@ def main(argv=None):
         os.environ["BRIEF_SEND_CALL_BYTES"] = str(a.send_budget)
 
     # Everything in the send call competes for the same room, so allocate once
-    # and degrade nothing unless the total is actually over. When it is, the
-    # TEXT part goes first: it is an alternative body, not the brief, and a real
-    # run's measured 40,364 B - a third of the whole call, more than the
-    # attachment and its safety margin together. Unbudgeted it cost the HTML
-    # seven cards and the attachment its tail.
+    # and degrade nothing unless the total is actually over.
+    #
+    # The BRIEF outranks everything. The Gmail-clip budget used to shed HTML
+    # cards on its own, and it became the binding constraint: a real run landed
+    # at 99.9% of the 87,040 B body budget with seven cards gone, while the send
+    # call sat at 84% with 21 KB spare that the HTML was not allowed to touch.
+    # That is the wrong trade. Gmail CLIPS - "[Message clipped] View entire
+    # message" is a link, and the content is one click away - whereas a shed
+    # card is gone. So clipping is now a warning, not a trigger; pass
+    # --clip-guard to shed for it instead.
     from .attachments import call_bytes, call_limit, html_room
     from .render import TEXT_BUDGET_BYTES, plain_text
     sizes = [os.path.getsize(s_) for s_ in a.scans]
-    fh, eh, pt = render_all(payload, a.email_budget, a.text_budget)
-
     limit = call_limit(len(sizes), a.send_budget or None)
+    cap = a.email_budget or (EMAIL_BUDGET if a.clip_guard else None)
+    fh, eh, pt = render_all(payload, cap, a.text_budget)
+
     total = call_bytes(len(eh.encode("utf-8")), len(pt.encode("utf-8")), sizes)
     if total > limit:
+        # Text before HTML: it is an alternative body, and a reader whose client
+        # shows HTML never sees it.
+        room_for_text = max(limit - len(eh.encode("utf-8"))
+                            - sum(b64(n) for n in sizes), 1024)
         print(f"send call would be {total:,} B of {limit:,} — trimming the "
-              f"plain-text part first, so the brief keeps its sections.")
-        pt = plain_text(a.text_budget or TEXT_BUDGET_BYTES)
+              f"plain-text part to {room_for_text:,} B first, so the brief "
+              f"keeps its sections.")
+        pt = plain_text(min(room_for_text, a.text_budget or room_for_text))
         total = call_bytes(len(eh.encode("utf-8")), len(pt.encode("utf-8")), sizes)
     if total > limit:
         room = html_room(len(pt.encode("utf-8")), sizes, a.send_budget or None)
-        if a.email_budget:
-            room = min(room, a.email_budget)
+        if cap:
+            room = min(room, cap)
         print(f"still {total:,} B of {limit:,}; the HTML must shed to {room:,} B.")
         _, eh, _ = render_all(payload, room, a.text_budget)
-        pt = plain_text(a.text_budget or TEXT_BUDGET_BYTES)
+        pt = plain_text(min(room_for_text, a.text_budget or room_for_text))
 
     os.makedirs(a.out_dir, exist_ok=True)
     stamp = a.date or payload["MAST"].get("file_date") or "brief"
@@ -226,7 +241,7 @@ def main(argv=None):
 
     size = len(eh.encode("utf-8"))
     print(f"wrote {page}")
-    budget_used = a.email_budget or EMAIL_BUDGET
+    budget_used = cap or EMAIL_BUDGET
     print(f"wrote {email}  ({size:,} B of the {budget_used:,} B body budget)")
     print(f"wrote {text}")
     print(f"wrote email.part01..{len(parts):02d}.html — read these in order and "
@@ -234,11 +249,11 @@ def main(argv=None):
           f"do not read {os.path.basename(email)} itself, it exceeds the read cap.")
     print(f"build {marker} — this marker appears in all three outputs. Quote it "
           "when you report the run; a brief without it did not come from here.")
-    if size > budget_used:
-        print(f"WARNING: email body is {size - budget_used:,} B over budget — "
-              "Gmail will clip it. Shorten sections or drop embedded scans.",
-              file=sys.stderr)
-        return 1
+    if size > EMAIL_BUDGET:
+        print(f"NOTE: the body is {size - EMAIL_BUDGET:,} B over Gmail's clip "
+              f"threshold, so Gmail will show \"[Message clipped] View entire "
+              f"message\". Nothing was dropped — every section is in the email, "
+              f"one click away. Pass --clip-guard to shed cards instead.")
     return 0
 
 
