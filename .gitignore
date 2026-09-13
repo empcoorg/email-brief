@@ -8,3 +8,4 @@ briefs/
 ROUTINE_PROMPT.filled.md
 tests/private_denylist.txt
 out/
+.DS_Store
