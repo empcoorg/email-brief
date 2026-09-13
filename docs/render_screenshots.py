@@ -46,6 +46,9 @@ def _write_lock(page_path):
         fh.write(LOCK_HEADER + f"sha256 = {digest}\n")
 
 
+CAPTURE_WIDTH = 960
+
+
 async def main():
     from playwright.async_api import async_playwright
     with tempfile.TemporaryDirectory() as td:
@@ -55,13 +58,18 @@ async def main():
         page_html = next(os.path.join(td, f) for f in os.listdir(td) if f.startswith("morning-brief"))
         async with async_playwright() as p:
             b = await p.chromium.launch(executable_path=os.environ.get("BRIEF_CHROMIUM", "/opt/pw-browsers/chromium") if os.path.exists(os.environ.get("BRIEF_CHROMIUM", "/opt/pw-browsers/chromium")) else None)
-            pg = await b.new_page(viewport={"width": 1180, "height": 1000}, color_scheme="dark", device_scale_factor=2)
+            # Capture width sets how large the text reads in the README: GitHub
+            # scales every image down to its ~880px column, so a 1180px capture
+            # showed 15.5px body text at ~11.6px. 960px renders it ~23% larger
+            # while staying above the 940px breakpoint - the desktop layout, with
+            # no table scrolling (measured). The brief's own sizes are unchanged.
+            pg = await b.new_page(viewport={"width": CAPTURE_WIDTH, "height": 1000}, color_scheme="dark", device_scale_factor=2)
             await pg.goto("file://" + page_html)
             await pg.wait_for_timeout(1500)  # let fonts settle
             # Top: masthead + action bar
             bar = await pg.query_selector("main > div, .actions, body")
             h = await pg.evaluate("() => { const s = document.querySelectorAll('section'); return s.length > 1 ? s[1].getBoundingClientRect().top + window.scrollY : 1200; }")
-            await pg.screenshot(path=os.path.join(DOCS, "mock-brief-top.png"), clip={"x": 0, "y": 0, "width": 1180, "height": min(int(h), 2200)})
+            await pg.screenshot(path=os.path.join(DOCS, "mock-brief-top.png"), clip={"x": 0, "y": 0, "width": CAPTURE_WIDTH, "height": min(int(h), 2200)})
             # Section 1: relevant job posts (ranked table with badges + legend)
             secs = await pg.query_selector_all("section")
             jobs = None
