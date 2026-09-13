@@ -487,6 +487,32 @@ class TestTemplate(unittest.TestCase):
                              "concatenating the written parts does not "
                              "reproduce email.html")
 
+    def test_prompt_names_every_postal_bucket_the_code_returns(self):
+        """The prompt must describe exactly the values classify_addressee returns.
+
+        postal.py gained a fourth bucket, "likely", and the template kept
+        saying there were three. A run that believes the prompt meets an
+        unrecognized value and can drop the owner's own mail. Derived from the
+        module's constants, so adding a bucket fails CI until the prompt says so.
+        """
+        from brief import postal
+        buckets = [postal.RECIPIENT, postal.LIKELY, postal.OTHER_NAMED, postal.GENERIC]
+        for b in buckets:
+            self.assertIn(f'"{b}"', self.fence, f"prompt never names the {b!r} bucket")
+        words = {2: "two", 3: "three", 4: "four", 5: "five"}
+        self.assertIn(f"{words[len(buckets)]} buckets", self.fence)
+        wrong = [w for n, w in words.items() if n != len(buckets) and f"{w} buckets" in self.fence]
+        self.assertEqual(wrong, [], "prompt still states a stale bucket count")
+
+    def test_scans_are_never_omitted_silently(self):
+        """Dropping a scan for size must be announced; that rule was lost once.
+
+        Rewriting the attachment bullet removed the omission paragraph along
+        with the text it replaced, so nothing required a warning when a scan
+        was left out. The rule is small and easy to cut by accident.
+        """
+        self.assertIn("Never omit silently", self.fence)
+
     def test_placeholders_documented_and_used(self):
         documented = set(re.findall(r"\{\{(\w+)\}\}", self.doc)) - {"PLACEHOLDER"}
         used = set(re.findall(r"\{\{(\w+)\}\}", self.fence))
