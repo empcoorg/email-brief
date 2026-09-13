@@ -8,6 +8,7 @@ prints the paths and the email's size against the 85 KB send budget.
 `validate` checks the payload and says what is wrong, without rendering.
 """
 import argparse
+import json
 import os
 import sys
 
@@ -16,6 +17,68 @@ from .attachments import b64_chars as b64
 from .render import render_all, split_for_send
 
 from .render import EMAIL_BUDGET_BYTES as EMAIL_BUDGET  # Gmail clips ~102 KB
+
+
+def _extract(page, out):
+    from .evening import extract_payload
+    try:
+        found = extract_payload(open(page, encoding="utf-8").read())
+    except (OSError, ValueError) as ex:
+        print(f"cannot read a payload from {page}: {ex}", file=sys.stderr)
+        return 2
+    if found is None:
+        print(f"no embedded payload in {page} - was it rendered before pages "
+              "carried one, or is this the wrong file?", file=sys.stderr)
+        return 2
+    with open(out, "w", encoding="utf-8") as f:
+        json.dump(found, f, ensure_ascii=False, indent=1)
+    print(f"wrote {out}  ({len(found)} keys)")
+    return 0
+
+
+def _evening(a):
+    """Decide the evening send and build its payload."""
+    from .evening import decide, extract_payload, merge, parse_record
+    try:
+        evening = load(a.evening)
+    except PayloadError as ex:
+        print(f"evening payload invalid: {ex}", file=sys.stderr)
+        return 2
+    carry, morning = [], None
+    if a.record:
+        rec = parse_record(open(a.record, encoding="utf-8").read())
+        if rec is None:
+            print("no 'Brief record:' line in the morning text - nothing is "
+                  "known to have been cut, so nothing is carried.")
+        else:
+            carry = list(dict.fromkeys(rec["shed"] + rec["clipped"]))
+    if carry:
+        if not a.morning_page:
+            print(f"the morning email left out {', '.join(carry)} but no "
+                  "--morning-page was given to carry them from", file=sys.stderr)
+            return 2
+        morning = extract_payload(open(a.morning_page, encoding="utf-8").read())
+        if morning is None:
+            print(f"{a.morning_page} holds no embedded payload; cannot carry "
+                  f"{', '.join(carry)}", file=sys.stderr)
+            return 2
+    try:
+        merged, carried = (merge(morning, evening, carry, a.carried_from)
+                           if carry else (evening, []))
+    except PayloadError as ex:
+        print(f"cannot merge: {ex}", file=sys.stderr)
+        return 2
+    send, why = decide(evening, carried)
+    with open(a.out, "w", encoding="utf-8") as f:
+        json.dump(merged, f, ensure_ascii=False, indent=1)
+    if not send:
+        print("SKIP — nothing important since the morning and nothing it left out.")
+        return 3
+    print(f"SEND — {len(why)} reason(s):")
+    for w in why:
+        print(f"  - {w}")
+    print(f"wrote {a.out}")
+    return 0
 
 
 def _verify(source, readback):
@@ -129,6 +192,9 @@ def main(argv=None):
     r.add_argument("--text-budget", type=int, default=None, metavar="BYTES",
                    help="max plain-text body before sections are shed "
                         "(default 10 KB; it is charged to the same send call)")
+    r.add_argument("--full-url", default=None, metavar="URL",
+                   help="address of the privately published full page; becomes "
+                        "the last line of the email and the text copy")
     r.add_argument("--scans", nargs="*", default=[], metavar="JPG",
                    help="mailpiece scans that will ride along in the same send "
                         "call; the email body budget shrinks to make room")
@@ -144,6 +210,22 @@ def main(argv=None):
     vf.add_argument("readback", help="the same file decoded out of the draft "
                                      "or sent message")
 
+    xp = sub.add_parser("extract-payload",
+                        help="recover the payload embedded in a published page "
+                             "(exit 0 found, 2 none)")
+    xp.add_argument("page", help="the page file, or an Artifact read-back of it")
+    xp.add_argument("-o", "--out", required=True, help="where to write the payload JSON")
+    ev = sub.add_parser("evening",
+                        help="merge what the morning email could not show into the "
+                             "evening payload; exit 0 send, 3 skip")
+    ev.add_argument("--evening", required=True, help="the evening run's own payload")
+    ev.add_argument("--morning-page", help="the morning's published page (or its read-back)")
+    ev.add_argument("--record", help="text file holding the morning email's text copy, "
+                                     "which ends with its 'Brief record:' line")
+    ev.add_argument("--from", dest="carried_from", default="this morning",
+                    help="the morning run stamp, shown on every carried section")
+    ev.add_argument("-o", "--out", required=True, help="where to write the merged payload")
+
     at = sub.add_parser("attachment",
                         help="is this file within the send-path size limits? "
                              "exit 0 yes, 4 no (size only, not proof of delivery)")
@@ -154,6 +236,12 @@ def main(argv=None):
 
     if a.cmd == "verify":
         return _verify(a.source, a.readback)
+
+    if a.cmd == "extract-payload":
+        return _extract(a.page, a.out)
+
+    if a.cmd == "evening":
+        return _evening(a)
 
     if a.cmd == "attachment":
         return _check_attachments(a.files, a.out_dir)
@@ -200,7 +288,11 @@ def main(argv=None):
     sizes = [os.path.getsize(s_) for s_ in a.scans]
     limit = call_limit(len(sizes), a.send_budget or None)
     cap = a.email_budget or (EMAIL_BUDGET if a.clip_guard else None)
-    fh, eh, pt = render_all(payload, cap, a.text_budget)
+    try:
+        fh, eh, pt = render_all(payload, cap, a.text_budget, a.full_url)
+    except ValueError as ex:
+        print(f"cannot render: {ex}", file=sys.stderr)
+        return 2
 
     total = call_bytes(len(eh.encode("utf-8")), len(pt.encode("utf-8")), sizes)
     if total > limit:
@@ -218,7 +310,7 @@ def main(argv=None):
         if cap:
             room = min(room, cap)
         print(f"still {total:,} B of {limit:,}; the HTML must shed to {room:,} B.")
-        _, eh, _ = render_all(payload, room, a.text_budget)
+        _, eh, _ = render_all(payload, room, a.text_budget, a.full_url)
         pt = plain_text(min(room_for_text, a.text_budget or room_for_text))
 
     os.makedirs(a.out_dir, exist_ok=True)
@@ -226,6 +318,20 @@ def main(argv=None):
     page = os.path.join(a.out_dir, f"morning-brief-{stamp}.html")
     email = os.path.join(a.out_dir, "email.html")
     text = os.path.join(a.out_dir, "email.txt")
+    # The page to publish carries the payload too, so a later evening run can
+    # recover any section the morning email could not show. It is a separate
+    # file so the page delivered in the session stays exactly as pinned.
+    from .evening import embed_payload
+    from .render import LAST_EMAIL_REPORT
+    # Deliberately NOT prefixed "morning-brief": tooling finds the session page
+    # as "the file starting with morning-brief", and a second match would make
+    # that depend on directory order.
+    published = os.path.join(a.out_dir, f"full-brief-{stamp}.html")
+    report = os.path.join(a.out_dir, "email.report.json")
+    with open(published, "w", encoding="utf-8") as f:
+        f.write(embed_payload(fh, payload))
+    with open(report, "w", encoding="utf-8") as f:
+        json.dump(dict(LAST_EMAIL_REPORT, build=marker, full_url=a.full_url or ""), f, indent=1)
     for path, body in ((page, fh), (email, eh), (text, pt)):
         with open(path, "w", encoding="utf-8") as f:
             f.write(body)

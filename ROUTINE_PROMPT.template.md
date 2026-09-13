@@ -22,6 +22,7 @@ the code fences is the prompt; nothing outside them gets deployed.
 | `{{LOYALTY_NOTES}}` | Loyalty/rewards balance lines to extract from those emails, if any (OPTIONAL) | `REI dividend balance emails` |
 | `{{FUND_TICKERS}}` | Mutual funds/ETFs for the daily NAV table (OPTIONAL market section) | `VTSAX, VTIAX` |
 | `{{JOURNALS}}` | Your top few scientific journals to scan for relevant new publications — during setup, ask the owner to list them, or omit the section if they're not interested (OPTIONAL research section) | `Science, Nature, Journal of Phycology` |
+| `{{EVENING_RUN_TIME}}` | Local time of the OPTIONAL evening update. It is a second Routine whose prompt is this same prompt with `EVENING RUN.` as its very first line; it sends only when something important arrived since the morning or the morning email could not show a section. Delete the EVENING UPDATE block if you don't want one | `6:00 PM` |
 
 ```
 EMAIL BRIEFING for {{OWNER_NAME}} ({{OWNER_EMAIL}}). Timezone {{TIMEZONE}}. Schedule: {{SCHEDULE}} at {{RUN_TIME}}. This is one scheduled run.
@@ -181,6 +182,12 @@ STEP 3 — render and check:
   It writes morning-brief-<date>.html, email.html and email.txt, prints the email's size against the 85 KB send budget, and prints a BUILD MARKER of the form brief-xxxxxxxxxxxx.
   QUOTE THAT MARKER in your chat reply. It is embedded in all three outputs, so it is the proof the renderer produced what you sent. If your reply has no marker, you hand-wrote HTML instead of rendering it — which silently breaks section order, escaping and link handling in ways the repo's tests cannot catch, because they test the renderer and a hand-written document never reaches it. Redo the run through the renderer. If it exits non-zero, READ THE ERROR — it names the key and row that is wrong — fix the payload and run it again. Never work around a validation error by hand-writing HTML.
 
+STEP 3b — publish the full page, then put its link in the email:
+  Publish /mnt/user-data/outputs/full-brief-<date>.html with the Artifact tool (favicon "📬", description "<subject line of this brief>"). Pass the FILE PATH — never read the page into your context; it is the complete brief with every section and scan, and it has no size limit because nothing is retyped. The page is private to the owner's claude.ai account.
+  Then run the STEP 3 render command again, unchanged except for one added flag: --full-url <the URL the Artifact tool returned>. That makes "Full brief, never truncated: <URL>" the last line of the email and of the text copy, and it survives any shedding. It also rewrites the email.partNN.html files — use the new ones.
+  If publishing fails or the tool is unavailable, send the brief WITHOUT the flag and say so in one line at the top of the chat reply. Never invent a link, reuse an old one, or substitute any other host.
+  The text copy's "Brief record:" line (written by the renderer) names any section the email had to shed or that falls past Gmail's clip point. Leave it in: the evening update reads it back out of the sent email.
+
 STEP 4 — deliver:
   * Send the standalone file, /mnt/user-data/outputs/morning-brief-<date>.html, with SendUserFile using display: "render".
   * Email the brief to {{DELIVERY_EMAIL}} exactly once, subject "Morning Brief — <Day Mon D, YYYY> ({{RUN_TIME}} run)", with the FULL HTML as the htmlBody and email.txt as the plain-text body. Both are read verbatim from the files the renderer produced. Do not edit them, reformat them, or "improve" them on the way out.
@@ -201,7 +208,22 @@ STEP 4 — deliver:
 
 WHY IT WORKS THIS WAY: the design used to live here as prose and was rebuilt from scratch every morning, so it drifted — badges lost their borders, axes landed on values like "$1,225", bars stopped lining up with their rulers. Those are now impossible: the renderer is unit-tested and the same code runs every day. If the brief looks wrong, the fix is a pull request against the repo, never a change to this prompt.
 
-DO NOT publish it as an Artifact, or give it any other hosted URL. It routinely contains masked account numbers, balances, names of people who send money, and scans of physical mail. If you think a hosted page would help, ask first — never publish on your own initiative.
+THE ONLY HOSTED COPY IS THE PRIVATE ARTIFACT FROM STEP 3b. It routinely contains masked account numbers, balances, names of people who send money, and scans of physical mail, so: publish exactly that one page per run, never share it, never publish anything else, and never put the brief on any other host.
+
+=== EVENING UPDATE (OPTIONAL — delete this block if you don't want one) ===
+
+This block applies ONLY when the very first line of this prompt is "EVENING RUN." — the second Routine, at {{EVENING_RUN_TIME}}. A morning run ignores it.
+
+On an evening run, everything above still applies, with these differences:
+  1. WINDOW: cover only what arrived since this morning's brief was sent, not the full daily window. Research sections are refreshed only where something genuinely moved.
+  2. FIND THIS MORNING'S BRIEF: search the sending mailbox's sent folder for today's "Morning Brief — <Day Mon D, YYYY>". Fetch it in PLAIN_TEXT form and save that text to /tmp/eb/morning.txt (a result saved to a file is fine — use the file). It ends with a "Brief record:" line and a "Full brief, never truncated: <URL>" line.
+  3. RECOVER THE MORNING PAGE: call the Artifact tool with action "read" on that URL. The page is large, so the result is saved to a local file: copy THAT FILE to /tmp/eb/morning-page.html. Never retype it. If the read comes back inline instead of as a file, or there is no morning brief or no link, carry nothing and say so in one line — do not guess what the morning left out.
+  4. WRITE the evening payload to /tmp/eb/evening.json exactly as STEP 2 describes, holding only what is new since the morning. Title the masthead "Evening Update".
+  5. DECIDE AND MERGE, in code:
+       cd /tmp/eb && python3 -m brief evening --evening evening.json --morning-page morning-page.html --record morning.txt --from "<the morning brief's run stamp>" -o evening.merged.json
+     Exit 3 = SKIP: nothing important since the morning and nothing it left out. Send NO email, publish nothing, say "Evening update skipped" and why in the chat reply, and stop.
+     Exit 0 = SEND: render evening.merged.json (STEP 3, with --scans if any), publish its page (STEP 3b), and deliver per STEP 4 with the subject "Evening Update — <Day Mon D, YYYY> ({{EVENING_RUN_TIME}} run)". Every section carried from the morning is labelled as such by the renderer; do not relabel it.
+     Exit 2 = the merge could not be done — it names the reason. Fix what it names if you can; otherwise send the evening update WITHOUT carried sections and say which ones could not be carried.
 
 ALSO write a 3–6 line plain-text summary in your chat reply covering only what needs action, so the brief is usable from a phone without opening the file. The push notification stays plain text as always.
 ```

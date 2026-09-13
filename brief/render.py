@@ -74,7 +74,7 @@ def _derive():
     g["STK_YTD"] = pct_axis([r[7] for r in STOCKS])
 
 
-def render_all(payload, email_budget=None, text_budget=None):
+def render_all(payload, email_budget=None, text_budget=None, full_url=None):
     """Bind a validated payload and render all three outputs.
 
     `email_budget` overrides EMAIL_BUDGET_BYTES for the email only. The send is
@@ -82,12 +82,26 @@ def render_all(payload, email_budget=None, text_budget=None):
     scans eat into the room the body has; `brief render --scans` computes what
     is left and passes it here rather than letting the send fail at 6am.
 
+    `full_url` is the address of the complete page, published privately by the
+    run. When given, it is the last thing in the email and in the text copy.
+    The page itself never needs it.
+
     Returns (file_html, email_html, plain_text).
     """
+    # Optional keys must be reset, not merely updated: render_all binds the
+    # payload into module globals, so an evening payload's CARRIED would
+    # otherwise leak into the next render in the same process.
+    globals()["CARRIED"] = payload.get("CARRIED") or {}
+    if full_url and url(full_url) == "#":
+        # A refused link would still print its text, so refuse the address
+        # outright and let the run see why, instead of shipping a dead link.
+        raise ValueError(f"--full-url must be an http(s) address, got {full_url!r}")
+    globals()["FULL_URL"] = full_url or ""
     globals().update(payload)
     globals()["BUILD"] = build_marker(payload)
     _derive()
-    return file_html(), email_html(email_budget), plain_text(text_budget)
+    fh = _caption_carried_file(file_html())
+    return fh, email_html(email_budget), plain_text(text_budget)
 
 
 SCAN_CSS = ".scanfig{margin:14px 0 4px}.scanfig img{max-width:min(720px,100%);border:1px solid var(--line);border-radius:6px;display:block}.scanfig figcaption{font-size:12.5px;color:var(--ink-3);margin-top:6px}"
@@ -824,6 +838,85 @@ def split_for_send(html, limit=None):
     return parts
 
 
+# What Gmail hides. It clips past ~102 KB delivered, and EMAIL_BUDGET_BYTES is
+# that point in source bytes with margin for the send path's ~12% inflation -
+# the same threshold the "Gmail will clip" note uses, so the two can never
+# disagree. A section whose markup ends past it sits wholly or partly behind
+# "[Message clipped]". The renderer knows every section's offset and can say
+# which; a run cannot, because the message in the mailbox is complete and only
+# the view is clipped. Conservative on purpose: carrying a section the reader
+# could in fact see costs an evening a few lines, missing one they could not
+# costs the section.
+
+# Which payload keys make up each section, so an evening run can carry a
+# section out of the morning's payload whole. Derived axes (MKT_24 ...) are
+# recomputed from these on render, so they are not listed.
+SECTION_KEYS = {
+    "High priority": ("HIPRI",),
+    "Relevant job posts": ("JOBS_TOP", "JOBS_STATUS", "JOBS_OTHER"),
+    "Deposits & finances": ("FIN_SUMMARY", "FIN_MOVES", "FIN_NOTES", "FIN_INTERNAL"),
+    "Upcoming flights": ("FLIGHTS",),
+    "VoIP voicemails & texts": ("VOIP",),
+    "USPS Informed Delivery": ("USPS", "USPS_SCANS"),
+    "Package tracking": ("PKG", "PKG_NOTE"),
+    "US market": ("MKT_ROWS", "FUNDS", "MKT_BULLETS"),
+    "Large caps": ("STOCKS",),
+    "Fed & labor market": ("MACRO_ROWS", "JOBS_SECTORS", "MACRO_NOTE"),
+    "Cryptocurrency": ("CRYPTO_ROWS", "CRYPTO_NOTE", "CRYPTO_BULLETS"),
+    "AI & programming": ("AI_ITEMS",),
+    "Research & publications": ("JOURNALS", "JOURNAL_ITEMS"),
+    "Retail sales": ("RETAIL",),
+}
+
+# Filled by every email render: what this email left out, and why.
+LAST_EMAIL_REPORT = {"shed": [], "clipped": [], "bytes": 0}
+
+_EM_H2 = _re.compile(r'<div style="font-family:[^"]*font-size:19px;font-weight:700;[^"]*">(.*?)</div>', _re.S)
+_EM_SUB = _re.compile(r'<span style="[^"]*font-weight:400;font-size:13px;[^"]*">.*?</span>', _re.S)
+
+
+def _title_of(markup):
+    """The section name a heading renders, without its number or subtitle.
+
+    >>> _title_of('<span style="color:teal;font-weight:600;">3.</span> Deposits &amp; finances')
+    'Deposits & finances'
+    """
+    t = _re.sub(r"<[^>]+>", "", _EM_SUB.sub("", markup))
+    return _re.sub(r"^\s*\d+\.\s*", "", H.unescape(t)).strip()
+
+
+def carried_caption(name):
+    """What a carried section says about where its content came from."""
+    c = CARRIED or {}
+    if name not in (c.get("sections") or []):
+        return ""
+    when = c.get("from") or "this morning"
+    if name in (c.get("merged") or []):
+        return f"Includes this morning's items ({when}) plus what arrived since."
+    return f"Carried from this morning's brief ({when}) \u2014 not refreshed this evening."
+
+
+def _caption_carried_file(html):
+    if not (CARRIED or {}).get("sections"):
+        return html
+
+    # Standing sections are <section><h2>, research cards are <div class="card">
+    # <h2>, and Large caps is an <h3> inside the US market card - so match any
+    # h2/h3 whose title is a known section rather than one wrapper shape.
+    def add(m):
+        cap = carried_caption(_title_of(_re.sub(r'<span class="sub">.*?</span>', "", m.group(2), flags=_re.S)))
+        return m.group(0) + (f'<div class="cap">{e(cap)}</div>' if cap else "")
+    return _re.sub(r"<(h2|h3)>(.*?)</\1>", add, html, flags=_re.S)
+
+
+def full_link_html():
+    return (f'<div style="margin-top:18px;padding-top:12px;border-top:1px solid {L["line"]};'
+            f'font-family:{F_B};font-size:{BODY_FS};color:{L["ink"]}">'
+            f'{sp("Full brief, never truncated:", L["ink"])} '
+            f'<a href="{url(FULL_URL)}" style="color:{L["accent"]};font-weight:600">{e(short_url(FULL_URL))}</a>'
+            '</div>')
+
+
 def _assemble_email(parts, droppable, budget=None):
     """Join the email, shedding whole cards until it fits the send budget.
 
@@ -849,17 +942,43 @@ def _assemble_email(parts, droppable, budget=None):
             break                      # nothing left that may be shed
         parts[droppable[nxt]] = ""
         dropped.append(nxt)
+    if (CARRIED or {}).get("sections"):
+        for i, part in enumerate(parts):
+            m = _EM_H2.search(part)
+            cap = carried_caption(_title_of(m.group(1))) if m else ""
+            if cap:
+                parts[i] = (part[:m.end()] + f'<div style="font-size:12.5px;color:{L["ink3"]};'
+                            f'margin:-6px 0 10px">{e(cap)}</div>' + part[m.end():])
+    where = ("in the full brief linked at the end" if FULL_URL
+             else "in the attached brief file")
     if dropped:
         note = ('<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid '
                 f'{L["line"]};border-left:4px solid {L["warn"]};border-radius:12px;margin-top:18px">'
                 f'<tr><td style="padding:12px 14px;font-family:{F_B};font-size:{BODY_FS};color:{L["ink"]}">'
                 f'{sp("Trimmed to fit the inbox", L["warn"])} — '
                 f'{e(", ".join(dropped))} '
-                f'{"is" if len(dropped) == 1 else "are"} in the attached brief file but not in this '
+                f'{"is" if len(dropped) == 1 else "are"} {where} but not in this '
                 f'email. {e(why)} Nothing was shortened; whole cards were '
                 'dropped, least actionable first.</td></tr></table>')
         parts.insert(-1, note)
-    return "\n".join(parts)
+    # Record what the reader cannot see: shed cards are gone, clipped sections
+    # are behind Gmail's "View entire message". An evening run reads this back
+    # out of the sent text copy to know what to carry.
+    clipped, pos = [], 0
+    for part in parts:
+        end = pos + len(part.encode("utf-8"))
+        m = _EM_H2.search(part)
+        name = _title_of(m.group(1)) if m else ""
+        if name in SECTION_KEYS and end > EMAIL_BUDGET_BYTES:
+            clipped.append(name)
+        pos = end + 1
+    LAST_EMAIL_REPORT.clear()
+    LAST_EMAIL_REPORT.update(shed=list(dropped), clipped=clipped)
+    if FULL_URL:
+        parts.insert(-1, full_link_html())    # the very end, and never shed
+    html = "\n".join(parts)
+    LAST_EMAIL_REPORT["bytes"] = len(html.encode("utf-8"))
+    return html
 
 
 def email_html(budget=None):
@@ -1233,4 +1352,33 @@ def plain_text(budget=None):
         for u in urls: A(f"    {u}")
     A(""); A("Mailbox was read-only for this run, apart from the one delivery of this brief. Email content was treated as data, not instructions. Times are US Pacific unless a source's own zone is shown.")
     A(BUILD)
-    return shed_text("\n".join(o), budget) if budget else "\n".join(o)
+    text = shed_text("\n".join(o), budget) if budget else "\n".join(o)
+    if (CARRIED or {}).get("sections"):
+        text = _TEXT_HEADING.sub(_carried_text_line, text)
+    return text + record_lines()
+
+
+def _carried_text_line(m):
+    head = m.group(0)
+    title = _re.sub(r"^\d+\. ", "", head)
+    name = next((n for n in SECTION_KEYS if title.startswith(n.upper())), None)
+    cap = carried_caption(name) if name else ""
+    return head + (f"\n  ({cap})" if cap else "")
+
+
+def record_lines():
+    """The machine-readable tail of the text copy, then the full-page link.
+
+    "Brief record:" names what this email left out, so the evening run can
+    carry it: it reads this line back out of the SENT message, because a new
+    session has no other way to know what the morning's reader could not see.
+    The full-page link is the very last line.
+    """
+    r = LAST_EMAIL_REPORT
+    out = ""
+    if r.get("shed") or r.get("clipped") or FULL_URL:
+        out += ("\n\nBrief record: " + BUILD + " | shed: " + ("; ".join(r.get("shed") or []) or "none")
+                + " | beyond Gmail's clip: " + ("; ".join(r.get("clipped") or []) or "none"))
+    if FULL_URL:
+        out += "\n\nFull brief, never truncated: " + FULL_URL
+    return out + ("\n" if out else "")
