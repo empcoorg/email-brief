@@ -8,7 +8,6 @@ Stdlib unittest; no browser needed.
 import copy
 import json
 import os
-import re
 import subprocess
 import sys
 import tempfile
@@ -31,10 +30,6 @@ def payload():
         return json.load(fh)
 
 
-def visible(html):
-    return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", html)).strip()
-
-
 def quiet_evening():
     """An evening with nothing urgent and no rows in the research cards."""
     p = payload()
@@ -50,20 +45,31 @@ def quiet_evening():
 
 
 class TestFullPageLink(unittest.TestCase):
-    def test_link_is_the_last_thing_in_the_email_and_the_text(self):
+    def test_link_is_in_the_email_header_and_last_in_the_text(self):
+        """Gmail hides a long message's tail, so the link must come before any section."""
         _, em, tx = R.render_all(payload(), None, None, URL)
-        self.assertTrue(visible(em).endswith(R.short_url(URL)),
-                        "the full-page link must be the very last visible text")
-        self.assertIn(f'href="{URL}"', em)
+        at = em.find(f'href="{URL}"')
+        self.assertGreater(at, 0)
+        self.assertEqual(em.count(f'href="{URL}"'), 1)
+        self.assertLess(at, em.find("Needs you today"),
+                        "the full-page link must sit in the masthead, above every section")
+        self.assertLess(len(em[:at].encode("utf-8")), 10_000,
+                        "the link must be far inside Gmail's clip point")
         self.assertEqual(tx.rstrip("\n").splitlines()[-1],
                          f"Full brief, never truncated: {URL}")
+
+    def test_link_is_visible_even_when_gmail_would_clip_the_email(self):
+        _, em, _ = R.render_all(payload(), None, None, URL)
+        self.assertGreater(len(em.encode("utf-8")), R.EMAIL_BUDGET_BYTES,
+                           "the sample must be big enough to clip for this test to mean anything")
+        self.assertLess(len(em[:em.find(f'href="{URL}"')].encode("utf-8")), R.EMAIL_BUDGET_BYTES)
 
     def test_link_survives_the_email_shedding_its_cards(self):
         """The link is how a reader reaches what was shed, so it is never shed."""
         _, em, tx = R.render_all(payload(), 40_000, 3_000, URL)
         self.assertTrue(R.LAST_EMAIL_REPORT["shed"], "the budget should have forced shedding")
         self.assertIn(f'href="{URL}"', em)
-        self.assertIn("in the full brief linked at the end", em)
+        self.assertIn("in the full brief linked at the top", em)
         self.assertTrue(tx.rstrip().endswith(URL))
 
     def test_no_link_and_no_change_without_a_url(self):

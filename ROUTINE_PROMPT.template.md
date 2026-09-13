@@ -184,7 +184,7 @@ STEP 3 — render and check:
 
 STEP 3b — publish the full page, then put its link in the email:
   Publish /mnt/user-data/outputs/full-brief-<date>.html with the Artifact tool (favicon "📬", description "<subject line of this brief>"). Pass the FILE PATH — never read the page into your context; it is the complete brief with every section and scan, and it has no size limit because nothing is retyped. The page is private to the owner's claude.ai account.
-  Then run the STEP 3 render command again, unchanged except for one added flag: --full-url <the URL the Artifact tool returned>. That makes "Full brief, never truncated: <URL>" the last line of the email and of the text copy, and it survives any shedding. It also rewrites the email.partNN.html files — use the new ones.
+  Then run the STEP 3 render command again, unchanged except for one added flag: --full-url <the URL the Artifact tool returned>. That puts "Full brief, never truncated: <URL>" in the email's masthead, above every section so Gmail's clipping can never hide it, and makes it the last line of the text copy; it survives any shedding. It also rewrites the email.partNN.html files — use the new ones.
   If publishing fails or the tool is unavailable, send the brief WITHOUT the flag and say so in one line at the top of the chat reply. Never invent a link, reuse an old one, or substitute any other host.
   The text copy's "Brief record:" line (written by the renderer) names any section the email had to shed or that falls past Gmail's clip point. Leave it in: the evening update reads it back out of the sent email.
 

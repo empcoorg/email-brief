@@ -910,7 +910,15 @@ def _caption_carried_file(html):
 
 
 def full_link_html():
-    return (f'<div style="margin-top:18px;padding-top:12px;border-top:1px solid {L["line"]};'
+    """The full-page link, for the masthead.
+
+    It sits in the header, not at the end: Gmail clips a long message and hides
+    its tail behind "View entire message", and the link is the route to
+    whatever the reader cannot see - so it must come before any clip point.
+    """
+    if not FULL_URL:
+        return ""
+    return (f'<div style="margin-top:10px;padding-top:8px;border-top:1px solid {L["line"]};'
             f'font-family:{F_B};font-size:{BODY_FS};color:{L["ink"]}">'
             f'{sp("Full brief, never truncated:", L["ink"])} '
             f'<a href="{url(FULL_URL)}" style="color:{L["accent"]};font-weight:600">{e(short_url(FULL_URL))}</a>'
@@ -949,7 +957,7 @@ def _assemble_email(parts, droppable, budget=None):
             if cap:
                 parts[i] = (part[:m.end()] + f'<div style="font-size:12.5px;color:{L["ink3"]};'
                             f'margin:-6px 0 10px">{e(cap)}</div>' + part[m.end():])
-    where = ("in the full brief linked at the end" if FULL_URL
+    where = ("in the full brief linked at the top" if FULL_URL
              else "in the attached brief file")
     if dropped:
         note = ('<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid '
@@ -974,8 +982,6 @@ def _assemble_email(parts, droppable, budget=None):
         pos = end + 1
     LAST_EMAIL_REPORT.clear()
     LAST_EMAIL_REPORT.update(shed=list(dropped), clipped=clipped)
-    if FULL_URL:
-        parts.insert(-1, full_link_html())    # the very end, and never shed
     html = "\n".join(parts)
     LAST_EMAIL_REPORT["bytes"] = len(html.encode("utf-8"))
     return html
@@ -992,7 +998,7 @@ def email_html(budget=None):
     stamps = "".join(f'<div style="margin-top:8px">{lbl(k)}<div style="font-family:{F_M};font-size:14px">{e(v)}</div></div>' for k, v in [("Timezone", MAST["tz"]), ("Scheduled slot", MAST["slot"]), ("Window covered", MAST["window"]), ("Run stamp", MAST["run"])])
     o.append(f'<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid {L["line"]};border-radius:14px"><tr><td style="padding:18px 16px">'
              f'<div style="font-family:{F_H};font-size:28px;font-weight:700;color:{L["ink"]}">{e(MAST["title"])}</div>'
-             f'<div style="font-size:16px;font-weight:600;color:{L["ink2"]};margin-top:2px">{e(MAST["dateline"])}</div>{stamps}'
+             f'<div style="font-size:16px;font-weight:600;color:{L["ink2"]};margin-top:2px">{e(MAST["dateline"])}</div>{full_link_html()}{stamps}'
              f'<div style="font-size:13px;color:{L["ink3"]};margin-top:10px">{e(MAST["note"])}</div>'
              f'<div style="font-size:12.5px;color:{L["ink3"]};margin-top:6px;border-top:1px solid {L["line"]};padding-top:6px">{LAYOUT_NOTE}</div>'
              f'<div style="font-size:13px;color:{L["warn"]};font-weight:600;margin-top:6px">{e(MAST["revised"])}</div></td></tr></table>')
