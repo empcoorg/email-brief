@@ -331,8 +331,9 @@ def main(argv=None):
     # Only a run that passes --scans says how many ride along; without it the
     # count is unknown, and the email keeps saying each scan is attached.
     attached = len(a.scans) if a.scans else None
+    stamp = a.date or payload["MAST"].get("file_date") or "brief"
     try:
-        fh, eh, pt = render_all(payload, cap, a.text_budget, a.full_url, attached)
+        fh, eh, pt = render_all(payload, cap, a.text_budget, a.full_url, attached, stamp)
     except ValueError as ex:
         print(f"cannot render: {ex}", file=sys.stderr)
         return 2
@@ -353,11 +354,10 @@ def main(argv=None):
         if cap:
             room = min(room, cap)
         print(f"still {total:,} B of {limit:,}; the HTML must shed to {room:,} B.")
-        _, eh, _ = render_all(payload, room, a.text_budget, a.full_url, attached)
+        _, eh, _ = render_all(payload, room, a.text_budget, a.full_url, attached, stamp)
         pt = plain_text(min(room_for_text, a.text_budget or room_for_text))
 
     os.makedirs(a.out_dir, exist_ok=True)
-    stamp = a.date or payload["MAST"].get("file_date") or "brief"
     page = os.path.join(a.out_dir, f"morning-brief-{stamp}.html")
     email = os.path.join(a.out_dir, "email.html")
     text = os.path.join(a.out_dir, "email.txt")
