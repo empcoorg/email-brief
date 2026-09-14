@@ -2,7 +2,7 @@
 
     python3 -m brief render payload.json --out-dir /mnt/user-data/outputs
     python3 -m brief validate payload.json
-    python3 -m brief expired listing.json --today 2026-09-13
+    python3 -m brief expired artifacts.txt sent/ --today 2026-09-13
 
 `render` writes morning-brief-<date>.html, email.html and email.txt, then
 prints the paths and the email's size against the 85 KB send budget.
@@ -37,22 +37,30 @@ def _extract(page, out):
     return 0
 
 
-def _expired(listing, today):
+def _expired(sources, today):
     """Print the brief pages past retention, one URL per line."""
-    from .retention import RETENTION_DAYS, expired
+    from .retention import RETENTION_DAYS, expired, load_rows
+    files = []
+    for src in sources:
+        if os.path.isdir(src):
+            files += sorted(os.path.join(src, f) for f in os.listdir(src)
+                            if os.path.isfile(os.path.join(src, f)))
+        else:
+            files.append(src)
+    rows = []
     try:
-        with open(listing, encoding="utf-8") as fh:
-            rows = json.load(fh)
-        if not isinstance(rows, list):
-            raise ValueError("expected a JSON list of artifact rows")
-        urls = expired([r for r in rows if isinstance(r, dict)], today)
+        for path in files:
+            with open(path, encoding="utf-8") as fh:
+                rows += load_rows(fh.read())
+        urls = expired(rows, today)
     except (OSError, ValueError) as ex:
-        print(f"cannot decide retention from {listing}: {ex}", file=sys.stderr)
+        print(f"cannot decide retention: {ex}", file=sys.stderr)
         return 2
     for u in urls:
         print(u)
     if not urls:
-        print(f"nothing older than {RETENTION_DAYS} days", file=sys.stderr)
+        print(f"nothing older than {RETENTION_DAYS} days in {len(rows)} page(s) "
+              f"from {len(files)} file(s)", file=sys.stderr)
     return 0 if urls else 3
 
 
@@ -256,8 +264,10 @@ def main(argv=None):
     xr = sub.add_parser("expired",
                         help="which published brief pages are past retention? "
                              "prints their URLs; exit 0 some, 3 none")
-    xr.add_argument("listing", help="JSON list of {title, url, favicon, updated}, "
-                                    "one per artifact the run can see")
+    xr.add_argument("sources", nargs="+",
+                    help="the Artifact listing as the tool printed it, sent briefs "
+                         "saved from get_message, a directory of those, or a JSON "
+                         "list of {title, url, favicon, updated}")
     xr.add_argument("--today", required=True, help="the run's date, YYYY-MM-DD")
     a = ap.parse_args(argv)
 
@@ -271,7 +281,7 @@ def main(argv=None):
         return _evening(a)
 
     if a.cmd == "expired":
-        return _expired(a.listing, a.today)
+        return _expired(a.sources, a.today)
 
     if a.cmd == "attachment":
         return _check_attachments(a.files, a.out_dir)
@@ -318,8 +328,11 @@ def main(argv=None):
     sizes = [os.path.getsize(s_) for s_ in a.scans]
     limit = call_limit(len(sizes), a.send_budget or None)
     cap = a.email_budget or (EMAIL_BUDGET if a.clip_guard else None)
+    # Only a run that passes --scans says how many ride along; without it the
+    # count is unknown, and the email keeps saying each scan is attached.
+    attached = len(a.scans) if a.scans else None
     try:
-        fh, eh, pt = render_all(payload, cap, a.text_budget, a.full_url)
+        fh, eh, pt = render_all(payload, cap, a.text_budget, a.full_url, attached)
     except ValueError as ex:
         print(f"cannot render: {ex}", file=sys.stderr)
         return 2
@@ -340,7 +353,7 @@ def main(argv=None):
         if cap:
             room = min(room, cap)
         print(f"still {total:,} B of {limit:,}; the HTML must shed to {room:,} B.")
-        _, eh, _ = render_all(payload, room, a.text_budget, a.full_url)
+        _, eh, _ = render_all(payload, room, a.text_budget, a.full_url, attached)
         pt = plain_text(min(room_for_text, a.text_budget or room_for_text))
 
     os.makedirs(a.out_dir, exist_ok=True)

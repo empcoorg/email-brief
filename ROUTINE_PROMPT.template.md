@@ -226,10 +226,12 @@ On an evening run, everything above still applies, with these differences:
      Exit 2 = the merge could not be done — it names the reason. Fix what it names if you can; otherwise send the evening update WITHOUT carried sections and say which ones could not be carried.
 
 STEP 5 — delete published pages older than 30 days (ONLY after the brief has been sent):
-  1. Call the Artifact tool with action "list" (limit 50). Write every row to /tmp/eb/artifacts.json as a JSON list of {"title", "url", "favicon", "updated"}, copying each value exactly as listed ("updated" is the last-updated date or timestamp).
-  2. cd /tmp/eb && python3 -m brief expired artifacts.json --today <today's date, YYYY-MM-DD>
-     Exit 3 = nothing to delete. Exit 0 = it prints the URLs to delete, one per line.
-  3. Call the Artifact tool with action "delete" on EACH printed URL, and on NOTHING else — never delete a page the command did not print, never delete this run's own page, and never pick pages by eye. If a delete is refused, unavailable, or asks for a confirmation nobody is there to give, stop deleting, and say in one line of the chat reply how many pages are past 30 days and could not be deleted. It never blocks or undoes the brief.
+  Pages are found two ways, because the artifact listing shows only the 50 newest and a month of briefs pushes the old pages off it. Save both as files; never retype them as JSON.
+  1. Call the Artifact tool with action "list" (limit 50) and write its output, exactly as printed, to /tmp/eb/retention/artifacts.txt.
+  2. Search the SENDING mailbox: in:sent subject:("Morning Brief" OR "Evening Update") older_than:30d newer_than:60d. For each result, get_message with messageFormat PLAIN_TEXT and save the result, exactly as returned, to /tmp/eb/retention/sent-<message id>.json (a result the tool already saved to a file: copy that file).
+  3. cd /tmp/eb && python3 -m brief expired retention/ --today <today's date, YYYY-MM-DD>
+     Exit 3 = nothing to delete. Exit 0 = it prints the URLs to delete, one per line. Exit 2 = a file could not be read; it says which — fix that file and run it again.
+  4. Call the Artifact tool with action "delete" on EACH printed URL, and on NOTHING else — never delete a page the command did not print, never delete this run's own page, and never pick pages by eye. A page that is already gone is not an error. If a delete is refused, unavailable, or asks for a confirmation nobody is there to give, stop deleting, and say in one line of the chat reply how many pages are past 30 days and could not be deleted. It never blocks or undoes the brief.
 
 ALSO write a 3–6 line plain-text summary in your chat reply covering only what needs action, so the brief is usable from a phone without opening the file. The push notification stays plain text as always.
 ```
