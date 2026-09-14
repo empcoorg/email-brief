@@ -74,7 +74,8 @@ def _derive():
     g["STK_YTD"] = pct_axis([r[7] for r in STOCKS])
 
 
-def render_all(payload, email_budget=None, text_budget=None, full_url=None):
+def render_all(payload, email_budget=None, text_budget=None, full_url=None,
+               attached_scans=None):
     """Bind a validated payload and render all three outputs.
 
     `email_budget` overrides EMAIL_BUDGET_BYTES for the email only. The send is
@@ -83,8 +84,13 @@ def render_all(payload, email_budget=None, text_budget=None, full_url=None):
     is left and passes it here rather than letting the send fail at 6am.
 
     `full_url` is the address of the complete page, published privately by the
-    run. When given, it is the last thing in the email and in the text copy.
-    The page itself never needs it.
+    run. When given, it sits in the email's masthead, each mailpiece scan links
+    to its figure on it, and it is the last line of the text copy. The page
+    itself never needs it.
+
+    `attached_scans` is how many scan JPGs ride along in the send, when known.
+    The email never claims a scan is attached unless it is: a run allowed to
+    drop scans to fit the send call must not leave the brief saying otherwise.
 
     Returns (file_html, email_html, plain_text).
     """
@@ -97,6 +103,7 @@ def render_all(payload, email_budget=None, text_budget=None, full_url=None):
         # outright and let the run see why, instead of shipping a dead link.
         raise ValueError(f"--full-url must be an http(s) address, got {full_url!r}")
     globals()["FULL_URL"] = full_url or ""
+    globals()["ATTACHED_SCANS"] = attached_scans
     globals().update(payload)
     globals()["BUILD"] = build_marker(payload)
     _derive()
@@ -939,6 +946,20 @@ def scan_anchor(n):
     return f"usps-scan-{n}"
 
 
+def scan_url(n):
+    """The full page's address, pointed at the n-th scan.
+
+    Any fragment already on the address is replaced, not appended to: a second
+    "#" would make the browser look for an id that does not exist.
+    """
+    return FULL_URL.split("#", 1)[0] + "#" + scan_anchor(n)
+
+
+def scan_attached(n):
+    """Is the n-th scan attached to this send? Unknown counts count as attached."""
+    return ATTACHED_SCANS is None or n <= ATTACHED_SCANS
+
+
 def scan_links_html():
     """Where the email's reader finds each mailpiece scan.
 
@@ -946,15 +967,20 @@ def scan_links_html():
     <img> - data: URI, cid: inline attachment and remote URL alike (verified by
     reading a sent test message back in RAW form). So each scan is named,
     linked to its figure on the private full page when there is one, and
-    pointed at the JPG attached to the end of the email.
+    pointed at the JPG attached to the end of the email when it is attached.
     """
     if not USPS_SCANS:
         return ""
     rows = []
     for n, _ in enumerate(USPS_SCANS, 1):
-        link = (f' <a href="{url(FULL_URL)}#{scan_anchor(n)}" style="color:{L["accent"]};font-weight:600">'
-                'view on claude.ai</a> (sign-in required) \u00b7' if FULL_URL else "")
-        rows.append(f'<div>{sp(f"Mailpiece scan {n}:", L["ink"])}{link} attached at the end of this email</div>')
+        parts = []
+        if FULL_URL:
+            parts.append(f' <a href="{url(scan_url(n))}" style="color:{L["accent"]};font-weight:600">'
+                         'view on claude.ai</a> (sign-in required)')
+        parts.append(" attached at the end of this email" if scan_attached(n)
+                     else " not attached \u2014 it did not fit in this email")
+        joined = " \u00b7".join(parts)   # a backslash may not sit inside an f-string's braces before 3.12
+        rows.append(f'<div>{sp(f"Mailpiece scan {n}:", L["ink"])}{joined}</div>')
     return f'<div style="margin-top:8px;font-size:{BODY_FS};color:{L["ink2"]}">' + "".join(rows) + '</div>'
 
 
@@ -1342,8 +1368,9 @@ def plain_text(budget=None):
     A(""); A(f"{tnum()}. USPS INFORMED DELIVERY (intended recipient's mail only)"); A(USPS["headline"])
     for d_, s_, a_, ty in USPS["pieces"]: A(f"  - {d_} · {s_} · addressed to {a_} · {ty}")
     for n, _ in enumerate(USPS_SCANS, 1):
-        A(f"  Mailpiece scan {n}: attached at the end of this email"
-          + (f"; also at {FULL_URL}#{scan_anchor(n)} (claude.ai sign-in required)" if FULL_URL else ""))
+        A(f"  Mailpiece scan {n}: "
+          + ("attached at the end of this email" if scan_attached(n) else "not attached (did not fit in this email)")
+          + (f"; also at {scan_url(n)} (claude.ai sign-in required)" if FULL_URL else ""))
     A("  " + USPS["counts"]); A("  Note: " + USPS["note"])
     if PKG:
         A(""); A(f"{tnum()}. PACKAGE TRACKING (kept until delivered)")

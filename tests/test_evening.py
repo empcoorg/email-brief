@@ -93,6 +93,36 @@ class TestFullPageLink(unittest.TestCase):
         self.assertIn("attached at the end of this email", usps)
         self.assertNotIn("<img", em)
 
+    def test_a_fragment_already_on_the_page_address_is_replaced(self):
+        _, em, tx = R.render_all(payload(), None, None, URL + "#top")
+        self.assertIn(f'href="{URL}#usps-scan-1"', em)
+        self.assertNotIn("#top#", em + tx)
+
+    def test_a_scan_that_did_not_fit_is_never_called_attached(self):
+        """A run may drop scans to fit the send call; the brief must not say they are attached."""
+        _, em, tx = R.render_all(payload(), None, None, URL, attached_scans=0)
+        usps = em[em.find("USPS Informed Delivery"):]
+        self.assertNotIn("attached at the end of this email", usps)
+        self.assertIn("not attached", usps)
+        self.assertIn(f'href="{URL}#usps-scan-1"', usps, "the page is then the only route to it")
+        self.assertIn("not attached", tx)
+        _, em, _ = R.render_all(payload(), None, None, URL, attached_scans=1)
+        self.assertIn("attached at the end of this email", em)
+
+    def test_render_cli_counts_the_scans_it_is_given(self):
+        with tempfile.TemporaryDirectory() as d:
+            scan = os.path.join(d, "usps-2026-03-03-1.jpg")
+            with open(scan, "wb") as fh:
+                fh.write(b"\xff\xd8\xff" + b"\x00" * 2000)
+            res = subprocess.run([sys.executable, "-m", "brief", "render", SAMPLE, "--out-dir", d,
+                                  "--date", "2026-09-13", "--full-url", URL, "--scans", scan],
+                                 cwd=ROOT, capture_output=True, text=True)
+            self.assertEqual(res.returncode, 0, res.stderr)
+            with open(os.path.join(d, "email.html"), encoding="utf-8") as fh:
+                em = fh.read()
+        self.assertIn("attached at the end of this email", em)
+        self.assertNotIn("not attached", em)
+
     def test_without_a_page_the_scan_still_points_at_its_attachment(self):
         _, em, _ = R.render_all(payload())
         usps = em[em.find("USPS Informed Delivery"):]
