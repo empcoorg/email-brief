@@ -150,8 +150,8 @@ class TestGeneratorOutputs(unittest.TestCase):
 
     def test_usps_scan_rendered_full_in_file_only(self):
         page_sec = self.r["page"].split("USPS Informed Delivery")[1].split("</section>")[0]
-        self.assertIn('<figure class="scanfig"><img src="data:image/', page_sec,
-                      "file must embed the mailpiece scan as a data: URI figure")
+        self.assertRegex(page_sec, r'<figure class="scanfig" id="usps-scan-1"><img src="data:image/',
+                         "file must embed the mailpiece scan as a data: URI figure the email can link to")
         self.assertIn("<figcaption>", page_sec)
         # the email never carries images (sanitizer strips them anyway)
         self.assertNotIn("<img", self.r["email"])

@@ -20,6 +20,7 @@ import brief.render as R  # noqa: E402
 from brief.evening import (decide, embed_payload, extract_payload, merge,  # noqa: E402
                            parse_record)
 from brief.model import PayloadError  # noqa: E402
+from brief.retention import RETENTION_DAYS  # noqa: E402
 
 SAMPLE = os.path.join(ROOT, "sample_payload.json")
 URL = "https://claude.ai/code/artifact/00000000-0000-4000-8000-000000000000"
@@ -71,6 +72,39 @@ class TestFullPageLink(unittest.TestCase):
         self.assertIn(f'href="{URL}"', em)
         self.assertIn("in the full brief linked at the top", em)
         self.assertTrue(tx.rstrip().endswith(URL))
+
+    def test_the_header_link_says_it_is_private_and_when_it_goes(self):
+        _, em, tx = R.render_all(payload(), None, None, URL)
+        head = em[:em.find("Needs you today")]
+        self.assertIn("signed in to claude.ai", head)
+        self.assertIn(f"Deleted after {RETENTION_DAYS} days", head)
+        self.assertIn(R.FULL_LINK_NOTE, tx)
+
+    def test_each_mailpiece_scan_links_to_its_figure_on_the_page(self):
+        """The email cannot show a scan, so it points at the page and the attachment."""
+        fh, em, tx = R.render_all(payload(), None, None, URL)
+        n = len(payload()["USPS_SCANS"])
+        self.assertGreater(n, 0, "the sample must carry a scan for this test to mean anything")
+        usps = em[em.find("USPS Informed Delivery"):]
+        for i in range(1, n + 1):
+            self.assertIn(f'href="{URL}#usps-scan-{i}"', usps)
+            self.assertIn(f'id="usps-scan-{i}"', fh, "the link must land on a real figure")
+            self.assertIn(f"{URL}#usps-scan-{i}", tx)
+        self.assertIn("attached at the end of this email", usps)
+        self.assertNotIn("<img", em)
+
+    def test_without_a_page_the_scan_still_points_at_its_attachment(self):
+        _, em, _ = R.render_all(payload())
+        usps = em[em.find("USPS Informed Delivery"):]
+        self.assertIn("Mailpiece scan 1:", usps)
+        self.assertIn("attached at the end of this email", usps)
+        self.assertNotIn("view on claude.ai", em)
+
+    def test_no_scan_line_when_there_is_no_scan(self):
+        p = payload()
+        p["USPS_SCANS"] = []
+        _, em, tx = R.render_all(p, None, None, URL)
+        self.assertNotIn("Mailpiece scan", em + tx)
 
     def test_no_link_and_no_change_without_a_url(self):
         _, em, tx = R.render_all(payload())

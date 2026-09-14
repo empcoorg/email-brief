@@ -107,6 +107,10 @@ def render_all(payload, email_budget=None, text_budget=None, full_url=None):
 SCAN_CSS = ".scanfig{margin:14px 0 4px}.scanfig img{max-width:min(720px,100%);border:1px solid var(--line);border-radius:6px;display:block}.scanfig figcaption{font-size:12.5px;color:var(--ink-3);margin-top:6px}"
 def cur_sym(cur): return {"USD": "$", "MXN": "MX$", "EUR": "\u20ac", "GBP": "\u00a3"}.get(cur, cur + " ")
 import re as _re
+
+from .retention import RETENTION_DAYS
+
+
 def short_url(u):
     v = _re.sub(r"^https?://(www\.)?", "", u)
     return v[:72] + ("…" if len(v) > 72 else "")
@@ -565,8 +569,8 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
     for d_, s_, a_, ty in USPS["pieces"]:
         o.append('<tr>' + tdl("Date", e(d_), "mono") + tdl("Sender", e(s_)) + tdl("Addressee (as printed)", e(a_), "mono") + tdl("Type / notes", e(ty), "meta") + '</tr>')
     o.append('</tbody></table></div>')
-    for uri, cap_ in USPS_SCANS:
-        o.append(f'<figure class="scanfig"><img src="{url(uri)}" alt="Full mailpiece scan (mock)"><figcaption>{e(cap_)}</figcaption></figure>')
+    for n, (uri, cap_) in enumerate(USPS_SCANS, 1):
+        o.append(f'<figure class="scanfig" id="{scan_anchor(n)}"><img src="{url(uri)}" alt="Full mailpiece scan (mock)"><figcaption>{e(cap_)}</figcaption></figure>')
     o.append(f'<ul>{li_lead(USPS["counts"])}</ul><p class="meta">{e(USPS["note"])}</p></div></section>')
     # Omitted entirely when the window carries no shipments, the way flights
     # are; the counter renumbers whatever follows. Shipments stay until the
@@ -909,6 +913,10 @@ def _caption_carried_file(html):
     return _re.sub(r"<(h2|h3)>(.*?)</\1>", add, html, flags=_re.S)
 
 
+FULL_LINK_NOTE = (f"Private: opens only when signed in to claude.ai. "
+                  f"Deleted after {RETENTION_DAYS} days.")
+
+
 def full_link_html():
     """The full-page link, for the masthead.
 
@@ -922,7 +930,32 @@ def full_link_html():
             f'font-family:{F_B};font-size:{BODY_FS};color:{L["ink"]}">'
             f'{sp("Full brief, never truncated:", L["ink"])} '
             f'<a href="{url(FULL_URL)}" style="color:{L["accent"]};font-weight:600">{e(short_url(FULL_URL))}</a>'
+            f'<div style="font-size:12.5px;color:{L["ink3"]};margin-top:2px">{e(FULL_LINK_NOTE)}</div>'
             '</div>')
+
+
+def scan_anchor(n):
+    """The id of the n-th mailpiece figure on the full page (1-based)."""
+    return f"usps-scan-{n}"
+
+
+def scan_links_html():
+    """Where the email's reader finds each mailpiece scan.
+
+    The email cannot show the scan itself: the Gmail send path strips every
+    <img> - data: URI, cid: inline attachment and remote URL alike (verified by
+    reading a sent test message back in RAW form). So each scan is named,
+    linked to its figure on the private full page when there is one, and
+    pointed at the JPG attached to the end of the email.
+    """
+    if not USPS_SCANS:
+        return ""
+    rows = []
+    for n, _ in enumerate(USPS_SCANS, 1):
+        link = (f' <a href="{url(FULL_URL)}#{scan_anchor(n)}" style="color:{L["accent"]};font-weight:600">'
+                'view on claude.ai</a> (sign-in required) \u00b7' if FULL_URL else "")
+        rows.append(f'<div>{sp(f"Mailpiece scan {n}:", L["ink"])}{link} attached at the end of this email</div>')
+    return f'<div style="margin-top:8px;font-size:{BODY_FS};color:{L["ink2"]}">' + "".join(rows) + '</div>'
 
 
 def _assemble_email(parts, droppable, budget=None):
@@ -1084,6 +1117,7 @@ def email_html(budget=None):
     inner += f'<div style="color:{L["ink3"]};font-style:italic">{e(USPS["headline"])}</div>'
     rws = [[td(f'<span style="font-family:{F_M}">{e(d_)}</span><br>{e(s_)}'), td(f'<span style="font-family:{F_M}">{e(a_)}</span>'), td(e(ty))] for d_, s_, a_, ty in USPS["pieces"]]
     inner += tbl(["Date · sender", "Addressee (as printed)", "Type / notes"], rws)
+    inner += scan_links_html()
     inner += '<ul style="margin:8px 0 0;padding-left:20px">' + em_li(USPS["counts"]) + '</ul>' + f'<p style="font-size:13px;color:{L["ink3"]}">{e(USPS["note"])}</p>'
     o.append(card(inner))
     # package tracking — omitted when the window carries no shipments; shipments
@@ -1307,6 +1341,9 @@ def plain_text(budget=None):
     A(""); A(f"{tnum()}. VOIP VOICEMAILS & TEXTS"); A(VOIP["headline"]); A("  - " + VOIP["last_msg"]); A("  - " + VOIP["last_acct"]); A("")
     A(""); A(f"{tnum()}. USPS INFORMED DELIVERY (intended recipient's mail only)"); A(USPS["headline"])
     for d_, s_, a_, ty in USPS["pieces"]: A(f"  - {d_} · {s_} · addressed to {a_} · {ty}")
+    for n, _ in enumerate(USPS_SCANS, 1):
+        A(f"  Mailpiece scan {n}: attached at the end of this email"
+          + (f"; also at {FULL_URL}#{scan_anchor(n)} (claude.ai sign-in required)" if FULL_URL else ""))
     A("  " + USPS["counts"]); A("  Note: " + USPS["note"])
     if PKG:
         A(""); A(f"{tnum()}. PACKAGE TRACKING (kept until delivered)")
@@ -1386,5 +1423,5 @@ def record_lines():
         out += ("\n\nBrief record: " + BUILD + " | shed: " + ("; ".join(r.get("shed") or []) or "none")
                 + " | beyond Gmail's clip: " + ("; ".join(r.get("clipped") or []) or "none"))
     if FULL_URL:
-        out += "\n\nFull brief, never truncated: " + FULL_URL
+        out += "\n\n" + FULL_LINK_NOTE + "\nFull brief, never truncated: " + FULL_URL
     return out + ("\n" if out else "")
