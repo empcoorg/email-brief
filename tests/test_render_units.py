@@ -360,7 +360,7 @@ class TestEmptySections(unittest.TestCase):
     EMPTIABLE = ("JOBS_TOP", "JOBS_STATUS", "JOBS_OTHER", "FIN_MOVES", "FIN_SUMMARY",
                  "FIN_NOTES", "PKG", "USPS_SCANS", "MKT_ROWS", "FUNDS", "MKT_BULLETS",
                  "CRYPTO_ROWS", "CRYPTO_BULLETS", "AI_ITEMS", "JOURNAL_ITEMS",
-                 "ACTIONS", "HIPRI")
+                 "ACTIONS", "HIPRI", "STOCKS", "MACRO_ROWS", "JOBS_SECTORS")
 
     def test_every_list_section_renders_when_empty(self):
         """The prompt says to omit a section with an empty list rather than
@@ -376,6 +376,181 @@ class TestEmptySections(unittest.TestCase):
         f, em, tx = render_all(payload(**{k: [] for k in self.EMPTIABLE}))
         for out in (f, em, tx):
             self.assertGreater(len(out), 500, "an all-empty brief must still render")
+
+
+def _all_empty():
+    """The sample with every list emptied - a real quiet day, taken to the limit."""
+    p = payload()
+    for k, v in p.items():
+        if isinstance(v, list):
+            p[k] = []
+        elif isinstance(v, dict):
+            for kk, vv in v.items():
+                if isinstance(vv, list):
+                    v[kk] = []
+    return p
+
+
+def _header_only_tables(html):
+    """Outermost tables in an email whose only row is the header row."""
+    found, depth, rows, start = [], 0, 0, 0
+    for m in re.finditer(r"<(/?)(table|tr)\b", html):
+        closing, tag = m.group(1), m.group(2)
+        if tag == "table" and not closing:
+            depth += 1
+            if depth == 1:
+                rows, start = 0, m.start()
+        elif tag == "table":
+            if depth == 1 and rows == 1 and "border-collapse:collapse" in html[start:start + 200]:
+                found.append(start)
+            depth -= 1
+        elif not closing and depth == 1:
+            rows += 1
+    return found
+
+
+def _div_depth(html):
+    return len(re.findall(r"<div\b", html)) - len(re.findall(r"</div>", html))
+
+
+class TestNoHollowSections(unittest.TestCase):
+    """An empty list must never draw a heading over an empty table.
+
+    A live brief showed "Large caps" as a header row with -1% / 0 / +1% axes and
+    nothing under it: the run had no large caps to report, and the renderer drew
+    the section anyway. A heading over an empty table reads as missing data. So:
+    research cards are omitted when they have nothing, and standing sections -
+    whose absence would be ambiguous - say "Nothing new." in one line.
+    """
+
+    @staticmethod
+    def headings(html):
+        """Section and sub-section headings, from the page's tags or the email's heading styles."""
+        found = re.findall(r"<h[23][^>]*>(.*?)</h[23]>", html, re.S)
+        found += re.findall(r"font-size:19px;font-weight:700;[^>]*>(.*?)</div>", html, re.S)
+        found += re.findall(r'margin:14px 0 6px">(.*?)</div>', html, re.S)
+        return [re.sub(r"<[^>]+>", "", h).strip() for h in found]
+
+    RESEARCH = {  # key emptied -> heading that must vanish from page and email, text heading
+        "STOCKS": ("Large caps", "LARGE CAPS"),
+        "JOBS_SECTORS": ("Jobs by sector", "Jobs by sector:"),
+        "JOURNAL_ITEMS": ("Research &amp; publications", "RESEARCH & PUBLICATIONS"),
+        "AI_ITEMS": ("AI &amp; programming", "AI & PROGRAMMING"),
+        "FUNDS": ("Vanguard funds", "Vanguard funds:"),
+    }
+
+    def test_each_empty_research_table_takes_its_heading_with_it(self):
+        for key, (heading, text_heading) in self.RESEARCH.items():
+            with self.subTest(key=key):
+                f, em, tx = render_all(payload(**{key: []}))
+                self.assertNotIn(heading, self.headings(f))
+                self.assertNotIn(heading, self.headings(em))
+                self.assertNotIn(text_heading, [l.strip() for l in tx.splitlines()])
+                full_f, full_em, full_tx = render_all(payload())
+                self.assertIn(heading, self.headings(full_f), "the sample must carry it for this test to mean anything")
+                self.assertIn(heading, self.headings(full_em))
+                self.assertTrue(any(l.strip().startswith(text_heading) for l in full_tx.splitlines()))
+
+    def test_no_output_draws_an_empty_table_on_an_all_empty_day(self):
+        f, em, tx = render_all(_all_empty())
+        self.assertEqual(re.findall(r"<tbody>\s*</tbody>", f), [], "page drew a table with no rows")
+        self.assertEqual(_header_only_tables(em), [], "email drew a header row with no rows under it")
+        self.assertNotIn("Journals scanned", f + em + tx)
+
+    def test_research_cards_are_omitted_entirely_when_they_have_nothing(self):
+        f, em, tx = render_all(_all_empty())
+        for heading in ("US market", "Large caps", "Cryptocurrency", "Fed &amp; labor market",
+                        "AI &amp; programming", "Research &amp; publications"):
+            self.assertNotIn(heading, self.headings(f))
+            self.assertNotIn(heading, self.headings(em))
+        self.assertNotIn('class="grid3"', f, "no research cards means no empty grid either")
+        for heading in ("US MARKET", "LARGE CAPS", "CRYPTOCURRENCY", "FED & LABOR MARKET"):
+            self.assertNotIn(heading, tx)
+
+    def test_standing_sections_say_nothing_new_instead_of_vanishing(self):
+        f, em, tx = render_all(_all_empty())
+        for out in (f, em, tx):
+            self.assertIn("Nothing needs you today.", out)
+            self.assertGreaterEqual(out.count("Nothing new."), 3,
+                                    "high priority, jobs and finances each say so")
+        for heading in ("High priority", "Relevant job posts", "Deposits &amp; finances",
+                        "VoIP voicemails", "USPS Informed Delivery", "Retail sales"):
+            self.assertIn(heading, f)
+            self.assertIn(heading, em)
+
+    def test_flights_without_legs_are_omitted_and_the_rest_renumber(self):
+        p = payload()
+        p["FLIGHTS"]["legs"] = []
+        f, em, tx = render_all(p)
+        self.assertNotIn("Upcoming flights", f + em)
+        self.assertNotIn("UPCOMING FLIGHTS", tx)
+        self.assertEqual(re.findall(r'<span class="num">(\d)\.', f), list("1234567"))
+
+    def test_the_fed_card_keeps_its_caption_when_only_the_jobs_table_goes(self):
+        p = payload(JOBS_SECTORS=[])
+        f, em, _ = render_all(p)
+        for out in (f, em):
+            self.assertIn("Fed &amp; labor market", out)
+            self.assertIn(e(p["MACRO_NOTE"]), out)
+
+    def test_every_page_card_closes_itself(self):
+        """The US market card used to stay open and swallow every card after it."""
+        for p in (payload(), payload(STOCKS=[]), payload(MKT_ROWS=[], FUNDS=[]), _all_empty()):
+            f, _, _ = render_all(p)
+            grid = f[f.find('<section><div class="grid3">'):]
+            grid = grid[:grid.find("</section>")] if 'class="grid3"' in f else ""
+            self.assertEqual(_div_depth(grid), 0, "a research card was left open")
+            self.assertEqual(_div_depth(f), 0)
+
+    def test_large_caps_alone_still_gets_a_card(self):
+        f, em, tx = render_all(payload(MKT_ROWS=[], FUNDS=[], MKT_BULLETS=[]))
+        self.assertIn("Large caps", f)
+        self.assertIn("Large caps", em)
+        self.assertIn("LARGE CAPS", tx)
+        self.assertNotIn("Vanguard funds", f + em)
+
+    def test_a_card_that_was_never_drawn_is_never_shed(self):
+        _, em, _ = render_all(payload(STOCKS=[], JOURNAL_ITEMS=[]), 30_000)
+        from brief.render import LAST_EMAIL_REPORT
+        self.assertTrue(LAST_EMAIL_REPORT["shed"], "the budget should have forced shedding")
+        for never in ("Large caps", "Research & publications"):
+            self.assertNotIn(never, LAST_EMAIL_REPORT["shed"])
+
+
+class TestStringsFollowTheData(unittest.TestCase):
+    def test_the_email_names_the_file_the_run_wrote(self):
+        _, em, _ = render_all(payload(), stamp="2026-10-02")
+        self.assertIn("morning-brief-2026-10-02.html", em)
+        self.assertNotIn("2026-09-07", em)
+
+    def test_the_cli_passes_its_date_through(self):
+        with tempfile.TemporaryDirectory() as d:
+            subprocess.run([sys.executable, "-m", "brief", "render", SAMPLE, "--out-dir", d,
+                            "--date", "2026-10-03"], cwd=ROOT, check=True, capture_output=True)
+            with open(os.path.join(d, "email.html"), encoding="utf-8") as fh:
+                self.assertIn("morning-brief-2026-10-03.html", fh.read())
+
+    def test_the_action_bar_subtitle_counts_urgent_rows(self):
+        quiet = payload(ACTIONS=[["info", "A note", "detail"]])
+        urgent = payload(ACTIONS=[["neg", "Bill due tonight", "detail"], ["neg", "Code expires", "d"],
+                                  ["info", "A note", "detail"]])
+        for doc in render_all(quiet)[:2]:
+            self.assertIn("nothing here is marked urgent", doc)
+            self.assertNotIn("tomorrow", doc)
+        for doc in render_all(urgent)[:2]:
+            self.assertIn("2 urgent before the next run", doc)
+
+    def test_voip_says_whether_the_line_is_alive_without_repeating_a_message(self):
+        p = payload()
+        f, em, tx = render_all(p)
+        for out in (f, em, tx):
+            self.assertEqual(out.count("Maple Street Dental"), 1, "the newest message printed twice")
+            self.assertIn("Last provider account notice", out)
+        p["VOIP"]["messages"] = []
+        f, em, tx = render_all(p)
+        for out in (f, em, tx):
+            self.assertEqual(out.count("Maple Street Dental"), 1,
+                             "on a quiet day the last message is the proof the line is alive")
 
 
 class TestAxisPathsNotInTheSample(unittest.TestCase):

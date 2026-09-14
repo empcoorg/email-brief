@@ -75,7 +75,7 @@ def _derive():
 
 
 def render_all(payload, email_budget=None, text_budget=None, full_url=None,
-               attached_scans=None):
+               attached_scans=None, stamp=None):
     """Bind a validated payload and render all three outputs.
 
     `email_budget` overrides EMAIL_BUDGET_BYTES for the email only. The send is
@@ -87,6 +87,9 @@ def render_all(payload, email_budget=None, text_budget=None, full_url=None,
     run. When given, it sits in the email's masthead, each mailpiece scan links
     to its figure on it, and it is the last line of the text copy. The page
     itself never needs it.
+
+    `stamp` is the date the standalone file is written under; the email names
+    that file, so the name has to be the real one.
 
     `attached_scans` is how many scan JPGs ride along in the send, when known.
     The email never claims a scan is attached unless it is: a run allowed to
@@ -104,6 +107,7 @@ def render_all(payload, email_budget=None, text_budget=None, full_url=None,
         raise ValueError(f"--full-url must be an http(s) address, got {full_url!r}")
     globals()["FULL_URL"] = full_url or ""
     globals()["ATTACHED_SCANS"] = attached_scans
+    globals()["FILE_STAMP"] = stamp or payload["MAST"].get("file_date") or "brief"
     globals().update(payload)
     globals()["BUILD"] = build_marker(payload)
     _derive()
@@ -490,14 +494,20 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
 <div class="stamp"><div class="lbl">Window covered</div><div class="val mono">{e(MAST['window'])}</div></div>
 <div class="stamp"><div class="lbl">Run stamp</div><div class="val mono">{e(MAST['run'])}</div></div>
 </div></header>""")
-    o.append('<section><h2>Needs you today <span class="sub">ranked; nothing expires before tomorrow\'s run</span></h2><div class="actions">')
+    o.append(f'<section><h2>Needs you today <span class="sub">{e(actions_sub())}</span></h2><div class="actions">')
     tagmap = {"warn": "Check", "neg": "Urgent", "info": "Note", "ok": "Clear"}
     for sev, t, d in ACTIONS:
         o.append(f'<div class="act {sev}"><div class="stripe"></div><div class="body"><div class="act-title"><span class="tag">{tagmap[sev]}</span>{e(t)}</div><div class="det">{e(d)}</div></div></div>')
+    if not ACTIONS:
+        o.append(f'<div class="nothing">{NOTHING_TODAY}</div>')
     o.append('</div></section>')
     # 4 high priority
     num = SectionNumber()
-    o.append(f'<section><h2><span class="num">{num()}.</span> High priority <span class="sub">ranked by severity \u00b7 act on these first</span></h2><div class="card"><div class="tbl-wrap"><table><thead><tr><th>What needs attention</th><th>Detail</th></tr></thead><tbody>')
+    o.append(f'<section><h2><span class="num">{num()}.</span> High priority <span class="sub">ranked by severity \u00b7 act on these first</span></h2><div class="card">')
+    if not HIPRI:
+        o.append(f'<div class="nothing">{NOTHING_NEW}</div>')
+    else:
+        o.append('<div class="tbl-wrap"><table><thead><tr><th>What needs attention</th><th>Detail</th></tr></thead><tbody>')
     for sev, t, items in HIPRI:
         detail = "<br>".join(lead_inner(i) for i in items)
         # the chip rides WITH the title rather than in a column of its own: a
@@ -505,60 +515,76 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
         o.append('<tr>' + tdl("What needs attention",
                               f'{sev_chip(sev)} <b class="c-{sev}">{e(t)}</b>')
                  + tdl("Detail", detail) + '</tr>')
-    o.append('</tbody></table></div></div></section>')
+    o.append(('</tbody></table></div>' if HIPRI else '') + '</div></section>')
     # 1 jobs
     o.append(f'<section><h2><span class="num">{num()}.</span> Relevant job posts <span class="sub">{e(JOBS_RANKED_NOTE)}</span></h2><div class="card">')
-    o.append('<h3 style="margin-top:0">Application status</h3><ul class="jobs">')
-    for t, m, d in JOBS_STATUS:
-        o.append(f'<li><span class="lead">{e(t)}</span> <span class="meta">— {e(m)}</span><br>{e(d)}</li>')
-    o.append('</ul><h3>Ranked leads</h3><div class="tbl-wrap"><table><thead><tr><th>Role</th><th>Company</th><th>Comp</th><th>Location</th><th>Source · received</th><th>Link</th></tr></thead><tbody>')
+    if not (JOBS_STATUS or JOBS_TOP or JOBS_OTHER):
+        o.append(f'<div class="nothing">{NOTHING_NEW}</div>')
+    if JOBS_STATUS:
+        o.append('<h3 style="margin-top:0">Application status</h3><ul class="jobs">')
+        for t, m, d in JOBS_STATUS:
+            o.append(f'<li><span class="lead">{e(t)}</span> <span class="meta">— {e(m)}</span><br>{e(d)}</li>')
+        o.append('</ul>')
+    if JOBS_TOP:
+        o.append('<h3>Ranked leads</h3><div class="tbl-wrap"><table><thead><tr><th>Role</th><th>Company</th><th>Comp</th><th>Location</th><th>Source · received</th><th>Link</th></tr></thead><tbody>')
     for r, c, comp, loc, src, tier, link in JOBS_TOP:
         fit, fcls = job_fit(tier); lcls, ltag = loc_tier(loc)
         role = f'<b>{e(r)}</b>' + (f'<span class="badge c-{fcls}">{fit}</span>' if fit else "")
         compc = f'<span class="c-pos">{e(comp)}</span>' if comp != "not stated" else f'<span class="muted">{e(comp)}</span>'
         locc = f'<span class="c-accent">{e(loc)}</span>' if lcls else e(loc)
         o.append('<tr>' + tdl("Role", role) + tdl("Company", e(c)) + tdl("Comp", compc, "mono") + tdl("Location", locc) + tdl("Source · received", e(src), "meta") + tdl("Link", f'<a href="{url(link)}">open</a>') + '</tr>')
-    o.append('</tbody></table></div><div class="legend"><span><b class="c-pos">Green</b> = comp stated</span><span><b class="c-accent">Teal</b> = ' + e(JOBS_TEAL_LABEL) + '</span><span><b class="c-warn">Amber</b> = deadline stated (none today)</span><span class="muted">Grey = not stated</span></div><div class="cap">' + e(JOBS_LEGEND_FIT) + '</div>')
-    o.append('<h3>Also seen (lower fit)</h3><ul class="jobs">')
-    for r, c, loc, link in JOBS_OTHER:
-        lcls, _ = loc_tier(loc)
-        locc = f'<span class="c-accent">{e(loc)}</span>' if lcls else f'<span class="meta">{e(loc)}</span>'
-        o.append(f'<li>{e(r)} — {e(c)} · {locc} · <a href="{url(link)}">link</a></li>')
-    o.append(f'</ul><p class="meta">{e(ALIGNERR)}</p><p class="meta">{e(JOBS_SKIPPED)}</p></div></section>')
+    if JOBS_TOP:
+        o.append('</tbody></table></div><div class="legend"><span><b class="c-pos">Green</b> = comp stated</span><span><b class="c-accent">Teal</b> = ' + e(JOBS_TEAL_LABEL) + '</span><span><b class="c-warn">Amber</b> = deadline stated (none today)</span><span class="muted">Grey = not stated</span></div><div class="cap">' + e(JOBS_LEGEND_FIT) + '</div>')
+    if JOBS_OTHER:
+        o.append('<h3>Also seen (lower fit)</h3><ul class="jobs">')
+        for r, c, loc, link in JOBS_OTHER:
+            lcls, _ = loc_tier(loc)
+            locc = f'<span class="c-accent">{e(loc)}</span>' if lcls else f'<span class="meta">{e(loc)}</span>'
+            o.append(f'<li>{e(r)} — {e(c)} · {locc} · <a href="{url(link)}">link</a></li>')
+        o.append('</ul>')
+    o.append("".join(f'<p class="meta">{e(x)}</p>' for x in (ALIGNERR, JOBS_SKIPPED) if x) + '</div></section>')
     # 2 finances
-    o.append(f'<section><h2><span class="num">{num()}.</span> Deposits &amp; finances</h2><div class="card"><div class="tiles">')
-    for l, v, d in FIN_SUMMARY:
-        o.append(f'<div class="tile"><div class="lbl">{e(l)}</div><div class="v mono">{e(v)}</div><div class="d">{e(d)}</div></div>')
-    o.append('</div><h3 style="margin-top:0">Money movements (outside → you / you → outside)</h3><div class="tbl-wrap"><table><thead><tr><th>When</th><th>Payee / source</th><th>Detail</th><th>Direction</th><th style="text-align:right">Amount</th><th>{head_html}{axis_html}</th></tr></thead><tbody>'.format(head_html=money_head(), axis_html=money_axis()))
-    for when, payee, det, amt, cur, usd, dirw, sign in FIN_MOVES:
-        cls = "dir-" + money_side(dirw, sign)[1]
-        amt_s = money_amount(amt, cur, usd, sign)
-        o.append('<tr>' + tdl("When", e(when), "mono") + tdl("Payee / source", e(payee)) + tdl("Detail", detail_html_file(det)) + tdl("Direction", f'<span class="{cls}">{e(sign)} {e(dirw)}</span>') + tdl("Amount", f'<span class="{cls}">{amt_s}</span>', "num mono") + tdl("Out ← 0 → In, USD", money_bar(usd, dirw, sign)) + '</tr>')
-    o.append(f'</tbody></table></div><div class="daxis-foot">{money_head()}{money_axis()}<div class="meta">{money_axis_note()}</div></div><div class="cap">Bar axis, in USD: {money_axis_note()}. Amounts are shown in their original currency; bars are plotted from the USD equivalent. Money in = green on the right, out / past due = red on the left, no direction = neutral grey straddling zero (magnitude only — an internal or unclassified move has no side). The sign and direction word state it too.</div>')
-    o.append('<h3>Transfers between your own accounts</h3><div class="nothing">' + e(FIN_INTERNAL) + '</div><h3>Bills, statements &amp; notices</h3><ul>')
-    for n in FIN_NOTES: o.append(li_lead(n))
-    o.append('</ul></div></section>')
+    o.append(f'<section><h2><span class="num">{num()}.</span> Deposits &amp; finances</h2><div class="card">')
+    if not (FIN_SUMMARY or FIN_MOVES or FIN_NOTES):
+        o.append(f'<div class="nothing">{NOTHING_NEW}</div>')
+    if FIN_SUMMARY:
+        o.append('<div class="tiles">' + "".join(f'<div class="tile"><div class="lbl">{e(l)}</div><div class="v mono">{e(v)}</div><div class="d">{e(d)}</div></div>' for l, v, d in FIN_SUMMARY) + '</div>')
+    if FIN_MOVES:
+        o.append('<h3 style="margin-top:0">Money movements (outside → you / you → outside)</h3><div class="tbl-wrap"><table><thead><tr><th>When</th><th>Payee / source</th><th>Detail</th><th>Direction</th><th style="text-align:right">Amount</th><th>{head_html}{axis_html}</th></tr></thead><tbody>'.format(head_html=money_head(), axis_html=money_axis()))
+        for when, payee, det, amt, cur, usd, dirw, sign in FIN_MOVES:
+            cls = "dir-" + money_side(dirw, sign)[1]
+            amt_s = money_amount(amt, cur, usd, sign)
+            o.append('<tr>' + tdl("When", e(when), "mono") + tdl("Payee / source", e(payee)) + tdl("Detail", detail_html_file(det)) + tdl("Direction", f'<span class="{cls}">{e(sign)} {e(dirw)}</span>') + tdl("Amount", f'<span class="{cls}">{amt_s}</span>', "num mono") + tdl("Out ← 0 → In, USD", money_bar(usd, dirw, sign)) + '</tr>')
+        o.append(f'</tbody></table></div><div class="daxis-foot">{money_head()}{money_axis()}<div class="meta">{money_axis_note()}</div></div><div class="cap">Bar axis, in USD: {money_axis_note()}. Amounts are shown in their original currency; bars are plotted from the USD equivalent. Money in = green on the right, out / past due = red on the left, no direction = neutral grey straddling zero (magnitude only — an internal or unclassified move has no side). The sign and direction word state it too.</div>')
+    if FIN_INTERNAL:
+        o.append('<h3>Transfers between your own accounts</h3><div class="nothing">' + e(FIN_INTERNAL) + '</div>')
+    if FIN_NOTES:
+        o.append('<h3>Bills, statements &amp; notices</h3><ul>' + "".join(li_lead(n) for n in FIN_NOTES) + '</ul>')
+    o.append('</div></section>')
     # 3 voip
     # 4 upcoming flights — persists until the trip date passes
-    o.append(f'<section><h2><span class="num">{num()}.</span> Upcoming flights <span class="sub">carried forward until the trip date passes</span></h2><div class="card">')
-    o.append(f'<p><span class="lead">{e(FLIGHTS["airline"])}, confirmation {e(FLIGHTS["conf"])}</span> — {e(FLIGHTS["pax"])}</p>')
-    o.append(f'<p class="meta">{e(FLIGHTS["booked"])}</p>')
-    # The on-time column exists only when at least one leg actually has a
-    # record. A column of "not available" apologies costs a third of the table
-    # width and tells the reader nothing they can act on.
-    show_stats = any(g.get("stats") for g in FLIGHTS["legs"])
-    hdr = '<th>Date · flight</th><th>Departs (airport local)</th><th>Arrives (airport local)</th>'
-    if show_stats:
-        hdr += '<th>Recent on-time record</th>'
-    o.append(f'<div class="tbl-wrap"><table><thead><tr>{hdr}</tr></thead><tbody>')
-    for g in FLIGHTS["legs"]:
-        row = (tdl("Date · flight", f'{e(g["date"])}<br><a href="{url(g["fa"])}" class="mono">{e(g["flight"])}</a>')
-               + tdl("Departs (airport local)", f'{e(g["frm"])}<br><span class="mono">{e(g["dep"])}</span>')
-               + tdl("Arrives (airport local)", f'{e(g["to"])}<br><span class="mono">{e(g["arr"])}</span>'))
+    # Omitted with no legs, like package tracking: the section exists to carry a
+    # known flight forward, and without one there is nothing to carry.
+    if FLIGHTS["legs"]:
+        o.append(f'<section><h2><span class="num">{num()}.</span> Upcoming flights <span class="sub">carried forward until the trip date passes</span></h2><div class="card">')
+        o.append(f'<p><span class="lead">{e(FLIGHTS["airline"])}, confirmation {e(FLIGHTS["conf"])}</span> — {e(FLIGHTS["pax"])}</p>')
+        o.append(f'<p class="meta">{e(FLIGHTS["booked"])}</p>')
+        # The on-time column exists only when at least one leg actually has a
+        # record. A column of "not available" apologies costs a third of the table
+        # width and tells the reader nothing they can act on.
+        show_stats = any(g.get("stats") for g in FLIGHTS["legs"])
+        hdr = '<th>Date · flight</th><th>Departs (airport local)</th><th>Arrives (airport local)</th>'
         if show_stats:
-            row += tdl("Recent on-time record", e(g.get("stats") or "not available"), "meta")
-        o.append('<tr>' + row + '</tr>')
-    o.append(f'</tbody></table></div><div class="cap">{e(FLIGHTS["note"])}</div></div></section>')
+            hdr += '<th>Recent on-time record</th>'
+        o.append(f'<div class="tbl-wrap"><table><thead><tr>{hdr}</tr></thead><tbody>')
+        for g in FLIGHTS["legs"]:
+            row = (tdl("Date · flight", f'{e(g["date"])}<br><a href="{url(g["fa"])}" class="mono">{e(g["flight"])}</a>')
+                   + tdl("Departs (airport local)", f'{e(g["frm"])}<br><span class="mono">{e(g["dep"])}</span>')
+                   + tdl("Arrives (airport local)", f'{e(g["to"])}<br><span class="mono">{e(g["arr"])}</span>'))
+            if show_stats:
+                row += tdl("Recent on-time record", e(g.get("stats") or "not available"), "meta")
+            o.append('<tr>' + row + '</tr>')
+        o.append(f'</tbody></table></div><div class="cap">{e(FLIGHTS["note"])}</div></div></section>')
     o.append(f'<section><h2><span class="num">{num()}.</span> VoIP voicemails &amp; texts <span class="sub">provider senders + Google Voice, Twilio, OpenPhone, Grasshopper, RingCentral, Dialpad</span></h2><div class="card"><div class="nothing">{e(VOIP["headline"])}</div>')
     if VOIP["messages"]:
         o.append('<div class="tbl-wrap"><table><thead><tr><th>When \u00b7 from</th><th>To \u00b7 type</th><th>Message</th></tr></thead><tbody>')
@@ -567,15 +593,21 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
                      + tdl("To \u00b7 type", f'<span class="mono">{e(to)}</span><br><span class="meta">{e(kind)}</span>')
                      + tdl("Message", e(text)) + '</tr>')
         o.append('</tbody></table></div>')
-    if VOIP["notes"]:
-        o.append("<ul>" + "".join(li_lead(n) for n in VOIP["notes"]) + "</ul>")
+    # last_msg and last_acct answer "is the line actually alive?" on a quiet
+    # day, which is exactly the day the section is otherwise empty. Only the
+    # plain-text body carried them; the file and the email dropped them.
+    if voip_tail():
+        o.append("<ul>" + "".join(li_lead(n) for n in voip_tail()) + "</ul>")
     o.append('</div></section>')
     # 5 USPS
     o.append(f'<section><h2><span class="num">{num()}.</span> USPS Informed Delivery <span class="sub">mail addressed to the intended recipient only; everyone else counted, never named</span></h2><div class="card"><div class="nothing">{e(USPS["headline"])}</div>')
-    o.append('<div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Sender</th><th>Addressee (as printed)</th><th>Type / notes</th></tr></thead><tbody>')
-    for d_, s_, a_, ty in USPS["pieces"]:
-        o.append('<tr>' + tdl("Date", e(d_), "mono") + tdl("Sender", e(s_)) + tdl("Addressee (as printed)", e(a_), "mono") + tdl("Type / notes", e(ty), "meta") + '</tr>')
-    o.append('</tbody></table></div>')
+    # The headline already says how many pieces there were; an empty table
+    # under it would only repeat that as a header with no rows.
+    if USPS["pieces"]:
+        o.append('<div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Sender</th><th>Addressee (as printed)</th><th>Type / notes</th></tr></thead><tbody>')
+        for d_, s_, a_, ty in USPS["pieces"]:
+            o.append('<tr>' + tdl("Date", e(d_), "mono") + tdl("Sender", e(s_)) + tdl("Addressee (as printed)", e(a_), "mono") + tdl("Type / notes", e(ty), "meta") + '</tr>')
+        o.append('</tbody></table></div>')
     for n, (uri, cap_) in enumerate(USPS_SCANS, 1):
         o.append(f'<figure class="scanfig" id="{scan_anchor(n)}"><img src="{url(uri)}" alt="Full mailpiece scan (mock)"><figcaption>{e(cap_)}</figcaption></figure>')
     o.append(f'<ul>{li_lead(USPS["counts"])}</ul><p class="meta">{e(USPS["note"])}</p></div></section>')
@@ -588,67 +620,95 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
             done = "dir-pos" if "deliver" in st.lower() else ""
             o.append('<tr>' + tdl("Carrier", e(car)) + tdl("Tracking", e(trk), "mono") + tdl("Sender \u00b7 item", e(item)) + tdl("Recipient", e(rcpt)) + tdl("Status", f'<span class="{done}">{e(st)}</span>', "meta") + tdl("Est. arrival", e(eta), "mono") + '</tr>')
         o.append(f'</tbody></table></div><p class="meta">{e(PKG_NOTE)}</p></div></section>')
-    o.append('<section><div class="grid3">')
-    o.append(f'<div class="card wide"><h2>US market</h2><div class="tbl-wrap"><table><thead><tr><th>Index</th><th style="text-align:right">Close</th><th>1D{axis_div(MKT_24)}</th><th>1W{axis_div(MKT_7D)}</th><th>YTD{axis_div(MKT_YTD)}</th></tr></thead><tbody>')
-    for n, c, p1, v1, p7, v7, py, vy in MKT_ROWS:
-        o.append('<tr>' + tdl("Index", e(n), "mono") + tdl("Close", e(c), "num mono")
-                 + tdl("1D", horizon_cell_file(p1, v1, MKT_24, "pts"))
-                 + tdl("1W", horizon_cell_file(p7, v7, MKT_7D, "pts"))
-                 + tdl("YTD", horizon_cell_file(py, vy, MKT_YTD, "pts")) + '</tr>')
-    o.append(f'</tbody></table></div>{axis_foot(MKT_24, "1D move, % of prior close")}{axis_foot(MKT_7D, "1W move, %")}{axis_foot(MKT_YTD, "YTD move, %")}<div class="cap">1D = close → close vs the prior session; 1W = trailing 5 sessions (one trading week); YTD = since the last close of the previous year. All in index points and %. {axis_note(MKT_24, "1D axis")}; {axis_note(MKT_7D, "1W axis")}; {axis_note(MKT_YTD, "YTD axis")}.</div>')
-    o.append(f'<h3>Vanguard funds</h3><div class="tbl-wrap"><table><thead><tr><th>Fund</th><th style="text-align:right">NAV</th><th>1D{axis_div(FUND_1D)}</th><th>1W{axis_div(FUND_1W)}</th><th>YTD{axis_div(FUND_YTD)}</th><th>As of</th></tr></thead><tbody>')
-    for tk, nm, nav, a1, v1, a7, v7, ay, vy, asof, note in FUNDS:
-        o.append('<tr>' + tdl("Fund", f'<span class="lead">{e(tk)}</span><br><span class="meta">{e(nm)}</span>', "mono")
-                 + tdl("NAV", e(nav), "num mono")
-                 + tdl("1D", horizon_cell_file(a1, v1, FUND_1D))
-                 + tdl("1W", horizon_cell_file(a7, v7, FUND_1W))
-                 + tdl("YTD", horizon_cell_file(ay, vy, FUND_YTD))
-                 + tdl("As of", f'<span class="meta">{e(asof)}</span>') + '</tr>')
-    o.append(f'</tbody></table></div>{axis_foot(FUND_1D, "1D NAV change, %")}{axis_foot(FUND_1W, "1W NAV change, %")}{axis_foot(FUND_YTD, "YTD NAV change, %")}<div class="cap">Change from the prior published NAV (1D), over one trading week (1W), and since the previous year-end (YTD) - each in $ and %. {axis_note(FUND_1D, "1D axis")}; {axis_note(FUND_1W, "1W axis")}; {axis_note(FUND_YTD, "YTD axis")}. ' + e(" ".join(f"{tk}: {note}" for tk, nm, nav, a1, v1, a7, v7, ay, vy, asof, note in FUNDS)) + '</div>')
-    o.append(f'<h3>Large caps</h3><div class="tbl-wrap"><table><thead><tr><th>Ticker</th><th style="text-align:right">Price</th><th>1D{axis_div(STK_1D)}</th><th>1W{axis_div(STK_1W)}</th><th>YTD{axis_div(STK_YTD)}</th></tr></thead><tbody>')
-    for tk, pr, a1, v1, a7, v7, ay, vy in STOCKS:
-        o.append('<tr>' + tdl("Ticker", f'<span class="lead">{e(tk)}</span>', "mono") + tdl("Price", e(pr), "num mono")
-                 + tdl("1D", horizon_cell_file(a1, v1, STK_1D))
-                 + tdl("1W", horizon_cell_file(a7, v7, STK_1W))
-                 + tdl("YTD", horizon_cell_file(ay, vy, STK_YTD)) + '</tr>')
-    o.append(f'</tbody></table></div>{axis_foot(STK_1D, "1D move, %")}{axis_foot(STK_1W, "1W move, %")}{axis_foot(STK_YTD, "YTD move, %")}<div class="cap">Same horizons as the indexes, each in $ per share and %. {axis_note(STK_1D, "1D axis")}; {axis_note(STK_1W, "1W axis")}; {axis_note(STK_YTD, "YTD axis")}.</div>')
-    o.append(f'<div class="card wide"><h2>Cryptocurrency</h2><div class="tbl-wrap"><table><thead><tr><th>Asset</th><th style="text-align:right">Price</th><th>1D{axis_div(CRY_24)}</th><th>1W{axis_div(CRY_7D)}</th><th>YTD{axis_div(CRY_YTD)}</th></tr></thead><tbody>')
-    for n, pr, v1, a1, v7, a7, vy, ay in CRYPTO_ROWS:
-        o.append('<tr>' + tdl("Asset", f'<span class="lead">{e(n)}</span>', "mono") + tdl("Price", e(pr), "num mono")
-                 + tdl("1D", horizon_cell_file(a1, v1, CRY_24, reverse=True))
-                 + tdl("1W", horizon_cell_file(a7, v7, CRY_7D, reverse=True))
-                 + tdl("YTD", horizon_cell_file(ay, vy, CRY_YTD, reverse=True)) + '</tr>')
-    o.append(f'</tbody></table></div>{axis_foot(CRY_24, "1D change, %")}{axis_foot(CRY_7D, "1W change, %")}{axis_foot(CRY_YTD, "YTD change, %")}<div class="cap">1D = rolling 24 h; 1W = rolling 7 days; YTD = since the last price of the previous year - crypto trades continuously, so there is no daily close and every window is measured back from the quote time. Each given as % and $. {axis_note(CRY_24, "1D axis")}; {axis_note(CRY_7D, "1W axis")}; {axis_note(CRY_YTD, "YTD axis")}. {e(CRYPTO_NOTE)}</div><ul>')
-    for b in CRYPTO_BULLETS: o.append(li_lead(b))
-    o.append('</ul></div>')
-    o.append('<div class="card wide"><h2>Fed &amp; labor market</h2><div class="tbl-wrap"><table><thead><tr><th>Indicator</th><th>Latest</th><th>Change · context</th><th>As of</th></tr></thead><tbody>')
-    for name, latest, context, asof in MACRO_ROWS:
-        o.append('<tr>' + tdl("Indicator", f'<span class="lead">{e(name)}</span>')
-                 + tdl("Latest", f'<b class="mono">{e(latest)}</b>')
-                 + tdl("Change · context", e(context))
-                 + tdl("As of", f'<span class="meta">{e(asof)}</span>') + '</tr>')
-    o.append('</tbody></table></div>')
-    o.append('<h3>Jobs by sector</h3><div class="tbl-wrap"><table><thead><tr><th>Sector</th><th style="text-align:right">Payrolls</th><th>Context</th><th>As of</th></tr></thead><tbody>')
-    for sector, change, context, asof in JOBS_SECTORS:
-        cls = "dir-pos" if not str(change).lstrip().startswith(("\u2212", "-")) else "dir-neg"
-        o.append('<tr>' + tdl("Sector", e(sector))
-                 + tdl("Payrolls", f'<span class="{cls} mono">{e(change)}</span>', "num")
-                 + tdl("Context", e(context))
-                 + tdl("As of", f'<span class="meta">{e(asof)}</span>') + '</tr>')
-    o.append(f'</tbody></table></div><div class="cap">{e(MACRO_NOTE)}</div></div>')
-    o.append('<div class="card"><h2>AI &amp; programming</h2><div class="tbl-wrap"><table><thead><tr><th>Item</th><th>What it means</th><th>Source</th></tr></thead><tbody>')
-    for t, d, link in AI_ITEMS:
-        o.append('<tr>' + tdl("Item", f'<span class="lead">{e(t)}</span>')
-                 + tdl("What it means", e(d))
-                 + tdl("Source", f'<a href="{url(link)}">open</a>') + '</tr>')
-    o.append('</tbody></table></div></div>')
-    o.append('<div class="card"><h2>Research &amp; publications</h2><div class="tbl-wrap"><table><thead><tr><th>Journal \u00b7 date</th><th>Paper</th><th>Takeaway</th></tr></thead><tbody>')
-    for j, t, au, d, tk, link in JOURNAL_ITEMS:
-        o.append('<tr>' + tdl("Journal \u00b7 date", f'<span class="lead">{e(j)}</span><br><span class="meta">{e(d)}</span>')
-                 + tdl("Paper", f'<a href="{url(link)}"><b>{e(t)}</b></a><br><span class="meta">{e(au)}</span>')
-                 + tdl("Takeaway", e(tk)) + '</tr>')
-    o.append(f'</tbody></table></div><div class="cap">Journals scanned: {e(JOURNALS)}; items newly published since the previous run.</div></div>')
-    o.append('</div></section>')
+    # Research cards are conditional: a card is drawn only when it has something
+    # to show, and within a card each table only when it has rows. A heading over
+    # an empty table reads as missing data, not as a quiet day. Every card also
+    # closes itself - the market card used to stay open and swallow the cards
+    # after it. Every card spans the full grid width: that is how they have
+    # always looked, because the swallowed cards inherited the market card's
+    # width, and a one-third column squeezes the AI and journal tables unreadably.
+    research = []
+    if MKT_ROWS or FUNDS or STOCKS:
+        research.append('<div class="card wide"><h2>US market</h2>')
+        if MKT_ROWS:
+            research.append('<div class="tbl-wrap"><table><thead><tr><th>Index</th><th style="text-align:right">Close</th><th>1D{0}</th><th>1W{1}</th><th>YTD{2}</th></tr></thead><tbody>'.format(axis_div(MKT_24), axis_div(MKT_7D), axis_div(MKT_YTD)))
+            for n, c, p1, v1, p7, v7, py, vy in MKT_ROWS:
+                research.append('<tr>' + tdl("Index", e(n), "mono") + tdl("Close", e(c), "num mono")
+                                + tdl("1D", horizon_cell_file(p1, v1, MKT_24, "pts"))
+                                + tdl("1W", horizon_cell_file(p7, v7, MKT_7D, "pts"))
+                                + tdl("YTD", horizon_cell_file(py, vy, MKT_YTD, "pts")) + '</tr>')
+            research.append(f'</tbody></table></div>{axis_foot(MKT_24, "1D move, % of prior close")}{axis_foot(MKT_7D, "1W move, %")}{axis_foot(MKT_YTD, "YTD move, %")}<div class="cap">1D = close → close vs the prior session; 1W = trailing 5 sessions (one trading week); YTD = since the last close of the previous year. All in index points and %. {axis_note(MKT_24, "1D axis")}; {axis_note(MKT_7D, "1W axis")}; {axis_note(MKT_YTD, "YTD axis")}.</div>')
+        if FUNDS:
+            research.append(f'<h3>Vanguard funds</h3><div class="tbl-wrap"><table><thead><tr><th>Fund</th><th style="text-align:right">NAV</th><th>1D{axis_div(FUND_1D)}</th><th>1W{axis_div(FUND_1W)}</th><th>YTD{axis_div(FUND_YTD)}</th><th>As of</th></tr></thead><tbody>')
+            for tk, nm, nav, a1, v1, a7, v7, ay, vy, asof, note in FUNDS:
+                research.append('<tr>' + tdl("Fund", f'<span class="lead">{e(tk)}</span><br><span class="meta">{e(nm)}</span>', "mono")
+                                + tdl("NAV", e(nav), "num mono")
+                                + tdl("1D", horizon_cell_file(a1, v1, FUND_1D))
+                                + tdl("1W", horizon_cell_file(a7, v7, FUND_1W))
+                                + tdl("YTD", horizon_cell_file(ay, vy, FUND_YTD))
+                                + tdl("As of", f'<span class="meta">{e(asof)}</span>') + '</tr>')
+            research.append(f'</tbody></table></div>{axis_foot(FUND_1D, "1D NAV change, %")}{axis_foot(FUND_1W, "1W NAV change, %")}{axis_foot(FUND_YTD, "YTD NAV change, %")}<div class="cap">Change from the prior published NAV (1D), over one trading week (1W), and since the previous year-end (YTD) - each in $ and %. {axis_note(FUND_1D, "1D axis")}; {axis_note(FUND_1W, "1W axis")}; {axis_note(FUND_YTD, "YTD axis")}. ' + e(" ".join(f"{tk}: {note}" for tk, nm, nav, a1, v1, a7, v7, ay, vy, asof, note in FUNDS)) + '</div>')
+        if STOCKS:
+            research.append(f'<h3>Large caps</h3><div class="tbl-wrap"><table><thead><tr><th>Ticker</th><th style="text-align:right">Price</th><th>1D{axis_div(STK_1D)}</th><th>1W{axis_div(STK_1W)}</th><th>YTD{axis_div(STK_YTD)}</th></tr></thead><tbody>')
+            for tk, pr, a1, v1, a7, v7, ay, vy in STOCKS:
+                research.append('<tr>' + tdl("Ticker", f'<span class="lead">{e(tk)}</span>', "mono") + tdl("Price", e(pr), "num mono")
+                                + tdl("1D", horizon_cell_file(a1, v1, STK_1D))
+                                + tdl("1W", horizon_cell_file(a7, v7, STK_1W))
+                                + tdl("YTD", horizon_cell_file(ay, vy, STK_YTD)) + '</tr>')
+            research.append(f'</tbody></table></div>{axis_foot(STK_1D, "1D move, %")}{axis_foot(STK_1W, "1W move, %")}{axis_foot(STK_YTD, "YTD move, %")}<div class="cap">Same horizons as the indexes, each in $ per share and %. {axis_note(STK_1D, "1D axis")}; {axis_note(STK_1W, "1W axis")}; {axis_note(STK_YTD, "YTD axis")}.</div>')
+        research.append('</div>')
+    if CRYPTO_ROWS or CRYPTO_BULLETS:
+        research.append('<div class="card wide"><h2>Cryptocurrency</h2>')
+        if CRYPTO_ROWS:
+            research.append(f'<div class="tbl-wrap"><table><thead><tr><th>Asset</th><th style="text-align:right">Price</th><th>1D{axis_div(CRY_24)}</th><th>1W{axis_div(CRY_7D)}</th><th>YTD{axis_div(CRY_YTD)}</th></tr></thead><tbody>')
+            for n, pr, v1, a1, v7, a7, vy, ay in CRYPTO_ROWS:
+                research.append('<tr>' + tdl("Asset", f'<span class="lead">{e(n)}</span>', "mono") + tdl("Price", e(pr), "num mono")
+                                + tdl("1D", horizon_cell_file(a1, v1, CRY_24, reverse=True))
+                                + tdl("1W", horizon_cell_file(a7, v7, CRY_7D, reverse=True))
+                                + tdl("YTD", horizon_cell_file(ay, vy, CRY_YTD, reverse=True)) + '</tr>')
+            research.append(f'</tbody></table></div>{axis_foot(CRY_24, "1D change, %")}{axis_foot(CRY_7D, "1W change, %")}{axis_foot(CRY_YTD, "YTD change, %")}<div class="cap">1D = rolling 24 h; 1W = rolling 7 days; YTD = since the last price of the previous year - crypto trades continuously, so there is no daily close and every window is measured back from the quote time. Each given as % and $. {axis_note(CRY_24, "1D axis")}; {axis_note(CRY_7D, "1W axis")}; {axis_note(CRY_YTD, "YTD axis")}. {e(CRYPTO_NOTE)}</div>')
+        if CRYPTO_BULLETS:
+            research.append('<ul>' + "".join(li_lead(b) for b in CRYPTO_BULLETS) + '</ul>')
+        research.append('</div>')
+    if MACRO_ROWS or JOBS_SECTORS:
+        research.append('<div class="card wide"><h2>Fed &amp; labor market</h2>')
+        if MACRO_ROWS:
+            research.append('<div class="tbl-wrap"><table><thead><tr><th>Indicator</th><th>Latest</th><th>Change · context</th><th>As of</th></tr></thead><tbody>')
+            for name, latest, context, asof in MACRO_ROWS:
+                research.append('<tr>' + tdl("Indicator", f'<span class="lead">{e(name)}</span>')
+                                + tdl("Latest", f'<b class="mono">{e(latest)}</b>')
+                                + tdl("Change · context", e(context))
+                                + tdl("As of", f'<span class="meta">{e(asof)}</span>') + '</tr>')
+            research.append('</tbody></table></div>')
+        if JOBS_SECTORS:
+            research.append('<h3>Jobs by sector</h3><div class="tbl-wrap"><table><thead><tr><th>Sector</th><th style="text-align:right">Payrolls</th><th>Context</th><th>As of</th></tr></thead><tbody>')
+            for sector, change, context, asof in JOBS_SECTORS:
+                cls = "dir-pos" if not str(change).lstrip().startswith(("\u2212", "-")) else "dir-neg"
+                research.append('<tr>' + tdl("Sector", e(sector))
+                                + tdl("Payrolls", f'<span class="{cls} mono">{e(change)}</span>', "num")
+                                + tdl("Context", e(context))
+                                + tdl("As of", f'<span class="meta">{e(asof)}</span>') + '</tr>')
+            research.append('</tbody></table></div>')
+        research.append(f'<div class="cap">{e(MACRO_NOTE)}</div></div>')
+    if AI_ITEMS:
+        research.append('<div class="card wide"><h2>AI &amp; programming</h2><div class="tbl-wrap"><table><thead><tr><th>Item</th><th>What it means</th><th>Source</th></tr></thead><tbody>')
+        for t, d, link in AI_ITEMS:
+            research.append('<tr>' + tdl("Item", f'<span class="lead">{e(t)}</span>')
+                            + tdl("What it means", e(d))
+                            + tdl("Source", f'<a href="{url(link)}">open</a>') + '</tr>')
+        research.append('</tbody></table></div></div>')
+    # No papers means no card - it used to print "Journals scanned: ;".
+    if JOURNAL_ITEMS:
+        research.append('<div class="card wide"><h2>Research &amp; publications</h2><div class="tbl-wrap"><table><thead><tr><th>Journal \u00b7 date</th><th>Paper</th><th>Takeaway</th></tr></thead><tbody>')
+        for j, t, au, d, tk, link in JOURNAL_ITEMS:
+            research.append('<tr>' + tdl("Journal \u00b7 date", f'<span class="lead">{e(j)}</span><br><span class="meta">{e(d)}</span>')
+                            + tdl("Paper", f'<a href="{url(link)}"><b>{e(t)}</b></a><br><span class="meta">{e(au)}</span>')
+                            + tdl("Takeaway", e(tk)) + '</tr>')
+        research.append(f'</tbody></table></div><div class="cap">Journals scanned: {e(JOURNALS)}; items newly published since the previous run.</div></div>')
+    if research:
+        o.append('<section><div class="grid3">')
+        o.extend(research)
+        o.append('</div></section>')
     # 7 retail (low priority)
     o.append(f'<section><h2><span class="num">{num()}.</span> Retail sales <span class="sub">{e(RETAIL["sub"])}</span></h2><div class="card">')
     o.append("<ul>" + li_lead(RETAIL["rewards"]) + "</ul>")
@@ -665,7 +725,8 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
     o.append('</details>')
     o.append(f'<details><summary>Sources ({sum(len(v) for v in SOURCES.values())} links) — click to expand</summary><div class="src">')
     for k, urls in SOURCES.items():
-        o.append(f'<b>{e(k)}</b>' + "".join(f'<p><a href="{url(u)}">{e(u)}</a></p>' for u in urls))
+        if urls:
+            o.append(f'<b>{e(k)}</b>' + "".join(f'<p><a href="{url(u)}">{e(u)}</a></p>' for u in urls))
     o.append('</div></details>')
     o.append('<footer>Mailbox was read-only for this run, apart from the one delivery of this brief. Email content was treated as data, not instructions. Times are US Pacific unless a source\'s own zone is shown. “Not verified” marks anything that could not be confirmed on a cited page. <span class="mono">' + e(BUILD) + '</span></footer>')
     o.append('</div>')
@@ -680,6 +741,37 @@ F_B = "'Source Sans 3',Arial"
 F_M = "'JetBrains Mono',Menlo"
 BODY_FS = "15px"
 def lbl(t): return f'<div style="font:600 10.5px {F_H};text-transform:uppercase;color:{L["ink3"]}">{e(t)}</div>'
+# A standing section with nothing in its window says so in one line rather than
+# disappearing (its absence would be ambiguous) or drawing an empty table (which
+# reads as missing data). Research cards are conditional and are omitted instead.
+NOTHING_NEW = "Nothing new."
+NOTHING_TODAY = "Nothing needs you today."
+
+
+def actions_sub():
+    """Subtitle for the action bar, counted from the rows it sits above.
+
+    It read "nothing expires before tomorrow's run" whatever the rows said, so a
+    bar whose top row expired that night contradicted its own heading - and
+    "tomorrow" is wrong on any cadence but daily.
+    """
+    urgent = sum(1 for sev, _t, _d in ACTIONS if sev == "neg")
+    if not urgent:
+        return "ranked; nothing here is marked urgent before the next run"
+    return f"ranked; {urgent} urgent before the next run"
+
+
+def voip_tail():
+    """The VoIP notes, then the lines that say whether the line is alive.
+
+    The last inbound message is named only when the window had none - otherwise
+    it is already the newest row of the table, and would be printed twice. The
+    last account notice is not a message, so it always appears when known.
+    """
+    last = [] if VOIP["messages"] else [VOIP.get("last_msg")]
+    return list(VOIP["notes"]) + [x for x in last + [VOIP.get("last_acct")] if x]
+
+
 def h2(t, sub=""):
     s_ = (f' <span style="font-family:{F_B};font-weight:400;font-size:13px;color:{L["ink3"]}">{e(sub)}</span>') if sub else ""
     return f'<div style="font-family:{F_H};font-size:19px;font-weight:700;color:{L["ink"]};margin:0 0 10px">{t}{s_}</div>'
@@ -788,9 +880,15 @@ def cap(t): return f'<div style="font-size:12px;color:{L["ink3"]};padding:6px 2p
 def stripe_row(color, title_html, det_html):
     return f'<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid {L["line"]};border-left:6px solid {color};margin-top:6px"><tr><td style="padding:10px 12px"><div style="font:600 15px {F_H};color:{L["ink"]}">{title_html}</div><div style="font-size:14px;color:{L["ink2"]};margin-top:2px">{det_html}</div></td></tr></table>'
 
-LAYOUT_NOTE = ("Layout: one fluid layout for phone and desktop (the mail path strips stylesheets, so the email cannot adapt itself). "
-               "The standalone file <b>morning-brief-2026-09-07.html</b> — full desktop tables, mobile cards, dark mode, collapsible sources, "
-               "and embedded USPS scans — is delivered in the Claude session alongside this email.")
+def layout_note():
+    """Names the standalone file the run actually wrote.
+
+    It was a frozen literal, so every brief for weeks told the reader to open a
+    file named for a date long past.
+    """
+    return ("Layout: one fluid layout for phone and desktop (the mail path strips stylesheets, so the email cannot adapt itself). "
+            f"The standalone file <b>morning-brief-{e(FILE_STAMP)}.html</b> — full desktop tables, mobile cards, dark mode, collapsible sources, "
+            "and embedded USPS scans — is delivered in the Claude session alongside this email.")
 
 # Gmail clips a message past ~102 KB and its sanitizer inflates the HTML ~12%,
 # so the body is budgeted at 85 KB. When the brief outgrows that, the EMAIL sheds
@@ -1059,12 +1157,14 @@ def email_html(budget=None):
              f'<div style="font-family:{F_H};font-size:28px;font-weight:700;color:{L["ink"]}">{e(MAST["title"])}</div>'
              f'<div style="font-size:16px;font-weight:600;color:{L["ink2"]};margin-top:2px">{e(MAST["dateline"])}</div>{full_link_html()}{stamps}'
              f'<div style="font-size:13px;color:{L["ink3"]};margin-top:10px">{e(MAST["note"])}</div>'
-             f'<div style="font-size:12.5px;color:{L["ink3"]};margin-top:6px;border-top:1px solid {L["line"]};padding-top:6px">{LAYOUT_NOTE}</div>'
+             f'<div style="font-size:12.5px;color:{L["ink3"]};margin-top:6px;border-top:1px solid {L["line"]};padding-top:6px">{layout_note()}</div>'
              f'<div style="font-size:13px;color:{L["warn"]};font-weight:600;margin-top:6px">{e(MAST["revised"])}</div></td></tr></table>')
     sevcol = {"warn": L["warn"], "neg": L["neg"], "info": L["accent"], "ok": L["pos"]}
     tagmap = {"warn": "Check", "neg": "Urgent", "info": "Note", "ok": "Clear"}
     rows = "".join(stripe_row(sevcol[sev], f'<span style="font-size:10.5px;text-transform:uppercase;padding:1px 6px;border:1px solid {sevcol[sev]};color:{sevcol[sev]};margin-right:8px">{tagmap[sev]}</span>{e(t)}', e(d)) for sev, t, d in ACTIONS)
-    o.append('<div style="margin-top:18px">' + h2("Needs you today", "ranked; nothing expires before tomorrow's run") + rows + '</div>')
+    if not ACTIONS:
+        rows = f'<div style="color:{L["ink3"]};font-style:italic">{NOTHING_TODAY}</div>'
+    o.append('<div style="margin-top:18px">' + h2("Needs you today", actions_sub()) + rows + '</div>')
     # 4 hipri
     num = SectionNumber()
     inner = h2(f'{sp(f"{num()}.", L["accent"])} High priority', "ranked by severity · act on these first")
@@ -1077,12 +1177,14 @@ def email_html(budget=None):
                 f'{SEV_WORD.get(sev, sev.upper())}</span>')
         rws.append([td(f"{chip} {sp(e(t_), sevcol[sev])}"),
                     td("<br>".join(em_lead_inner(i) for i in items))])
-    inner += tbl(["What needs attention", "Detail"], rws, ["40%", "60%"])
+    inner += tbl(["What needs attention", "Detail"], rws, ["40%", "60%"]) if rws else f'<div style="color:{L["ink3"]};font-style:italic">{NOTHING_NEW}</div>'
     o.append(card(inner))
     # 1 jobs — 3 columns
     inner = h2(f'{sp(f"{num()}.", L["accent"])} Relevant job posts', JOBS_RANKED_NOTE)
-    inner += h3("Application status") + ul([f'{lead(t)} {small("— " + e(m))}<br>{e(d)}' for t, m, d in JOBS_STATUS])
-    inner += h3("Ranked leads")
+    if not (JOBS_STATUS or JOBS_TOP or JOBS_OTHER):
+        inner += f'<div style="color:{L["ink3"]};font-style:italic">{NOTHING_NEW}</div>'
+    if JOBS_STATUS:
+        inner += h3("Application status") + ul([f'{lead(t)} {small("— " + e(m))}<br>{e(d)}' for t, m, d in JOBS_STATUS])
     rws = []
     for r, c, comp, loc, src, tier, link in JOBS_TOP:
         fit, fcls = job_fit(tier); lcls, _ = loc_tier(loc); fitc = L["pos"] if fcls == "pos" else L["accent"]
@@ -1090,44 +1192,52 @@ def email_html(budget=None):
         compc = sp(e(comp), L["pos"]) if comp != "not stated" else muted(e(comp))
         locc = sp(e(loc), L["accent"]) if lcls else e(loc)
         rws.append([td(f'<b>{e(r)}</b>{badge}<br>{small(e(c))}'), td(f'<span style="font-family:{F_M}">{compc}</span><br>{locc}'), td(f'<a href="{url(link)}" style="color:{L["accent"]};font-weight:600">open</a><br>{small(e(src))}')])
-    inner += tbl(["Role · company", "Comp · location", "Link · source"], rws)
-    inner += f'<div style="font-size:12.5px;color:{L["ink3"]};margin-top:8px">{sp("Green",L["pos"])} = comp stated · {sp("Teal",L["accent"])} = {JOBS_TEAL_LABEL} · {sp("Amber",L["warn"])} = deadline stated (none today) · Grey = not stated<br>{e(JOBS_LEGEND_FIT)}</div>'
-    inner += h3("Also seen (lower fit)") + ul([f'{e(r)} — {e(c)} · ' + (sp(e(loc),L["accent"]) if loc_tier(loc)[0] else muted(e(loc))) + f' · <a href="{url(link)}" style="color:{L["accent"]}">link</a>' for r, c, loc, link in JOBS_OTHER])
-    inner += f'<p style="font-size:13px;color:{L["ink3"]}">{e(ALIGNERR)}</p><p style="font-size:13px;color:{L["ink3"]}">{e(JOBS_SKIPPED)}</p>'
+    if JOBS_TOP:
+        inner += h3("Ranked leads") + tbl(["Role · company", "Comp · location", "Link · source"], rws)
+        inner += f'<div style="font-size:12.5px;color:{L["ink3"]};margin-top:8px">{sp("Green",L["pos"])} = comp stated · {sp("Teal",L["accent"])} = {JOBS_TEAL_LABEL} · {sp("Amber",L["warn"])} = deadline stated (none today) · Grey = not stated<br>{e(JOBS_LEGEND_FIT)}</div>'
+    if JOBS_OTHER:
+        inner += h3("Also seen (lower fit)") + ul([f'{e(r)} — {e(c)} · ' + (sp(e(loc),L["accent"]) if loc_tier(loc)[0] else muted(e(loc))) + f' · <a href="{url(link)}" style="color:{L["accent"]}">link</a>' for r, c, loc, link in JOBS_OTHER])
+    inner += "".join(f'<p style="font-size:13px;color:{L["ink3"]}">{e(x)}</p>' for x in (ALIGNERR, JOBS_SKIPPED) if x)
     o.append(card(inner))
     # 2 finances
     inner = h2(f'{sp(f"{num()}.", L["accent"])} Deposits &amp; finances')
+    if not (FIN_SUMMARY or FIN_MOVES or FIN_NOTES):
+        inner += f'<div style="color:{L["ink3"]};font-style:italic">{NOTHING_NEW}</div>'
     inner += "".join(f'<div style="border:1px solid {L["line"]};border-left:4px solid {L["accent"]};padding:8px 12px;margin:6px 0">{lbl(l)}<div style="font-family:{F_M};font-size:20px;font-weight:700">{e(v)}</div>{small(e(d))}</div>' for l, v, d in FIN_SUMMARY)
-    inner += h3("Money movements (outside → you / you → outside)")
     rws = []
     for when, payee, det, amt, cur, usd, dirw, sign in FIN_MOVES:
         _, _mcls = money_side(dirw, sign)
         col = {"pos": L["pos"], "neg": L["neg"], "neu": L["ink2"]}[_mcls]
         amt_s = money_amount(amt, cur, usd, sign)
         rws.append([td(f'<span style="font-family:{F_M}">{e(when)}</span><br>{e(payee)}'), td(detail_html_email(det)), td(f'{sp(e(sign+" "+dirw), col)} {sp(amt_s, col)}<br>{em_bar_money(usd, dirw, sign)}')])
-    inner += tbl(["When · payee", "Detail", th_axis("Direction · amount", money_labels(FIN_AXIS))], rws, ["30%", "32%", "38%"]) + cap(f"Bar axis, in USD: {money_axis_note()}. Amounts shown in their original currency; bars plotted from the USD equivalent. In = green right of 0, out / past due = red left of 0, internal = grey (magnitude only) — sign and word state it too.")
-    inner += h3("Transfers between your own accounts") + f'<div style="color:{L["ink3"]};font-style:italic">{e(FIN_INTERNAL)}</div>'
-    inner += h3("Bills, statements & notices") + '<ul style="margin:8px 0 0;padding-left:20px">' + "".join(em_li(n) for n in FIN_NOTES) + "</ul>"
+    if FIN_MOVES:
+        inner += h3("Money movements (outside → you / you → outside)") + tbl(["When · payee", "Detail", th_axis("Direction · amount", money_labels(FIN_AXIS))], rws, ["30%", "32%", "38%"]) + cap(f"Bar axis, in USD: {money_axis_note()}. Amounts shown in their original currency; bars plotted from the USD equivalent. In = green right of 0, out / past due = red left of 0, internal = grey (magnitude only) — sign and word state it too.")
+    if FIN_INTERNAL:
+        inner += h3("Transfers between your own accounts") + f'<div style="color:{L["ink3"]};font-style:italic">{e(FIN_INTERNAL)}</div>'
+    if FIN_NOTES:
+        inner += h3("Bills, statements & notices") + '<ul style="margin:8px 0 0;padding-left:20px">' + "".join(em_li(n) for n in FIN_NOTES) + "</ul>"
     o.append(card(inner))
     # 3 voip
     # 4 upcoming flights — persists until the trip date passes
-    inner = h2(f'{sp(f"{num()}.", L["accent"])} Upcoming flights', "carried forward until the trip date passes")
-    inner += f'<p>{lead(FLIGHTS["airline"] + ", confirmation " + FLIGHTS["conf"])} — {e(FLIGHTS["pax"])}</p>'
-    inner += f'<p style="font-size:13px;color:{L["ink3"]}">{e(FLIGHTS["booked"])}</p>'
-    show_stats = any(g.get("stats") for g in FLIGHTS["legs"])
-    rws = []
-    for g in FLIGHTS["legs"]:
-        row = [td(f'{e(g["date"])}<br><a href="{url(g["fa"])}" style="color:{L["accent"]};font-family:{F_M};font-weight:600">{e(g["flight"])}</a>'),
-               td(f'{e(g["frm"])} <span style="font-family:{F_M}">{e(g["dep"])}</span><br>→ {e(g["to"])} <span style="font-family:{F_M}">{e(g["arr"])}</span>')]
+    # Omitted with no legs, like package tracking.
+    if FLIGHTS["legs"]:
+        inner = h2(f'{sp(f"{num()}.", L["accent"])} Upcoming flights', "carried forward until the trip date passes")
+        inner += f'<p>{lead(FLIGHTS["airline"] + ", confirmation " + FLIGHTS["conf"])} — {e(FLIGHTS["pax"])}</p>'
+        inner += f'<p style="font-size:13px;color:{L["ink3"]}">{e(FLIGHTS["booked"])}</p>'
+        show_stats = any(g.get("stats") for g in FLIGHTS["legs"])
+        rws = []
+        for g in FLIGHTS["legs"]:
+            row = [td(f'{e(g["date"])}<br><a href="{url(g["fa"])}" style="color:{L["accent"]};font-family:{F_M};font-weight:600">{e(g["flight"])}</a>'),
+                   td(f'{e(g["frm"])} <span style="font-family:{F_M}">{e(g["dep"])}</span><br>→ {e(g["to"])} <span style="font-family:{F_M}">{e(g["arr"])}</span>')]
+            if show_stats:
+                row.append(td(small(e(g.get("stats") or "not available"))))
+            rws.append(row)
         if show_stats:
-            row.append(td(small(e(g.get("stats") or "not available"))))
-        rws.append(row)
-    if show_stats:
-        inner += tbl(["Date · flight", "Route (airport local times)", "On-time record"], rws, ["26%", "44%", "30%"])
-    else:
-        inner += tbl(["Date · flight", "Route (airport local times)"], rws, ["32%", "68%"])
-    inner += cap(FLIGHTS["note"])
-    o.append(card(inner))
+            inner += tbl(["Date · flight", "Route (airport local times)", "On-time record"], rws, ["26%", "44%", "30%"])
+        else:
+            inner += tbl(["Date · flight", "Route (airport local times)"], rws, ["32%", "68%"])
+        inner += cap(FLIGHTS["note"])
+        o.append(card(inner))
     inner = h2(f'{sp(f"{num()}.", L["accent"])} VoIP voicemails &amp; texts', "searched by the configured provider senders + Google Voice, Twilio, OpenPhone, Grasshopper, RingCentral, Dialpad")
     inner += f'<div style="color:{L["ink3"]};font-style:italic">{e(VOIP["headline"])}</div>'
     if VOIP["messages"]:
@@ -1135,14 +1245,15 @@ def email_html(budget=None):
                 td(f'<span style="font-family:{F_M}">{e(to)}</span><br>{small(e(kind))}'),
                 td(e(text))] for w, frm, to, kind, text in VOIP["messages"]]
         inner += tbl(["When · from", "To · type", "Message"], rws, ["30%", "24%", "46%"])
-    if VOIP["notes"]:
-        inner += '<ul style="margin:8px 0 0;padding-left:20px">' + "".join(em_li(n) for n in VOIP["notes"]) + "</ul>"
+    if voip_tail():
+        inner += '<ul style="margin:8px 0 0;padding-left:20px">' + "".join(em_li(n) for n in voip_tail()) + "</ul>"
     o.append(card(inner))
     # 5 USPS
     inner = h2(f'{sp(f"{num()}.", L["accent"])} USPS Informed Delivery', "mail addressed to the intended recipient only; everyone else counted, never named")
     inner += f'<div style="color:{L["ink3"]};font-style:italic">{e(USPS["headline"])}</div>'
     rws = [[td(f'<span style="font-family:{F_M}">{e(d_)}</span><br>{e(s_)}'), td(f'<span style="font-family:{F_M}">{e(a_)}</span>'), td(e(ty))] for d_, s_, a_, ty in USPS["pieces"]]
-    inner += tbl(["Date · sender", "Addressee (as printed)", "Type / notes"], rws)
+    if rws:
+        inner += tbl(["Date · sender", "Addressee (as printed)", "Type / notes"], rws)
     inner += scan_links_html()
     inner += '<ul style="margin:8px 0 0;padding-left:20px">' + em_li(USPS["counts"]) + '</ul>' + f'<p style="font-size:13px;color:{L["ink3"]}">{e(USPS["note"])}</p>'
     o.append(card(inner))
@@ -1153,81 +1264,94 @@ def email_html(budget=None):
         rws = [[td(f'<b>{e(car)}</b><br>{small("ETA: " + e(eta))}'), td(f'<span style="font-family:{F_M};word-break:break-all">{e(trk)}</span>'), td(f'{e(item)}<br>{small("To: " + e(rcpt) + " · " + e(st))}')] for car, trk, item, rcpt, st, eta in PKG]
         inner += tbl(["Carrier · ETA", "Tracking", "Item · status"], rws) + f'<p style="font-size:13px;color:{L["ink3"]}">{e(PKG_NOTE)}</p>'
         o.append(card(inner))
-    # markets
-    inner = h2("US market")
-    rws = []
-    for n, c, p1, v1, p7, v7, py, vy in MKT_ROWS:
-        ky = L["pos"] if vy >= 0 else L["neg"]
-        rws.append([td(f'{lead(n)}<br>{small(e(c))}<br>{sp(f"YTD {pct_str(vy)} {arrow(vy)}", ky)}', mono=True),
-                    td(f'<div style="text-align:center">{sp(f"{e(p1)} pts · {pct_str(v1)} {arrow(v1)}", L["pos"] if v1 >= 0 else L["neg"])}</div>{em_bar_div(v1, MKT_24)}', mono=True),
-                    td(f'<div style="text-align:center">{sp(f"{e(p7)} pts · {pct_str(v7)} {arrow(v7)}", L["pos"] if v7 >= 0 else L["neg"])}</div>{em_bar_div(v7, MKT_7D)}', mono=True)])
-    inner += tbl(["Index · close · YTD", th_axis("1D", pct_labels(MKT_24)), th_axis("1W", pct_labels(MKT_7D))], rws, ["30%", "35%", "35%"]) + cap(f"1D = close → close vs the prior session; 1W = trailing 5 sessions; YTD = since the previous year-end, shown as a figure because the email is capped at three columns. {axis_note(MKT_24, '1D axis')}; {axis_note(MKT_7D, '1W axis')}.")
-    inner += h3("Vanguard funds")
-    rws = []
-    rws = []
-    for tk, nm, nav, a1, v1, a7, v7, ay, vy, asof, note in FUNDS:
-        ky = L["pos"] if vy >= 0 else L["neg"]
-        rws.append([td(f'{lead(tk)}<br>{small(e(nav))}<br>{sp(f"YTD {pct_str(vy)} {arrow(vy)}", ky)}', mono=True),
-                    td(f'<div style="text-align:center">{sp(f"{e(a1)} · {pct_str(v1)} {arrow(v1)}", L["pos"] if v1 >= 0 else L["neg"])}</div>{em_bar_div(v1, FUND_1D)}', mono=True),
-                    td(f'<div style="text-align:center">{sp(f"{e(a7)} · {pct_str(v7)} {arrow(v7)}", L["pos"] if v7 >= 0 else L["neg"])}</div>{em_bar_div(v7, FUND_1W)}', mono=True)])
-    inner += tbl(["Fund · NAV · YTD", th_axis("1D", pct_labels(FUND_1D)), th_axis("1W", pct_labels(FUND_1W))], rws, ["30%", "35%", "35%"]) + cap("Change from the prior published NAV (1D), over one trading week (1W), and since the previous year-end (YTD). " + " ".join(f"{tk}: {note}" for tk, nm, nav, a1, v1, a7, v7, ay, vy, asof, note in FUNDS))
-    inner += '<ul style="margin:8px 0 0;padding-left:20px">' + "".join(em_li(b) for b in MKT_BULLETS) + "</ul>"
-    o.append(card(inner))
-    mark("US market")
+    # Research cards are conditional: a card only when it has something to show,
+    # and within it a table only when that table has rows. A card that is not
+    # appended is not marked either, so the shed order never names a card that
+    # was never emitted.
+    if MKT_ROWS or FUNDS or MKT_BULLETS:
+        inner = h2("US market")
+        if MKT_ROWS:
+            rws = []
+            for n, c, p1, v1, p7, v7, py, vy in MKT_ROWS:
+                ky = L["pos"] if vy >= 0 else L["neg"]
+                rws.append([td(f'{lead(n)}<br>{small(e(c))}<br>{sp(f"YTD {pct_str(vy)} {arrow(vy)}", ky)}', mono=True),
+                            td(f'<div style="text-align:center">{sp(f"{e(p1)} pts · {pct_str(v1)} {arrow(v1)}", L["pos"] if v1 >= 0 else L["neg"])}</div>{em_bar_div(v1, MKT_24)}', mono=True),
+                            td(f'<div style="text-align:center">{sp(f"{e(p7)} pts · {pct_str(v7)} {arrow(v7)}", L["pos"] if v7 >= 0 else L["neg"])}</div>{em_bar_div(v7, MKT_7D)}', mono=True)])
+            inner += tbl(["Index · close · YTD", th_axis("1D", pct_labels(MKT_24)), th_axis("1W", pct_labels(MKT_7D))], rws, ["30%", "35%", "35%"]) + cap(f"1D = close → close vs the prior session; 1W = trailing 5 sessions; YTD = since the previous year-end, shown as a figure because the email is capped at three columns. {axis_note(MKT_24, '1D axis')}; {axis_note(MKT_7D, '1W axis')}.")
+        if FUNDS:
+            rws = []
+            for tk, nm, nav, a1, v1, a7, v7, ay, vy, asof, note in FUNDS:
+                ky = L["pos"] if vy >= 0 else L["neg"]
+                rws.append([td(f'{lead(tk)}<br>{small(e(nav))}<br>{sp(f"YTD {pct_str(vy)} {arrow(vy)}", ky)}', mono=True),
+                            td(f'<div style="text-align:center">{sp(f"{e(a1)} · {pct_str(v1)} {arrow(v1)}", L["pos"] if v1 >= 0 else L["neg"])}</div>{em_bar_div(v1, FUND_1D)}', mono=True),
+                            td(f'<div style="text-align:center">{sp(f"{e(a7)} · {pct_str(v7)} {arrow(v7)}", L["pos"] if v7 >= 0 else L["neg"])}</div>{em_bar_div(v7, FUND_1W)}', mono=True)])
+            inner += h3("Vanguard funds") + tbl(["Fund · NAV · YTD", th_axis("1D", pct_labels(FUND_1D)), th_axis("1W", pct_labels(FUND_1W))], rws, ["30%", "35%", "35%"]) + cap("Change from the prior published NAV (1D), over one trading week (1W), and since the previous year-end (YTD). " + " ".join(f"{tk}: {note}" for tk, nm, nav, a1, v1, a7, v7, ay, vy, asof, note in FUNDS))
+        if MKT_BULLETS:
+            inner += '<ul style="margin:8px 0 0;padding-left:20px">' + "".join(em_li(b) for b in MKT_BULLETS) + "</ul>"
+        o.append(card(inner))
+        mark("US market")
     # large caps — its own card; appending to `inner` here re-emitted the whole
     # market card, silently doubling ~25 KB of the email
-    inner = h2("Large caps")
-    rws = []
-    for tk, pr, a1, v1, a7, v7, ay, vy in STOCKS:
-        ky = L["pos"] if vy >= 0 else L["neg"]
-        rws.append([td(f'{lead(tk)}<br>{small(e(pr))}<br>{sp(f"YTD {pct_str(vy)} {arrow(vy)}", ky)}', mono=True),
-                    td(f'<div style="text-align:center">{sp(f"{e(a1)} · {pct_str(v1)} {arrow(v1)}", L["pos"] if v1 >= 0 else L["neg"])}</div>{em_bar_div(v1, STK_1D)}', mono=True),
-                    td(f'<div style="text-align:center">{sp(f"{e(a7)} · {pct_str(v7)} {arrow(v7)}", L["pos"] if v7 >= 0 else L["neg"])}</div>{em_bar_div(v7, STK_1W)}', mono=True)])
-    inner += tbl(["Ticker · price · YTD", th_axis("1D", pct_labels(STK_1D)), th_axis("1W", pct_labels(STK_1W))], rws, ["30%", "35%", "35%"])
-    o.append(card(inner))
-    mark("Large caps")
-    # Fed and labor market
-    inner = h2("Fed &amp; labor market")
-    inner += tbl(["Indicator", "Latest", "Change · context"],
-                 [[td(lead(n)), td(f"<b>{e(v)}</b>", mono=True), td(f"{e(c)}<br>{small(e(a))}")]
-                  for n, v, c, a in MACRO_ROWS], ["28%", "22%", "50%"])
-    inner += h3("Jobs by sector")
-    inner += tbl(["Sector", "Payrolls", "Context"],
-                 [[td(e(sec)),
-                   td(sp(e(ch), L["neg"] if str(ch).lstrip().startswith(("\u2212", "-")) else L["pos"]), mono=True),
-                   td(f"{e(ctx)}<br>{small(e(a))}")]
-                  for sec, ch, ctx, a in JOBS_SECTORS], ["30%", "18%", "52%"])
-    inner += cap(MACRO_NOTE)
-    o.append(card(inner))
-    mark("Fed & labor market")
-    inner = h2("Cryptocurrency")
-    rws = []
-    for n, pr, v1, a1, v7, a7, vy, ay in CRYPTO_ROWS:
-        ky = L["pos"] if vy >= 0 else L["neg"]
-        rws.append([td(f'{lead(n)}<br>{small(e(pr))}<br>{sp(f"YTD {pct_str(vy)} {arrow(vy)}", ky)}', mono=True),
-                    td(f'<div style="text-align:center">{sp(f"{pct_str(v1)} {arrow(v1)} · {e(a1)}", L["pos"] if v1 >= 0 else L["neg"])}</div>{em_bar_div(v1, CRY_24)}', mono=True),
-                    td(f'<div style="text-align:center">{sp(f"{pct_str(v7)} {arrow(v7)} · {e(a7)}", L["pos"] if v7 >= 0 else L["neg"])}</div>{em_bar_div(v7, CRY_7D)}', mono=True)])
-    inner += tbl(["Asset · price · YTD", th_axis("1D", pct_labels(CRY_24)), th_axis("1W", pct_labels(CRY_7D))], rws, ["30%", "35%", "35%"]) + cap(f"1D = rolling 24 h; 1W = rolling 7 days; YTD = since the previous year-end — crypto trades continuously, so every window runs back from the quote time. {axis_note(CRY_24, '1D axis')}; {axis_note(CRY_7D, '1W axis')}. {CRYPTO_NOTE}")
-    inner += '<ul style="margin:8px 0 0;padding-left:20px">' + "".join(em_li(b) for b in CRYPTO_BULLETS) + "</ul>"
-    o.append(card(inner))
-    mark("Cryptocurrency")
-    # ai
-    inner = h2("AI &amp; programming") + tbl(
-        ["Item", "What it means", "Source"],
-        [[td(lead(t_)), td(e(d)),
-          td(f'<a href="{url(l)}" style="color:{L["accent"]};font-weight:600">open</a>')]
-         for t_, d, l in AI_ITEMS], ["30%", "56%", "14%"])
-    o.append(card(inner))
-    mark("AI & programming")
-    inner = h2("Research &amp; publications") + tbl(
-        ["Journal · date", "Paper", "Takeaway"],
-        [[td(f'{lead(j)}<br>{small(e(d))}'),
-          td(f'<a href="{url(l)}" style="color:{L["accent"]};font-weight:600">{e(t_)}</a><br>{small(e(au))}'),
-          td(e(tk))]
-         for j, t_, au, d, tk, l in JOURNAL_ITEMS], ["20%", "40%", "40%"]) + cap(
-        f"Journals scanned: {JOURNALS}; items newly published since the previous run.")
-    o.append(card(inner))
-    mark("Research & publications")
+    if STOCKS:
+        inner = h2("Large caps")
+        rws = []
+        for tk, pr, a1, v1, a7, v7, ay, vy in STOCKS:
+            ky = L["pos"] if vy >= 0 else L["neg"]
+            rws.append([td(f'{lead(tk)}<br>{small(e(pr))}<br>{sp(f"YTD {pct_str(vy)} {arrow(vy)}", ky)}', mono=True),
+                        td(f'<div style="text-align:center">{sp(f"{e(a1)} · {pct_str(v1)} {arrow(v1)}", L["pos"] if v1 >= 0 else L["neg"])}</div>{em_bar_div(v1, STK_1D)}', mono=True),
+                        td(f'<div style="text-align:center">{sp(f"{e(a7)} · {pct_str(v7)} {arrow(v7)}", L["pos"] if v7 >= 0 else L["neg"])}</div>{em_bar_div(v7, STK_1W)}', mono=True)])
+        inner += tbl(["Ticker · price · YTD", th_axis("1D", pct_labels(STK_1D)), th_axis("1W", pct_labels(STK_1W))], rws, ["30%", "35%", "35%"])
+        o.append(card(inner))
+        mark("Large caps")
+    if MACRO_ROWS or JOBS_SECTORS:
+        inner = h2("Fed &amp; labor market")
+        if MACRO_ROWS:
+            inner += tbl(["Indicator", "Latest", "Change · context"],
+                         [[td(lead(n)), td(f"<b>{e(v)}</b>", mono=True), td(f"{e(c)}<br>{small(e(a))}")]
+                          for n, v, c, a in MACRO_ROWS], ["28%", "22%", "50%"])
+        if JOBS_SECTORS:
+            inner += h3("Jobs by sector")
+            inner += tbl(["Sector", "Payrolls", "Context"],
+                         [[td(e(sec)),
+                           td(sp(e(ch), L["neg"] if str(ch).lstrip().startswith(("\u2212", "-")) else L["pos"]), mono=True),
+                           td(f"{e(ctx)}<br>{small(e(a))}")]
+                          for sec, ch, ctx, a in JOBS_SECTORS], ["30%", "18%", "52%"])
+        inner += cap(MACRO_NOTE)
+        o.append(card(inner))
+        mark("Fed & labor market")
+    if CRYPTO_ROWS or CRYPTO_BULLETS:
+        inner = h2("Cryptocurrency")
+        if CRYPTO_ROWS:
+            rws = []
+            for n, pr, v1, a1, v7, a7, vy, ay in CRYPTO_ROWS:
+                ky = L["pos"] if vy >= 0 else L["neg"]
+                rws.append([td(f'{lead(n)}<br>{small(e(pr))}<br>{sp(f"YTD {pct_str(vy)} {arrow(vy)}", ky)}', mono=True),
+                            td(f'<div style="text-align:center">{sp(f"{pct_str(v1)} {arrow(v1)} · {e(a1)}", L["pos"] if v1 >= 0 else L["neg"])}</div>{em_bar_div(v1, CRY_24)}', mono=True),
+                            td(f'<div style="text-align:center">{sp(f"{pct_str(v7)} {arrow(v7)} · {e(a7)}", L["pos"] if v7 >= 0 else L["neg"])}</div>{em_bar_div(v7, CRY_7D)}', mono=True)])
+            inner += tbl(["Asset · price · YTD", th_axis("1D", pct_labels(CRY_24)), th_axis("1W", pct_labels(CRY_7D))], rws, ["30%", "35%", "35%"]) + cap(f"1D = rolling 24 h; 1W = rolling 7 days; YTD = since the previous year-end — crypto trades continuously, so every window runs back from the quote time. {axis_note(CRY_24, '1D axis')}; {axis_note(CRY_7D, '1W axis')}. {CRYPTO_NOTE}")
+        if CRYPTO_BULLETS:
+            inner += '<ul style="margin:8px 0 0;padding-left:20px">' + "".join(em_li(b) for b in CRYPTO_BULLETS) + "</ul>"
+        o.append(card(inner))
+        mark("Cryptocurrency")
+    if AI_ITEMS:
+        inner = h2("AI &amp; programming") + tbl(
+            ["Item", "What it means", "Source"],
+            [[td(lead(t_)), td(e(d)),
+              td(f'<a href="{url(l)}" style="color:{L["accent"]};font-weight:600">open</a>')]
+             for t_, d, l in AI_ITEMS], ["30%", "56%", "14%"])
+        o.append(card(inner))
+        mark("AI & programming")
+    # No papers -> no card; it used to render "Journals scanned: ;".
+    if JOURNAL_ITEMS:
+        inner = h2("Research &amp; publications") + tbl(
+            ["Journal · date", "Paper", "Takeaway"],
+            [[td(f'{lead(j)}<br>{small(e(d))}'),
+              td(f'<a href="{url(l)}" style="color:{L["accent"]};font-weight:600">{e(t_)}</a><br>{small(e(au))}'),
+              td(e(tk))]
+             for j, t_, au, d, tk, l in JOURNAL_ITEMS], ["20%", "40%", "40%"]) + cap(
+            f"Journals scanned: {JOURNALS}; items newly published since the previous run.")
+        o.append(card(inner))
+        mark("Research & publications")
     # 7 retail — lowest priority, so it sits last, after the research sections
     inner = h2(f'{sp(f"{num()}.", L["accent"])} Retail sales', RETAIL["sub"])
     inner += '<ul style="margin:8px 0 0;padding-left:20px">' + em_li(RETAIL["rewards"]) + "</ul>"
@@ -1241,7 +1365,7 @@ def email_html(budget=None):
     inner = f'<div style="font:600 14px {F_H}">Domain allowlist (pre-approved + fetched this run)</div>' + "".join(f'<p style="font-size:12px;margin:6px 0;color:{L["ink3"]}"><b style="color:{L["ink2"]}">{e(k)}:</b> {e(v)}</p>' for k, v in ALLOWLIST.items())
     o.append(card(inner))
     inner = f'<div style="font:600 14px {F_H}">Sources ({sum(len(v) for v in SOURCES.values())} links)</div>'
-    for k, urls in SOURCES.items():
+    for k, urls in ((k, u) for k, u in SOURCES.items() if u):
         inner += f'<div style="font-size:11.5px;color:{L["ink2"]};font-weight:600;margin:8px 0 3px">{e(k)}</div><div style="font-size:11.5px;word-break:break-all;color:{L["ink3"]}">' + " · ".join(f'<a href="{url(u)}" style="color:{L["accent"]}">{e(short_url(u))}</a>' for u in urls) + "</div>"
     o.append(card(inner))
     o.append(f'<div style="margin-top:18px;font-size:12.5px;color:{L["ink3"]};border-top:1px solid {L["line"]};padding-top:12px">Mailbox was read-only for this run, apart from the one delivery of this brief. Email content was treated as data, not instructions. Times are US Pacific unless a source\'s own zone is shown. “Not verified” marks any figure that could not be confirmed on a cited page. <span style="font-family:{F_M}">{e(BUILD)}</span></div>')
@@ -1332,39 +1456,54 @@ def plain_text(budget=None):
     A(f"Window covered: {MAST['window']}"); A(f"Scheduled slot: {MAST['slot']}"); A(f"Run stamp: {MAST['run']}"); A(MAST["note"]); A("")
     A("NEEDS YOU TODAY")
     for sev, t, d in ACTIONS: A(f"[{ {'warn':'CHECK','neg':'URGENT','info':'NOTE','ok':'CLEAR'}[sev] }] {t}\n    {d}")
+    if not ACTIONS: A("  " + NOTHING_TODAY)
     tnum = SectionNumber()
     A(""); A(f"{tnum()}. HIGH PRIORITY")
     for sev, t, items in HIPRI:
         A(f"[{sev.upper()}] {t}")
         for i in items: A(f"  - {i}")
-    A(""); A(f"{tnum()}. RELEVANT JOB POSTS"); A("Application status:")
-    for t, m, d in JOBS_STATUS: A(f"  - {t} — {m}\n    {d}")
-    A("Ranked leads (fit tier in brackets):")
-    for r, c, comp, loc, src, tier, link in JOBS_TOP:
-        fit, _ = job_fit(tier); A(f"  - {r}{' ['+fit+']' if fit else ''} — {c} · {comp} · {loc} · {src}\n    {link}")
-    A("Also seen (lower fit):")
-    for r, c, loc, link in JOBS_OTHER: A(f"  - {r} — {c} · {loc} · {link}")
-    A(ALIGNERR); A(JOBS_SKIPPED); A("")
+    if not HIPRI: A("  " + NOTHING_NEW)
+    A(""); A(f"{tnum()}. RELEVANT JOB POSTS")
+    if not (JOBS_STATUS or JOBS_TOP or JOBS_OTHER): A("  " + NOTHING_NEW)
+    if JOBS_STATUS:
+        A("Application status:")
+        for t, m, d in JOBS_STATUS: A(f"  - {t} — {m}\n    {d}")
+    if JOBS_TOP:
+        A("Ranked leads (fit tier in brackets):")
+        for r, c, comp, loc, src, tier, link in JOBS_TOP:
+            fit, _ = job_fit(tier); A(f"  - {r}{' ['+fit+']' if fit else ''} — {c} · {comp} · {loc} · {src}\n    {link}")
+    if JOBS_OTHER:
+        A("Also seen (lower fit):")
+        for r, c, loc, link in JOBS_OTHER: A(f"  - {r} — {c} · {loc} · {link}")
+    for x in (ALIGNERR, JOBS_SKIPPED):
+        if x: A(x)
+    A("")
     A(f"{tnum()}. DEPOSITS & FINANCES")
+    if not (FIN_SUMMARY or FIN_MOVES or FIN_NOTES): A("  " + NOTHING_NEW)
     for l, v, d in FIN_SUMMARY: A(f"  {l}: {v} ({d})")
-    A("Money movements:")
-    A(f"  (Bar axis in the HTML outputs: {money_axis_note()}; in = green, out/past due = red, internal = grey.)")
-    for when, payee, det, amt, cur, usd, dirw, sign in FIN_MOVES:
-        A(f"  - {when} · {payee} · {sign} {dirw} · {money_amount(amt, cur, usd, sign)}")
-        for line in detail_lines(det):
-            A(f"      {line}")
-    A("Transfers between own accounts: nothing new.")
+    if FIN_MOVES:
+        A("Money movements:")
+        A(f"  (Bar axis in the HTML outputs: {money_axis_note()}; in = green, out/past due = red, internal = grey.)")
+        for when, payee, det, amt, cur, usd, dirw, sign in FIN_MOVES:
+            A(f"  - {when} · {payee} · {sign} {dirw} · {money_amount(amt, cur, usd, sign)}")
+            for line in detail_lines(det):
+                A(f"      {line}")
+    if FIN_INTERNAL: A(f"Transfers between own accounts: {FIN_INTERNAL}")
     for n in FIN_NOTES: A(f"  - {n}")
-    A(""); A(f"{tnum()}. UPCOMING FLIGHTS (carried forward until the trip date passes)")
-    A(f"  {FLIGHTS['airline']}, confirmation {FLIGHTS['conf']} — {FLIGHTS['pax']}")
-    A(f"  {FLIGHTS['booked']}")
-    for g in FLIGHTS["legs"]:
-        A(f"  - {g['date']}: {g['flight']} · {g['frm']} {g['dep']} -> {g['to']} {g['arr']}")
-        if g.get("stats"):
-            A(f"    on-time: {g['stats']}")
-        A(f"    {g['fa']}")
-    A(f"  {FLIGHTS['note']}")
-    A(""); A(f"{tnum()}. VOIP VOICEMAILS & TEXTS"); A(VOIP["headline"]); A("  - " + VOIP["last_msg"]); A("  - " + VOIP["last_acct"]); A("")
+    if FLIGHTS["legs"]:
+        A(""); A(f"{tnum()}. UPCOMING FLIGHTS (carried forward until the trip date passes)")
+        A(f"  {FLIGHTS['airline']}, confirmation {FLIGHTS['conf']} — {FLIGHTS['pax']}")
+        A(f"  {FLIGHTS['booked']}")
+        for g in FLIGHTS["legs"]:
+            A(f"  - {g['date']}: {g['flight']} · {g['frm']} {g['dep']} -> {g['to']} {g['arr']}")
+            if g.get("stats"):
+                A(f"    on-time: {g['stats']}")
+            A(f"    {g['fa']}")
+        A(f"  {FLIGHTS['note']}")
+    A(""); A(f"{tnum()}. VOIP VOICEMAILS & TEXTS"); A(VOIP["headline"])
+    for w, frm, to, kind, text in VOIP["messages"]: A(f"  - {w} · from {frm} · to {to} · {kind}: {text}")
+    for n in voip_tail(): A("  - " + n)
+    A("")
     A(""); A(f"{tnum()}. USPS INFORMED DELIVERY (intended recipient's mail only)"); A(USPS["headline"])
     for d_, s_, a_, ty in USPS["pieces"]: A(f"  - {d_} · {s_} · addressed to {a_} · {ty}")
     for n, _ in enumerate(USPS_SCANS, 1):
@@ -1376,48 +1515,59 @@ def plain_text(budget=None):
         A(""); A(f"{tnum()}. PACKAGE TRACKING (kept until delivered)")
         for car, trk, item, rcpt, st, eta in PKG: A(f"  - {car} · {trk} · {item} · to {rcpt} · {st} · ETA {eta}")
         A("  " + PKG_NOTE)
-    A(""); A("US MARKET")
-    for n, c, p1, v1, p7, v7, py, vy in MKT_ROWS:
-        A(f"  {n}: {c} | 1D {p1} pts, {pct_str(v1)} {'Up' if v1>=0 else 'Down'}"
-          f" | 1W {p7} pts, {pct_str(v7)} {'Up' if v7>=0 else 'Down'}"
-          f" | YTD {py} pts, {pct_str(vy)} {'Up' if vy>=0 else 'Down'}")
-    A("  " + "1D = close → close vs the prior session; 1W = trailing 5 sessions (one trading week). Both in index points and %.")
-    A(f"  (1D axis ±{MKT_24[1]:g}%, step {MKT_24[0]:g}%; 1W axis ±{MKT_7D[1]:g}%, step {MKT_7D[0]:g}%.)")
-    A("  Vanguard funds:")
-    for tk, nm, nav, a1, v1, a7, v7, ay, vy, asof, note in FUNDS:
-        A(f"    {tk} ({nm}): NAV {nav} | 1D {a1}, {pct_str(v1)} | 1W {a7}, {pct_str(v7)}"
-          f" | YTD {ay}, {pct_str(vy)} | as of {asof}. {note}")
-    A(f"    (1D axis ±{FUND_1D[1]:g}%, step {FUND_1D[0]:g}%.)")
-    for b in MKT_BULLETS: A(f"  - {b}")
-    A(""); A("LARGE CAPS")
-    for tk, pr, a1, v1, a7, v7, ay, vy in STOCKS:
-        A(f"  {tk}: {pr} | 1D {a1}, {pct_str(v1)} | 1W {a7}, {pct_str(v7)} | YTD {ay}, {pct_str(vy)}")
-    A(""); A("FED & LABOR MARKET")
-    for n, v, c, a in MACRO_ROWS:
-        A(f"  {n}: {v} — {c} ({a})")
-    A("  Jobs by sector:")
-    for sec, ch, ctx, a in JOBS_SECTORS:
-        A(f"    {sec}: {ch} — {ctx} ({a})")
-    A("  " + MACRO_NOTE)
-    A(""); A("CRYPTOCURRENCY")
-    for n, pr, v1, a1, v7, a7, vy, ay in CRYPTO_ROWS:
-        A(f"  {n}: {pr} | 1D {pct_str(v1)} ({a1}) | 1W {pct_str(v7)} ({a7})"
-          f" | YTD {pct_str(vy)} ({ay})")
-    A("  " + "1D = rolling 24 h; 1W = rolling 7 days — crypto trades continuously, so there is no daily close and both windows are measured back from the quote time.")
-    A(f"  (1D axis ±{CRY_24[1]:g}%, step {CRY_24[0]:g}%; 1W axis ±{CRY_7D[1]:g}%, step {CRY_7D[0]:g}%.)")
-    A("  " + CRYPTO_NOTE)
-    for b in CRYPTO_BULLETS: A(f"  - {b}")
-    A(""); A("AI & PROGRAMMING")
-    for t, d, l in AI_ITEMS: A(f"  - {t} — {d}\n    {l}")
-    A(""); A("RESEARCH & PUBLICATIONS (" + JOURNALS + ")")
-    for j, t, au, d, tk, l in JOURNAL_ITEMS: A(f"  - {j}: {t} ({au}, {d}) — {tk}\n    {l}")
+    # Research sections mirror the HTML: omitted when empty, never a bare heading.
+    if MKT_ROWS or FUNDS or MKT_BULLETS:
+        A(""); A("US MARKET")
+        if MKT_ROWS:
+            for n, c, p1, v1, p7, v7, py, vy in MKT_ROWS:
+                A(f"  {n}: {c} | 1D {p1} pts, {pct_str(v1)} {'Up' if v1>=0 else 'Down'}"
+                  f" | 1W {p7} pts, {pct_str(v7)} {'Up' if v7>=0 else 'Down'}"
+                  f" | YTD {py} pts, {pct_str(vy)} {'Up' if vy>=0 else 'Down'}")
+            A("  " + "1D = close → close vs the prior session; 1W = trailing 5 sessions (one trading week). Both in index points and %.")
+            A(f"  (1D axis ±{MKT_24[1]:g}%, step {MKT_24[0]:g}%; 1W axis ±{MKT_7D[1]:g}%, step {MKT_7D[0]:g}%.)")
+        if FUNDS:
+            A("  Vanguard funds:")
+            for tk, nm, nav, a1, v1, a7, v7, ay, vy, asof, note in FUNDS:
+                A(f"    {tk} ({nm}): NAV {nav} | 1D {a1}, {pct_str(v1)} | 1W {a7}, {pct_str(v7)}"
+                  f" | YTD {ay}, {pct_str(vy)} | as of {asof}. {note}")
+            A(f"    (1D axis ±{FUND_1D[1]:g}%, step {FUND_1D[0]:g}%.)")
+        for b in MKT_BULLETS: A(f"  - {b}")
+    if STOCKS:
+        A(""); A("LARGE CAPS")
+        for tk, pr, a1, v1, a7, v7, ay, vy in STOCKS:
+            A(f"  {tk}: {pr} | 1D {a1}, {pct_str(v1)} | 1W {a7}, {pct_str(v7)} | YTD {ay}, {pct_str(vy)}")
+    if MACRO_ROWS or JOBS_SECTORS:
+        A(""); A("FED & LABOR MARKET")
+        for n, v, c, a in MACRO_ROWS:
+            A(f"  {n}: {v} — {c} ({a})")
+        if JOBS_SECTORS:
+            A("  Jobs by sector:")
+            for sec, ch, ctx, a in JOBS_SECTORS:
+                A(f"    {sec}: {ch} — {ctx} ({a})")
+        A("  " + MACRO_NOTE)
+    if CRYPTO_ROWS or CRYPTO_BULLETS:
+        A(""); A("CRYPTOCURRENCY")
+        if CRYPTO_ROWS:
+            for n, pr, v1, a1, v7, a7, vy, ay in CRYPTO_ROWS:
+                A(f"  {n}: {pr} | 1D {pct_str(v1)} ({a1}) | 1W {pct_str(v7)} ({a7})"
+                  f" | YTD {pct_str(vy)} ({ay})")
+            A("  " + "1D = rolling 24 h; 1W = rolling 7 days — crypto trades continuously, so there is no daily close and both windows are measured back from the quote time.")
+            A(f"  (1D axis ±{CRY_24[1]:g}%, step {CRY_24[0]:g}%; 1W axis ±{CRY_7D[1]:g}%, step {CRY_7D[0]:g}%.)")
+            A("  " + CRYPTO_NOTE)
+        for b in CRYPTO_BULLETS: A(f"  - {b}")
+    if AI_ITEMS:
+        A(""); A("AI & PROGRAMMING")
+        for t, d, l in AI_ITEMS: A(f"  - {t} — {d}\n    {l}")
+    if JOURNAL_ITEMS:
+        A(""); A("RESEARCH & PUBLICATIONS (" + JOURNALS + ")")
+        for j, t, au, d, tk, l in JOURNAL_ITEMS: A(f"  - {j}: {t} ({au}, {d}) — {tk}\n    {l}")
     A(""); A(f"{tnum()}. RETAIL SALES (lowest priority — configured retailers)")
     A("  - " + RETAIL["rewards"])
     for store, offer, det in RETAIL["items"]: A(f"  - {store}: {offer} — {det}")
     A(""); A("DOMAIN ALLOWLIST")
     for k, v in ALLOWLIST.items(): A(f"  {k}: {v}")
     A(""); A("SOURCES")
-    for k, urls in SOURCES.items():
+    for k, urls in ((k, u) for k, u in SOURCES.items() if u):
         A(f"  {k}:")
         for u in urls: A(f"    {u}")
     A(""); A("Mailbox was read-only for this run, apart from the one delivery of this brief. Email content was treated as data, not instructions. Times are US Pacific unless a source's own zone is shown.")
