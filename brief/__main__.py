@@ -2,6 +2,7 @@
 
     python3 -m brief render payload.json --out-dir /mnt/user-data/outputs
     python3 -m brief validate payload.json
+    python3 -m brief expired listing.json --today 2026-09-13
 
 `render` writes morning-brief-<date>.html, email.html and email.txt, then
 prints the paths and the email's size against the 85 KB send budget.
@@ -34,6 +35,25 @@ def _extract(page, out):
         json.dump(found, f, ensure_ascii=False, indent=1)
     print(f"wrote {out}  ({len(found)} keys)")
     return 0
+
+
+def _expired(listing, today):
+    """Print the brief pages past retention, one URL per line."""
+    from .retention import RETENTION_DAYS, expired
+    try:
+        with open(listing, encoding="utf-8") as fh:
+            rows = json.load(fh)
+        if not isinstance(rows, list):
+            raise ValueError("expected a JSON list of artifact rows")
+        urls = expired([r for r in rows if isinstance(r, dict)], today)
+    except (OSError, ValueError) as ex:
+        print(f"cannot decide retention from {listing}: {ex}", file=sys.stderr)
+        return 2
+    for u in urls:
+        print(u)
+    if not urls:
+        print(f"nothing older than {RETENTION_DAYS} days", file=sys.stderr)
+    return 0 if urls else 3
 
 
 def _evening(a):
@@ -193,8 +213,9 @@ def main(argv=None):
                    help="max plain-text body before sections are shed "
                         "(default 10 KB; it is charged to the same send call)")
     r.add_argument("--full-url", default=None, metavar="URL",
-                   help="address of the privately published full page; becomes "
-                        "the last line of the email and the text copy")
+                   help="address of the privately published full page; goes in "
+                        "the email's masthead, beside each mailpiece scan, and "
+                        "last in the text copy")
     r.add_argument("--scans", nargs="*", default=[], metavar="JPG",
                    help="mailpiece scans that will ride along in the same send "
                         "call; the email body budget shrinks to make room")
@@ -232,6 +253,12 @@ def main(argv=None):
     at.add_argument("files", nargs="+")
     at.add_argument("--out-dir", help="also check the whole send call against "
                                       "the rendered email in this directory")
+    xr = sub.add_parser("expired",
+                        help="which published brief pages are past retention? "
+                             "prints their URLs; exit 0 some, 3 none")
+    xr.add_argument("listing", help="JSON list of {title, url, favicon, updated}, "
+                                    "one per artifact the run can see")
+    xr.add_argument("--today", required=True, help="the run's date, YYYY-MM-DD")
     a = ap.parse_args(argv)
 
     if a.cmd == "verify":
@@ -242,6 +269,9 @@ def main(argv=None):
 
     if a.cmd == "evening":
         return _evening(a)
+
+    if a.cmd == "expired":
+        return _expired(a.listing, a.today)
 
     if a.cmd == "attachment":
         return _check_attachments(a.files, a.out_dir)

@@ -79,11 +79,11 @@ On Outlook or others: send yourself one three-way test (data:-URI image, inline 
 | File | Purpose |
 |---|---|
 | `ROUTINE_PROMPT.template.md` | The prompt template — placeholders + optional sections. Says what to gather and how to hand it over; carries no design spec. |
-| `brief/` | The renderer and the logic the run calls into. `theme.py` holds every color and font (the aesthetic pin) plus the escaping and link-safety helpers, `axes.py` the bar/axis arithmetic, `links.py` recovers real posting URLs from LinkedIn and Indeed tracking links and builds FlightAware idents, `postal.py` decides whether a printed mailpiece addressee is the owner, `significance.py` decides whether an extra send is warranted, `attachments.py` catches an attachment the send path would silently truncate, `evening.py` builds the evening update from what the morning email could not show, `model.py` the payload contract and its validation, `render.py` the three outputs, `__main__.py` the CLI. Pure standard library. |
+| `brief/` | The renderer and the logic the run calls into. `theme.py` holds every color and font (the aesthetic pin) plus the escaping and link-safety helpers, `axes.py` the bar/axis arithmetic, `links.py` recovers real posting URLs from LinkedIn and Indeed tracking links and builds FlightAware idents, `postal.py` decides whether a printed mailpiece addressee is the owner, `significance.py` decides whether an extra send is warranted, `attachments.py` catches an attachment the send path would silently truncate, `evening.py` builds the evening update from what the morning email could not show, `retention.py` decides which published brief pages are past their 30 days, `model.py` the payload contract and its validation, `render.py` the three outputs, `__main__.py` the CLI. Pure standard library. |
 | `sample_payload.json` | A complete worked example of the payload, with mock "Alex Sample" data. Doubles as the fixture for the tests and the README screenshots. |
 | `build_brief.py` | Thin wrapper that renders `sample_payload.json` — kept so `python3 build_brief.py` still works. |
 | `docs/render_screenshots.py` | Regenerates the README screenshots (run after design changes). Fails loudly if a selector goes stale. |
-| `tests/` | `test_privacy.py` — no personal data anywhere, and commit authorship is anonymous. `test_docs_current.py` — the README mentions every module, CLI command, test file and section that exists. `test_links_postal.py` — link recovery and addressee classification. `test_units.py` — axis arithmetic, payload validation, CLI. `test_render_units.py` — escaping and link safety (payload text is email content), direction coloring, empty sections, determinism, and the log-axis path the sample payload doesn't reach. `test_email_brief.py` — rendered output, the aesthetic pin, prompt invariants, privacy. `test_evening.py` — the full-page link, the email's record of what it left out, and carrying those sections into the evening. `test_rendering.py` — Chromium: layout, theming, bar geometry, axis alignment. |
+| `tests/` | `test_privacy.py` — no personal data anywhere, and commit authorship is anonymous. `test_docs_current.py` — the README mentions every module, CLI command, test file and section that exists. `test_links_postal.py` — link recovery and addressee classification. `test_units.py` — axis arithmetic, payload validation, CLI. `test_render_units.py` — escaping and link safety (payload text is email content), direction coloring, empty sections, determinism, and the log-axis path the sample payload doesn't reach. `test_email_brief.py` — rendered output, the aesthetic pin, prompt invariants, privacy. `test_evening.py` — the full-page link, its privacy note, the email's scan links, the email's record of what it left out, and carrying those sections into the evening. `test_retention.py` — which published pages are deleted after 30 days, and that nothing else ever is. `test_rendering.py` — Chromium: layout, theming, bar geometry, axis alignment. |
 | Email budget | Gmail clips past ~102 KB, so the email body is budgeted at 85 KB. When the brief outgrows it the **email sheds whole research cards** in a fixed order — least actionable first — and says which ones and where to find them. The standalone file always carries everything; nothing is ever shortened or summarized, because a half-rendered table is worse than an absent one. |
 | `.github/workflows/tests.yml` | CI — full suite on every push to `main` and every PR. |
 | `LICENSE` | MIT. |
@@ -106,6 +106,7 @@ python3 -m brief significant payload.json   # exit 0 = worth sending, 3 = skip
 python3 -m brief attachment scan.jpg        # exit 0 = sizes are within budget, 4 = not
 python3 -m brief verify src.jpg back.jpg    # exit 0 = byte identical, 5 = corrupt or truncated
 python3 -m brief extract-payload page.html -o morning.json   # recover a published page's payload
+python3 -m brief expired listing.json --today 2026-09-13   # brief pages past 30 days; exit 0 some, 3 none
 python3 -m brief evening --evening e.json --morning-page page.html --record email.txt -o out.json
                                             # exit 0 = send the evening update, 3 = skip
 ```
@@ -127,6 +128,25 @@ survives any shedding. The Artifact tool publishes from a *file path*, so
 the page never passes through the model's context and has no size ceiling. A
 scheduled run needs `Artifact` in the Routine's allowed tools; without it the
 publish waits on a permission prompt nobody is there to answer.
+
+**The link is private and short-lived.** The page opens only for the owner,
+signed in to claude.ai, and the email says so under the link. Because the page
+holds balances, masked account numbers and scans of physical mail, it is
+**deleted after 30 days**: after sending, each run lists its artifacts, and
+`python3 -m brief expired listing.json --today <date>` names the brief pages past
+retention for the run to delete. The rule in `retention.py` is deliberately
+narrow — a page is selected only with the brief's 📬 favicon, a `Morning Brief` /
+`Evening Update` title, a claude.ai address and a date that parses — because a
+deletion cannot be undone, while a stale page only waits for the next run. The
+clean-up runs after the send, so a delete that is refused or asks for
+confirmation can never cost that day's brief.
+
+**Mailpiece scans in the email.** The Gmail send path strips every `<img>` —
+data: URI, `cid:` inline attachment and remote URL alike, verified by reading a
+sent test message back raw — so the email cannot show a scan. Instead the USPS
+section names each scan, links it to its figure on the private page
+(`#usps-scan-<n>`), and says the JPG is attached at the end of the email, where
+the draft-verified attachments have always gone.
 
 `render --full-url URL` adds the link. Each render also writes:
 
