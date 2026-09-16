@@ -9,6 +9,7 @@ that refuses to render, because nobody checks a brief that looks plausible.
 Stdlib only — no jsonschema, no dependencies to install in a Routine run.
 """
 import json
+import re as _re
 
 # key -> (kind, per-row arity or None, human description)
 #   "rows"   list of tuples/lists, each of the given length
@@ -55,6 +56,14 @@ SPEC = {
     "JOURNAL_ITEMS": ("rows", 6, "papers: (journal, title, authors, date, takeaway, link)"),
     "ALLOWLIST":  ("map", None, "domain allowlist block"),
     "SOURCES":    ("mapl", None, "sources, grouped"),
+}
+
+# Keys a payload MAY carry. They are validated when present and ignored when
+# absent, so a run written against an older prompt still renders - a new section
+# must never turn every existing payload into a refusal at 10am.
+OPTIONAL_SPEC = {
+    "AI_SPEND": ("obj", ("year", "rows"), "AI billing year to date: year, rows of "
+                                          "(service, usd_total, note), optional note"),
 }
 
 FIT_TIERS = ("strong", "related", "")
@@ -120,6 +129,26 @@ def validate(payload):
             absent = [k2 for k2 in arity if k2 not in v]
             if absent:
                 _fail(key, f"missing field(s) {', '.join(absent)} ({desc})")
+
+    ai = payload.get("AI_SPEND")
+    if ai is not None:
+        kind, needed, desc = OPTIONAL_SPEC["AI_SPEND"]
+        if not isinstance(ai, dict):
+            _fail("AI_SPEND", f"expected an object ({desc})")
+        absent = [k for k in needed if k not in ai]
+        if absent:
+            _fail("AI_SPEND", f"missing field(s) {', '.join(absent)} ({desc})")
+        if not _re.match(r"^\d{4}$", str(ai["year"])):
+            _fail("AI_SPEND", f"year must be four digits, got {ai['year']!r} — it is what "
+                              "resets the total on 1 January")
+        if not isinstance(ai["rows"], list):
+            _fail("AI_SPEND", f"expected a list of rows ({desc})")
+        for n, row in enumerate(ai["rows"]):
+            if not isinstance(row, (list, tuple)) or len(row) != 3:
+                _fail("AI_SPEND", f"row {n} must have 3 fields (service, usd_total, note)")
+            if not isinstance(row[1], (int, float)):
+                _fail("AI_SPEND", f"row {n}: the year-to-date total must be a number, got "
+                                  f"{row[1]!r} — a formatted string cannot be added up")
 
     for n, row in enumerate(payload["VOIP"]["messages"]):
         if not isinstance(row, (list, tuple)) or len(row) != 5:

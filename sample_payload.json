@@ -241,6 +241,27 @@
   "First Meridian Bank — Visa ···1234 statement posted (Mon 8:59 AM EST): balance $1,210.45 · minimum $35.00 · due March 27.",
   "Nothing unusual: no duplicate charges, no processor alerts, no tax notices. A “$20 bonus for referrals” email from the brokerage is a promo, not a deposit."
  ],
+ "AI_SPEND": {
+  "year": "2026",
+  "rows": [
+   [
+    "Acme AI",
+    120.0,
+    "71% of AI spend this year"
+   ],
+   [
+    "Northwind AI",
+    34.0,
+    "20% of AI spend this year"
+   ],
+   [
+    "Cascade Speech",
+    15.0,
+    "9% of AI spend this year"
+   ]
+  ],
+  "note": "Acme AI carries an opening balance agreed for 2026; the others started at $0.00 when their first invoice arrived."
+ },
  "FIN_INTERNAL": "One scheduled transfer between the owner's own accounts today (in the table above); no other internal movement.",
  "VOIP": {
   "headline": "One text message in the window; no voicemails.",

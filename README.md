@@ -51,7 +51,7 @@ That's the whole setup. The rest of this README explains what you get and how to
 ## What a brief contains
 
 - **A "needs you today" action bar** — severity-striped items ranked by urgency.
-- **Standing sections, numbered in this order:** high priority (first, so it sits directly under the action bar), relevant job posts (exact-posting links, never tracking redirects), deposits & finances (external money separate from transfers between your own accounts), upcoming flights (carried forward until the trip date passes, with FlightAware links and each flight's recent on-time record), VoIP voicemails & texts, a US postal-mail digest via USPS Informed Delivery that details only your own mail and reduces everyone else's to a count, package tracking (kept until delivered, omitted entirely when nothing is in flight), and retail sales — always last, because it is the lowest-priority thing in the brief.
+- **Standing sections, numbered in this order:** high priority (first, so it sits directly under the action bar), relevant job posts (exact-posting links, never tracking redirects), deposits & finances (external money separate from transfers between your own accounts, plus a small **AI services — billed year to date** table), upcoming flights (carried forward until the trip date passes, with FlightAware links and each flight's recent on-time record), VoIP voicemails & texts, a US postal-mail digest via USPS Informed Delivery that details only your own mail and reduces everyone else's to a count, package tracking (kept until delivered, omitted entirely when nothing is in flight), and retail sales — always last, because it is the lowest-priority thing in the brief.
   Numbering is computed. A standing section with nothing new in its window says "Nothing new." in one line, because its absence would be ambiguous; flights and package tracking, which exist only to carry something forward, are omitted when there is nothing to carry, and the rest renumber rather than leaving a gap. **No section ever draws a heading over an empty table** — that reads as missing data, not as a quiet day.
 - **Researched cards** when there's news: US markets (indexes, and a Large caps table for the stocks you list — a private company is reported by its latest valuation instead of a price), your fund tickers, cryptocurrency, the Fed & labor market, AI & programming, and research & publications from journals you pick. Market, fund and crypto tables carry labelled even axes, an explicit horizon on every figure (1D and 1W, plus YTD on funds, with as-of stamps), and absolute magnitudes ($ / index points) beside every percentage.
 - A fixed visual identity, rendered by code — light/dark themed HTML file, a fluid email layout that survives email-provider HTML sanitizers, color-coded lead-ins, diverging bars on even axes, and mailpiece scans attached as JPGs.
@@ -79,11 +79,11 @@ On Outlook or others: send yourself one three-way test (data:-URI image, inline 
 | File | Purpose |
 |---|---|
 | `ROUTINE_PROMPT.template.md` | The prompt template — placeholders + optional sections. Says what to gather and how to hand it over; carries no design spec. |
-| `brief/` | The renderer and the logic the run calls into. `theme.py` holds every color and font (the aesthetic pin) plus the escaping and link-safety helpers, `axes.py` the bar/axis arithmetic, `links.py` recovers real posting URLs from LinkedIn and Indeed tracking links and builds FlightAware idents, `postal.py` decides whether a printed mailpiece addressee is the owner, `significance.py` decides whether an extra send is warranted, `attachments.py` catches an attachment the send path would silently truncate, `evening.py` builds the evening update from what the morning email could not show, `retention.py` decides which published brief pages are past their 30 days, `model.py` the payload contract and its validation, `render.py` the three outputs, `__main__.py` the CLI. Pure standard library. |
+| `brief/` | The renderer and the logic the run calls into. `theme.py` holds every color and font (the aesthetic pin) plus the escaping and link-safety helpers, `axes.py` the bar/axis arithmetic, `links.py` recovers real posting URLs from LinkedIn and Indeed tracking links and builds FlightAware idents, `postal.py` decides whether a printed mailpiece addressee is the owner, `significance.py` decides whether an extra send is warranted, `attachments.py` catches an attachment the send path would silently truncate, `evening.py` builds the evening update from what the morning email could not show, `spend.py` keeps each AI service's year-to-date billing total, `retention.py` decides which published brief pages are past their 30 days, `model.py` the payload contract and its validation, `render.py` the three outputs, `__main__.py` the CLI. Pure standard library. |
 | `sample_payload.json` | A complete worked example of the payload, with mock "Alex Sample" data. Doubles as the fixture for the tests and the README screenshots. |
 | `build_brief.py` | Thin wrapper that renders `sample_payload.json` — kept so `python3 build_brief.py` still works. |
 | `docs/render_screenshots.py` | Regenerates the README screenshots (run after design changes). Fails loudly if a selector goes stale. |
-| `tests/` | `test_privacy.py` — no personal data anywhere, and commit authorship is anonymous. `test_docs_current.py` — the README mentions every module, CLI command, test file and section that exists. `test_links_postal.py` — link recovery and addressee classification. `test_units.py` — axis arithmetic, payload validation, CLI. `test_render_units.py` — escaping and link safety (payload text is email content), direction coloring, empty sections, determinism, and the log-axis path the sample payload doesn't reach. `test_email_brief.py` — rendered output, the aesthetic pin, prompt invariants, privacy. `test_evening.py` — the full-page link, its privacy note, the email's scan links, the email's record of what it left out, and carrying those sections into the evening. `test_retention.py` — which published pages are deleted after 30 days, found from the artifact listing and from sent briefs, and that nothing else ever is. `test_rendering.py` — Chromium: layout, theming, bar geometry, axis alignment. |
+| `tests/` | `test_privacy.py` — no personal data anywhere, and commit authorship is anonymous. `test_docs_current.py` — the README mentions every module, CLI command, test file and section that exists. `test_links_postal.py` — link recovery and addressee classification. `test_units.py` — axis arithmetic, payload validation, CLI. `test_render_units.py` — escaping and link safety (payload text is email content), direction coloring, empty sections, determinism, and the log-axis path the sample payload doesn't reach. `test_email_brief.py` — rendered output, the aesthetic pin, prompt invariants, privacy. `test_evening.py` — the full-page link, its privacy note, the email's scan links, the email's record of what it left out, and carrying those sections into the evening. `test_retention.py` — which published pages are deleted after 30 days, found from the artifact listing and from sent briefs, and that nothing else ever is. `test_spend.py` — AI billing carried forward between briefs, never double-counted, reset on 1 January. `test_rendering.py` — Chromium: layout, theming, bar geometry, axis alignment. |
 | Email budget | Gmail clips past ~102 KB, so the email body is budgeted at 85 KB. When the brief outgrows it the **email sheds whole research cards** in a fixed order — least actionable first — and says which ones and where to find them. The standalone file always carries everything; nothing is ever shortened or summarized, because a half-rendered table is worse than an absent one. |
 | `.github/workflows/tests.yml` | CI — full suite on every push to `main` and every PR. |
 | `LICENSE` | MIT. |
@@ -107,6 +107,8 @@ python3 -m brief attachment scan.jpg        # exit 0 = sizes are within budget, 
 python3 -m brief verify src.jpg back.jpg    # exit 0 = byte identical, 5 = corrupt or truncated
 python3 -m brief extract-payload page.html -o morning.json   # recover a published page's payload
 python3 -m brief expired retention/ --today 2026-09-13    # brief pages past 30 days; exit 0 some, 3 none
+python3 -m brief ai-spend --previous morning.txt --today 2026-09-15 --add "Acme AI=20.00"
+                                            # carry AI billing totals forward; writes the payload's AI_SPEND block
 python3 -m brief evening --evening e.json --morning-page page.html --record email.txt -o out.json
                                             # exit 0 = send the evening update, 3 = skip
 ```
@@ -181,6 +183,30 @@ The clip threshold the record uses is the same one the "Gmail will clip" note
 uses, so the two never disagree. It is conservative on purpose: carrying a
 section the reader could in fact see costs a few lines; missing one costs the
 section.
+
+### AI billing, year to date
+
+Deposits & finances ends with a small table of what each AI service has billed
+this calendar year. The brief has no memory — every run is a fresh session — and
+the repo is public, so the total is carried in the brief itself: each text copy
+ends its finances section with
+
+    AI spend YTD 2026: Acme AI $120.00; Northwind AI $18.50
+
+and the next run reads that line out of the previous sent brief, adds only the
+charges that arrived in its own window, and prints the new line:
+
+    python3 -m brief ai-spend --previous morning.txt --today 2026-09-15 \
+        --add "Acme AI=20.00" -o ai_spend.json
+
+Nothing is back-dated — a service's count starts at zero when its first invoice
+arrives, and the caption says so — and the year resets on 1 January by
+construction, because a line stamped with another year is not carried forward.
+`--basis "Acme AI=250.00" --basis-year 2026` sets an opening balance
+established outside the mailbox; it applies only when there is nothing to carry
+forward, so it is added once and then lives inside the carried total.
+`AI_SPEND` is an **optional** payload key: a run written against an older prompt
+renders exactly as before, without the table.
 
 ### Attachments go through a draft
 

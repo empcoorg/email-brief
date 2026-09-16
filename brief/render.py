@@ -101,6 +101,9 @@ def render_all(payload, email_budget=None, text_budget=None, full_url=None,
     # payload into module globals, so an evening payload's CARRIED would
     # otherwise leak into the next render in the same process.
     globals()["CARRIED"] = payload.get("CARRIED") or {}
+    # Optional keys are bound explicitly, so a payload written against an older
+    # prompt renders with the section simply absent.
+    globals()["AI_SPEND"] = payload.get("AI_SPEND") or {}
     if full_url and url(full_url) == "#":
         # A refused link would still print its text, so refuse the address
         # outright and let the run see why, instead of shipping a dead link.
@@ -556,6 +559,13 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
             amt_s = money_amount(amt, cur, usd, sign)
             o.append('<tr>' + tdl("When", e(when), "mono") + tdl("Payee / source", e(payee)) + tdl("Detail", detail_html_file(det)) + tdl("Direction", f'<span class="{cls}">{e(sign)} {e(dirw)}</span>') + tdl("Amount", f'<span class="{cls}">{amt_s}</span>', "num mono") + tdl("Out ← 0 → In, USD", money_bar(usd, dirw, sign)) + '</tr>')
         o.append(f'</tbody></table></div><div class="daxis-foot">{money_head()}{money_axis()}<div class="meta">{money_axis_note()}</div></div><div class="cap">Bar axis, in USD: {money_axis_note()}. Amounts are shown in their original currency; bars are plotted from the USD equivalent. Money in = green on the right, out / past due = red on the left, no direction = neutral grey straddling zero (magnitude only — an internal or unclassified move has no side). The sign and direction word state it too.</div>')
+    if ai_spend_rows():
+        o.append('<h3>AI services — billed year to date</h3><div class="tbl-wrap"><table><thead><tr><th>Service</th><th style="text-align:right">Billed ' + e(AI_SPEND["year"]) + '</th><th>Share</th></tr></thead><tbody>')
+        for service, total, note in ai_spend_rows():
+            o.append('<tr>' + tdl("Service", f'<span class="lead">{e(service)}</span>')
+                     + tdl("Billed", f'<span class="mono">{e(usd_str(total))}</span>', "num")
+                     + tdl("Share", e(note), "meta") + '</tr>')
+        o.append(f'</tbody></table></div><div class="cap">{e(ai_spend_caption())}</div>')
     if FIN_INTERNAL:
         o.append('<h3>Transfers between your own accounts</h3><div class="nothing">' + e(FIN_INTERNAL) + '</div>')
     if FIN_NOTES:
@@ -759,6 +769,37 @@ def actions_sub():
     if not urgent:
         return "ranked; nothing here is marked urgent before the next run"
     return f"ranked; {urgent} urgent before the next run"
+
+
+def usd_str(amount):
+    """A USD figure, formatted the way every money column in the brief is.
+
+    NOT named usd(): `usd` is a loop variable in the money-movement rows, and a
+    module-level function of that name is shadowed inside those functions.
+    """
+    return f"${amount:,.2f}"
+
+
+def ai_spend_rows():
+    """The AI billing rows, or nothing when the payload carries no AI_SPEND."""
+    return (AI_SPEND or {}).get("rows") or []
+
+
+def ai_spend_total():
+    return sum(float(r[1]) for r in ai_spend_rows())
+
+
+def ai_spend_caption():
+    """Says what the figure is and, plainly, what it is not.
+
+    Nothing is back-dated: the count starts when a service is first seen, so a
+    reader must not mistake it for a full year of billing.
+    """
+    note = (AI_SPEND or {}).get("note") or ""
+    base = (f"Billed {AI_SPEND['year']} to date across {len(ai_spend_rows())} service(s): "
+            f"{usd_str(ai_spend_total())}. Counted from billing emails as they arrive - earlier "
+            f"charges are not back-dated - and reset to $0.00 on 1 January.")
+    return f"{base} {note}".strip()
 
 
 def voip_tail():
@@ -1101,7 +1142,29 @@ def _assemble_email(parts, droppable, budget=None):
     # clip is a link the reader can follow, a shed card is gone. The caller
     # decides, because only the caller knows the whole send call.
     budget = budget if budget else float("inf")
-    while len(("\n".join(parts)).encode("utf-8")) > budget:
+    where = ("in the full brief linked at the top" if FULL_URL
+             else "in the attached brief file")
+
+    def trim_note(names):
+        """The note that tells the reader which cards went, and where they are."""
+        if not names:
+            return ""
+        return ('<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid '
+                f'{L["line"]};border-left:4px solid {L["warn"]};border-radius:12px;margin-top:18px">'
+                f'<tr><td style="padding:12px 14px;font-family:{F_B};font-size:{BODY_FS};color:{L["ink"]}">'
+                f'{sp("Trimmed to fit the inbox", L["warn"])} — '
+                f'{e(", ".join(names))} '
+                f'{"is" if len(names) == 1 else "are"} {where} but not in this '
+                f'email. {e(why)} Nothing was shortened; whole cards were '
+                'dropped, least actionable first.</td></tr></table>')
+
+    # The note is part of the email, so its own bytes are counted while shedding.
+    # They used not to be, and a brief that shed cards could still land OVER the
+    # budget by the size of the note explaining the shedding.
+    def size(names):
+        return len(("\n".join(parts)).encode("utf-8")) + len(trim_note(names).encode("utf-8"))
+
+    while size(dropped) > budget:
         nxt = next((n for n in SHED_ORDER if n in droppable and parts[droppable[n]]), None)
         if nxt is None:
             break                      # nothing left that may be shed
@@ -1114,18 +1177,8 @@ def _assemble_email(parts, droppable, budget=None):
             if cap:
                 parts[i] = (part[:m.end()] + f'<div style="font-size:12.5px;color:{L["ink3"]};'
                             f'margin:-6px 0 10px">{e(cap)}</div>' + part[m.end():])
-    where = ("in the full brief linked at the top" if FULL_URL
-             else "in the attached brief file")
     if dropped:
-        note = ('<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid '
-                f'{L["line"]};border-left:4px solid {L["warn"]};border-radius:12px;margin-top:18px">'
-                f'<tr><td style="padding:12px 14px;font-family:{F_B};font-size:{BODY_FS};color:{L["ink"]}">'
-                f'{sp("Trimmed to fit the inbox", L["warn"])} — '
-                f'{e(", ".join(dropped))} '
-                f'{"is" if len(dropped) == 1 else "are"} {where} but not in this '
-                f'email. {e(why)} Nothing was shortened; whole cards were '
-                'dropped, least actionable first.</td></tr></table>')
-        parts.insert(-1, note)
+        parts.insert(-1, trim_note(dropped))
     # Record what the reader cannot see: shed cards are gone, clipped sections
     # are behind Gmail's "View entire message". An evening run reads this back
     # out of the sent text copy to know what to carry.
@@ -1212,6 +1265,11 @@ def email_html(budget=None):
         rws.append([td(f'<span style="font-family:{F_M}">{e(when)}</span><br>{e(payee)}'), td(detail_html_email(det)), td(f'{sp(e(sign+" "+dirw), col)} {sp(amt_s, col)}<br>{em_bar_money(usd, dirw, sign)}')])
     if FIN_MOVES:
         inner += h3("Money movements (outside → you / you → outside)") + tbl(["When · payee", "Detail", th_axis("Direction · amount", money_labels(FIN_AXIS))], rws, ["30%", "32%", "38%"]) + cap(f"Bar axis, in USD: {money_axis_note()}. Amounts shown in their original currency; bars plotted from the USD equivalent. In = green right of 0, out / past due = red left of 0, internal = grey (magnitude only) — sign and word state it too.")
+    if ai_spend_rows():
+        inner += h3(f'AI services — billed year to date') + tbl(
+            ["Service", f'Billed {AI_SPEND["year"]}', "Share"],
+            [[td(lead(service)), td(sp(e(usd_str(total)), L["ink"]), mono=True), td(small(e(note)))]
+             for service, total, note in ai_spend_rows()], ["40%", "26%", "34%"]) + cap(ai_spend_caption())
     if FIN_INTERNAL:
         inner += h3("Transfers between your own accounts") + f'<div style="color:{L["ink3"]};font-style:italic">{e(FIN_INTERNAL)}</div>'
     if FIN_NOTES:
@@ -1488,6 +1546,14 @@ def plain_text(budget=None):
             A(f"  - {when} · {payee} · {sign} {dirw} · {money_amount(amt, cur, usd, sign)}")
             for line in detail_lines(det):
                 A(f"      {line}")
+    if ai_spend_rows():
+        A(f"AI services — billed year to date ({AI_SPEND['year']}):")
+        for service, total, note in ai_spend_rows():
+            A(f"  - {service}: {usd_str(total)} ({note})")
+        A("  " + ai_spend_caption())
+        # Machine-readable, and the reason the total survives to the next run:
+        # tomorrow's brief reads this line out of today's sent email.
+        A("  " + spend_line())
     if FIN_INTERNAL: A(f"Transfers between own accounts: {FIN_INTERNAL}")
     for n in FIN_NOTES: A(f"  - {n}")
     if FLIGHTS["legs"]:
@@ -1576,6 +1642,13 @@ def plain_text(budget=None):
     if (CARRIED or {}).get("sections"):
         text = _TEXT_HEADING.sub(_carried_text_line, text)
     return text + record_lines()
+
+
+def spend_line():
+    """The line the next run parses back out of this brief's text copy."""
+    from .spend import format_line
+    return format_line((AI_SPEND or {}).get("year", ""),
+                       {r[0]: float(r[1]) for r in ai_spend_rows()})
 
 
 def _carried_text_line(m):

@@ -3,6 +3,7 @@
     python3 -m brief render payload.json --out-dir /mnt/user-data/outputs
     python3 -m brief validate payload.json
     python3 -m brief expired artifacts.txt sent/ --today 2026-09-13
+    python3 -m brief ai-spend --previous morning.txt --today 2026-09-15 --add "Acme AI=20.00"
 
 `render` writes morning-brief-<date>.html, email.html and email.txt, then
 prints the paths and the email's size against the 85 KB send budget.
@@ -62,6 +63,53 @@ def _expired(sources, today):
         print(f"nothing older than {RETENTION_DAYS} days in {len(rows)} page(s) "
               f"from {len(files)} file(s)", file=sys.stderr)
     return 0 if urls else 3
+
+
+def _pairs(items, what):
+    """"Name=12.34" pairs from the command line, as (name, amount)."""
+    out = []
+    for item in items or []:
+        name, sep, amount = str(item).rpartition("=")
+        if not sep or not name.strip():
+            raise ValueError(f"{what} must look like \"Service=12.34\", got {item!r}")
+        try:
+            out.append((name.strip(), float(amount.replace("$", "").replace(",", "").strip())))
+        except ValueError:
+            raise ValueError(f"{what} {item!r}: {amount!r} is not a number") from None
+    return out
+
+
+def _ai_spend(a):
+    """Carry each AI service's year-to-date total forward and add this run's charges."""
+    from .spend import accumulate, format_line, rows
+    previous = ""
+    if a.previous:
+        try:
+            with open(a.previous, encoding="utf-8") as fh:
+                previous = fh.read()
+        except OSError as ex:
+            print(f"cannot read {a.previous}: {ex}", file=sys.stderr)
+            return 2
+    try:
+        year, totals, carried = accumulate(previous, _pairs(a.add, "--add"), a.today,
+                                           dict(_pairs(a.basis, "--basis")), a.basis_year)
+    except ValueError as ex:
+        print(f"cannot total AI spend: {ex}", file=sys.stderr)
+        return 2
+    block = {"year": year, "rows": rows(totals)}
+    if a.note:
+        block["note"] = a.note
+    with open(a.out, "w", encoding="utf-8") as fh:
+        json.dump(block, fh, ensure_ascii=False, indent=1)
+    where = (f"carried forward from the previous brief ({carried})" if carried
+             else "nothing carried forward — this is the first brief of "
+                  f"{year}, or the previous one had no line")
+    print(f"wrote {a.out} — {where}.")
+    for service, total, note in block["rows"]:
+        print(f"  {service}: ${total:,.2f}  ({note})")
+    print(format_line(year, totals))
+    print("Paste the contents of the file into the payload as AI_SPEND.")
+    return 0
 
 
 def _evening(a):
@@ -261,6 +309,24 @@ def main(argv=None):
     at.add_argument("files", nargs="+")
     at.add_argument("--out-dir", help="also check the whole send call against "
                                       "the rendered email in this directory")
+    sp_ = sub.add_parser("ai-spend",
+                         help="carry AI billing totals forward and add this run's "
+                              "charges; writes the payload's AI_SPEND block")
+    sp_.add_argument("--previous", help="the previous brief's text copy, which ends with "
+                                        "its 'AI spend YTD' line (omit on the first run)")
+    sp_.add_argument("--today", required=True, help="the run's date, YYYY-MM-DD — its year "
+                                                    "is what resets the total on 1 January")
+    sp_.add_argument("--add", action="append", metavar="SERVICE=USD", default=[],
+                     help="a charge that arrived in THIS window only; repeatable. Anything "
+                          "older is already inside the carried total")
+    sp_.add_argument("--basis", action="append", metavar="SERVICE=USD", default=[],
+                     help="starting amount for a service, used only when nothing is carried "
+                          "forward (an opening balance established outside the mailbox)")
+    sp_.add_argument("--basis-year", help="the year a --basis applies to; outside it the "
+                                          "basis is ignored")
+    sp_.add_argument("--note", help="one line shown under the table")
+    sp_.add_argument("-o", "--out", default="ai_spend.json", help="where to write the block")
+
     xr = sub.add_parser("expired",
                         help="which published brief pages are past retention? "
                              "prints their URLs; exit 0 some, 3 none")
@@ -279,6 +345,9 @@ def main(argv=None):
 
     if a.cmd == "evening":
         return _evening(a)
+
+    if a.cmd == "ai-spend":
+        return _ai_spend(a)
 
     if a.cmd == "expired":
         return _expired(a.sources, a.today)
