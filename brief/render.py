@@ -750,6 +750,8 @@ F_H = "Archivo,Arial"
 F_B = "'Source Sans 3',Arial"
 F_M = "'JetBrains Mono',Menlo"
 BODY_FS = "15px"
+# One step under body size, for the masthead's route-to-the-brief line.
+LINK_FS = "13px"
 def lbl(t): return f'<div style="font:600 10.5px {F_H};text-transform:uppercase;color:{L["ink3"]}">{e(t)}</div>'
 # A standing section with nothing in its window says so in one line rather than
 # disappearing (its absence would be ambiguous) or drawing an empty table (which
@@ -927,9 +929,9 @@ def layout_note():
     It was a frozen literal, so every brief for weeks told the reader to open a
     file named for a date long past.
     """
-    return ("Layout: one fluid layout for phone and desktop (the mail path strips stylesheets, so the email cannot adapt itself). "
-            f"The standalone file <b>morning-brief-{e(FILE_STAMP)}.html</b> — full desktop tables, mobile cards, dark mode, collapsible sources, "
-            "and embedded USPS scans — is delivered in the Claude session alongside this email.")
+    return ("One fluid layout for phone and desktop — the mail path strips stylesheets. "
+            f"The standalone file <b>morning-brief-{e(FILE_STAMP)}.html</b>, with full tables, "
+            "dark mode and the mailpiece scans, is in the Claude session.")
 
 # Gmail clips a message past ~102 KB and its sanitizer inflates the HTML ~12%,
 # so the body is budgeted at 85 KB. When the brief outgrows that, the EMAIL sheds
@@ -1069,14 +1071,15 @@ def full_link_html():
     It sits in the header, not at the end: Gmail clips a long message and hides
     its tail behind "View entire message", and the link is the route to
     whatever the reader cannot see - so it must come before any clip point.
+    It follows the layout note, which already draws the rule above it, and sits
+    a step below body size: it is a route to the brief, not part of it.
     """
     if not FULL_URL:
         return ""
-    return (f'<div style="margin-top:10px;padding-top:8px;border-top:1px solid {L["line"]};'
-            f'font-family:{F_B};font-size:{BODY_FS};color:{L["ink"]}">'
+    return (f'<div style="margin-top:6px;font-family:{F_B};font-size:{LINK_FS};color:{L["ink"]}">'
             f'{sp("Full brief, never truncated:", L["ink"])} '
             f'<a href="{url(FULL_URL)}" style="color:{L["accent"]};font-weight:600">{e(short_url(FULL_URL))}</a>'
-            f'<div style="font-size:12.5px;color:{L["ink3"]};margin-top:2px">{e(FULL_LINK_NOTE)}</div>'
+            f'<div style="font-size:11.5px;color:{L["ink3"]};margin-top:2px">{e(FULL_LINK_NOTE)}</div>'
             '</div>')
 
 
@@ -1208,9 +1211,9 @@ def email_html(budget=None):
     stamps = "".join(f'<div style="margin-top:8px">{lbl(k)}<div style="font-family:{F_M};font-size:14px">{e(v)}</div></div>' for k, v in [("Timezone", MAST["tz"]), ("Scheduled slot", MAST["slot"]), ("Window covered", MAST["window"]), ("Run stamp", MAST["run"])])
     o.append(f'<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid {L["line"]};border-radius:14px"><tr><td style="padding:18px 16px">'
              f'<div style="font-family:{F_H};font-size:28px;font-weight:700;color:{L["ink"]}">{e(MAST["title"])}</div>'
-             f'<div style="font-size:16px;font-weight:600;color:{L["ink2"]};margin-top:2px">{e(MAST["dateline"])}</div>{full_link_html()}{stamps}'
+             f'<div style="font-size:16px;font-weight:600;color:{L["ink2"]};margin-top:2px">{e(MAST["dateline"])}</div>{stamps}'
              f'<div style="font-size:13px;color:{L["ink3"]};margin-top:10px">{e(MAST["note"])}</div>'
-             f'<div style="font-size:12.5px;color:{L["ink3"]};margin-top:6px;border-top:1px solid {L["line"]};padding-top:6px">{layout_note()}</div>'
+             f'<div style="font-size:12.5px;color:{L["ink3"]};margin-top:6px;border-top:1px solid {L["line"]};padding-top:6px">{layout_note()}</div>{full_link_html()}'
              f'<div style="font-size:13px;color:{L["warn"]};font-weight:600;margin-top:6px">{e(MAST["revised"])}</div></td></tr></table>')
     sevcol = {"warn": L["warn"], "neg": L["neg"], "info": L["accent"], "ok": L["pos"]}
     tagmap = {"warn": "Check", "neg": "Urgent", "info": "Note", "ok": "Clear"}

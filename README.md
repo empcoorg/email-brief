@@ -124,9 +124,9 @@ bar. It is a rule with tests, not a judgement made fresh each evening.
 
 Every brief links to the **complete page, never truncated**, published
 privately to the owner's claude.ai account. It is the one route to everything the
-email could not carry, so in the email it sits in the masthead, under the
-dateline, ahead of Gmail's clip point; in the text copy it is the last line. It
-survives any shedding. The Artifact tool publishes from a *file path*, so
+email could not carry, so in the email it sits in the masthead, under the layout
+note and a step below body size, ahead of Gmail's clip point; in the text copy
+it is the last line. It survives any shedding. The Artifact tool publishes from a *file path*, so
 the page never passes through the model's context and has no size ceiling. A
 scheduled run needs `Artifact` in the Routine's allowed tools; without it the
 publish waits on a permission prompt nobody is there to answer.
