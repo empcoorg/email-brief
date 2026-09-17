@@ -87,6 +87,7 @@ On Outlook or others: send yourself one three-way test (data:-URI image, inline 
 | `sample_payload.json` | A complete worked example of the payload, with mock "Alex Sample" data. Doubles as the fixture for the tests and the README screenshots. |
 | `build_brief.py` | Thin wrapper that renders `sample_payload.json` — kept so `python3 build_brief.py` still works. |
 | `docs/render_screenshots.py` | Regenerates the README screenshots (run after design changes). Fails loudly if a selector goes stale. |
+| `docs/egress-allowlist.txt` | The domains to paste into the Routine environment's **Network access → Custom** list, so the sources the prompt reads are not refused by the egress proxy. Kept in step with the prompt by a test. |
 | `tests/` | `test_privacy.py` — no personal data anywhere, and commit authorship is anonymous. `test_docs_current.py` — the README mentions every module, CLI command, test file and section that exists. `test_links_postal.py` — link recovery and addressee classification. `test_units.py` — axis arithmetic, payload validation, CLI. `test_render_units.py` — escaping and link safety (payload text is email content), direction coloring, empty sections, determinism, and the log-axis path the sample payload doesn't reach. `test_email_brief.py` — rendered output, the aesthetic pin, prompt invariants, privacy. `test_evening.py` — the full-page link, its privacy note, the email's scan links, the email's record of what it left out, and carrying those sections into the evening. `test_retention.py` — which published pages are deleted after 30 days, found from the artifact listing and from sent briefs, and that nothing else ever is. `test_phones.py` — phone numbers become dialable, and tracking numbers, ZIP+4 and scan data never do. `test_spend.py` — AI billing carried forward between briefs, never double-counted, reset on 1 January. `test_rendering.py` — Chromium: layout, theming, bar geometry, axis alignment. |
 | Send budget | A brief may fill **98% of the sending connector's limit** (`--connector gmail｜outlook｜microsoft365`, or `BRIEF_CONNECTOR_LIMIT_BYTES`), leaving 2% for MIME headers and the provider's own framing. A second ceiling applies at the same time: htmlBody, the plain-text part and every attachment's base64 are inline arguments of ONE tool call, and a run cannot emit more than `SEND_CALL_BYTES` (135 KB, measured from a refusal at ~145 KB) in a single response. **The smaller of the two wins**, so today the emit ceiling binds — 98% of Gmail's 25 MB is ~25 MB — and the connector's share takes over the moment a run proves it can emit more. |
 | Email budget | Gmail clips past ~102 KB, so the email body is budgeted at 85 KB. When the brief outgrows it the **email sheds whole research cards** in a fixed order — least actionable first — and says which ones and where to find them. The standalone file always carries everything; nothing is ever shortened or summarized, because a half-rendered table is worse than an absent one. |
@@ -222,9 +223,28 @@ pins the rule in the prompt, because the prompt is what a run actually follows.
 So the template puts **WebSearch first** for every researched figure and uses
 `WebFetch` only to confirm a number search already gave, marks a figure the
 proxy blocked as "not verified — search snippet only", and records the blocked
-domain. Widening what a run can fetch is a **change to the environment's egress
-allowlist**, made where the Routine's environment is configured — not something
-this repo or the prompt can grant.
+domain.
+
+**To let a run fetch its sources**, paste [`docs/egress-allowlist.txt`](docs/egress-allowlist.txt)
+into the environment the Routine runs in: claude.ai/code → the cloud environment
+selector → **Edit** → **Network access** → **Custom**, with *also include the
+default list* ticked so package registries and GitHub keep working. The file
+holds every source the prompt reads — quote sources, wire services, journals,
+travel — with no wildcard, and a test fails if the prompt names a source the file
+omits. Strip the comments if the field will not take them:
+
+    grep -v '^#' docs/egress-allowlist.txt | grep . | pbcopy
+
+**Add one domain first and run the brief**, rather than pasting all of them
+blind: there are open reports of Custom lists not reaching the proxy, and a
+single working fetch tells you which situation you are in.
+
+**What it costs.** Every allowed domain is somewhere a run that has just read a
+mailbox could send a request, which is why the list is finite and boring, why
+there is no wildcard, and why the prompt forbids putting anything from the
+mailbox into a request at all. `permissions.allow` entries like
+`WebFetch(domain:…)` are a *different layer* — they decide whether Claude is
+prompted, not whether the packet leaves.
 
 ### Phone numbers are dialable
 

@@ -22,6 +22,7 @@ sys.path.insert(0, ROOT)
 
 README = open(os.path.join(ROOT, "README.md"), encoding="utf-8").read()
 CLAUDE_MD = open(os.path.join(ROOT, "CLAUDE.md"), encoding="utf-8").read()
+TEMPLATE = open(os.path.join(ROOT, "ROUTINE_PROMPT.template.md"), encoding="utf-8").read()
 
 
 class TestReadmeDescribesTheCode(unittest.TestCase):
@@ -67,6 +68,53 @@ class TestReadmeDescribesTheCode(unittest.TestCase):
             self.assertTrue(os.path.isfile(os.path.join(ROOT, img)), f"missing {img}")
         self.assertIn("screenshots.lock", README,
                       "the README must explain that screenshot currency is enforced")
+
+
+class TestEgressAllowlist(unittest.TestCase):
+    """The list pasted into the environment must carry what the prompt reads.
+
+    The prompt's domain list says which sources to PREFER; it cannot grant
+    access. If the two drift, a run follows the prompt to a domain the proxy
+    refuses, and the section comes out empty with nobody the wiser.
+    """
+
+    PATH = os.path.join(ROOT, "docs", "egress-allowlist.txt")
+
+    def domains(self):
+        with open(self.PATH, encoding="utf-8") as fh:
+            return [l.strip() for l in fh if l.strip() and not l.startswith("#")]
+
+    def prompt_domains(self):
+        block = TEMPLATE.split("PRE-APPROVED DOMAINS")[1].split("KNOWN-DIFFICULT")[0]
+        found = []
+        for line in block.splitlines():
+            if ":" in line and "\u00b7" in line:
+                found += [d.strip() for d in line.split(":", 1)[1].split("\u00b7") if "." in d]
+        return found
+
+    def test_every_domain_the_prompt_prefers_is_in_the_list(self):
+        listed, wanted = set(self.domains()), self.prompt_domains()
+        self.assertTrue(wanted, "the template no longer names its sources")
+        missing = sorted(d for d in wanted if d not in listed)
+        self.assertEqual(missing, [], f"the allowlist omits sources the prompt reads: {missing}")
+
+    def test_the_list_is_finite_boring_and_free_of_wildcards(self):
+        doms = self.domains()
+        self.assertEqual(sorted(doms), sorted(set(doms)), "a domain is listed twice")
+        for d in doms:
+            self.assertNotIn("*", d, f"{d}: a wildcard widens this far past what a brief reads")
+            self.assertNotIn("/", d, f"{d}: a domain, not a URL")
+            self.assertRegex(d, r"^[a-z0-9.-]+\.[a-z]{2,}$", f"{d} is not a bare domain")
+
+    def test_the_file_says_what_it_is_and_what_it_costs(self):
+        with open(self.PATH, encoding="utf-8") as fh:
+            head = fh.read().split("# Markets")[0]
+        self.assertIn("EGRESS_BLOCKED", head, "it must say why the prompt's own list is not enough")
+        self.assertIn("Network access", head, "it must say where the list is pasted")
+        self.assertIn("mailbox", head, "it must say what widening egress costs")
+
+    def test_the_readme_points_at_the_file(self):
+        self.assertIn("docs/egress-allowlist.txt", README)
 
 
 class TestTheDocRuleIsWrittenDown(unittest.TestCase):

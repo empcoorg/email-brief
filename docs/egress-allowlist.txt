@@ -1,0 +1,203 @@
+# Egress allowlist for the Routine's cloud environment.
+#
+# Paste the domains below (comment lines and blanks are ignored by the
+# field; strip them if it will not take them) into claude.ai/code ->
+# the cloud environment this Routine runs in -> Edit -> Network access
+# -> Custom, with "also include the default list" ticked so package
+# registries and GitHub keep working.
+#
+# WHY THIS FILE EXISTS: the prompt's own domain list says which sources to
+# PREFER. It cannot grant access: the sandbox sits behind an egress proxy
+# with its own allowlist, and anything absent from THAT list comes back as
+# EGRESS_BLOCKED however the prompt is written. This file is the list to
+# paste there, kept in step with the prompt by a test.
+#
+# WHAT IT COSTS: every domain here is somewhere a run that has just read a
+# mailbox could send a request. That is why the list is finite and boring -
+# quote sources, wire services, journals - with no wildcard, and why the
+# prompt forbids putting anything from the mailbox into a request at all.
+# Add a domain when a run actually needed it and was refused; not before.
+
+# Markets/finance
+aol.com
+apnews.com
+barchart.com
+barrons.com
+bea.gov
+benzinga.com
+bloomberg.com
+bls.gov
+businessinsider.com
+cmegroup.com
+cnbc.com
+federalreserve.gov
+fedratecalc.com
+fidelity.com
+finance.yahoo.com
+finra.org
+finviz.com
+forbes.com
+fortune.com
+fred.stlouisfed.org
+ft.com
+fxstreet.com
+home.treasury.gov
+housingwire.com
+investing.com
+investor.vanguard.com
+investors.com
+kiplinger.com
+lancasteronline.com
+macrotrends.net
+marketscreener.com
+marketwatch.com
+money.usnews.com
+morningstar.com
+nasdaq.com
+nasdaqtrader.com
+nyse.com
+oddsshopper.com
+parameter.io
+pbs.org
+reuters.com
+schwab.com
+sec.gov
+seekingalpha.com
+slickcharts.com
+spglobal.com
+statmuse.com
+stockanalysis.com
+stockcharts.com
+stooq.com
+thestreet.com
+tradingeconomics.com
+vanguard.com
+wisesheets.io
+wsj.com
+ycharts.com
+zacks.com
+
+# World/news
+abcnews.go.com
+aljazeera.com
+axios.com
+bbc.com
+cbsnews.com
+cnn.com
+economist.com
+latimes.com
+marketplace.org
+nbcnews.com
+npr.org
+nytimes.com
+politico.com
+theguardian.com
+usatoday.com
+washingtonpost.com
+
+# Crypto
+ambcrypto.com
+binance.com
+bitcoinmagazine.com
+bitstamp.net
+blockworks.co
+coinbase.com
+coindesk.com
+coingecko.com
+coinglass.com
+coinmarketcap.com
+coinstats.app
+cointelegraph.com
+cryptoslate.com
+decrypt.co
+defillama.com
+dlnews.com
+dune.com
+etherscan.io
+farside.co.uk
+kraken.com
+lcx.com
+messari.io
+metamask.io
+news.bitcoin.com
+sundayguardianlive.com
+theblock.co
+u.today
+
+# Journals
+doi.org
+nature.com
+onlinelibrary.wiley.com
+pubmed.ncbi.nlm.nih.gov
+scholar.google.com
+science.org
+
+# Science/genomics
+biorxiv.org
+biospace.com
+endpts.com
+fiercebiotech.com
+genomeweb.com
+illumina.com
+nanoporetech.com
+ncbi.nlm.nih.gov
+statnews.com
+
+# AI/programming
+ai.google.dev
+ai.meta.com
+anthropic.com
+arstechnica.com
+arxiv.org
+bleepingcomputer.com
+blog.google
+blog.rust-lang.org
+blogs.nvidia.com
+deepmind.google
+devblogs.microsoft.com
+developer.nvidia.com
+github.blog
+github.com
+huggingface.co
+infoworld.com
+lwn.net
+mistral.ai
+news.ycombinator.com
+nodejs.org
+nvd.nist.gov
+openai.com
+phoronix.com
+pypi.org
+python.org
+pytorch.org
+qwenlm.github.io
+simonwillison.net
+spectrum.ieee.org
+stackoverflow.blog
+techcrunch.com
+technologyreview.com
+thehackernews.com
+thenewstack.io
+thenextweb.com
+theregister.com
+theverge.com
+venturebeat.com
+wired.com
+zdnet.com
+
+# Jobs
+api.ashbyhq.com
+boards.greenhouse.io
+indeed.com
+jobs.ashbyhq.com
+jobs.lever.co
+linkedin.com
+
+# Travel
+aa.com
+amtrak.com
+delta.com
+faa.gov
+flightaware.com
+transtats.bts.gov
+united.com
