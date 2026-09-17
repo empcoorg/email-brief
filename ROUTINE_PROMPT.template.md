@@ -133,7 +133,8 @@ For those researched sections, use web search so the information is current as o
 
 === WEB ACCESS — PRE-APPROVED LIST, AND NEVER STALL ===
 
-The domains below are pre-saved as approved. Draw the researched sections from these first; they are known to work and need no approval.
+WHAT THIS LIST IS, AND WHAT IT IS NOT. It is the set of sources to prefer, written here so the run does not go hunting. It is NOT network configuration: the sandbox sits behind an egress proxy with its own allowlist, and a domain absent from THAT list returns `{"error_type":"EGRESS_BLOCKED"}` no matter what this prompt says. Observed 2026-09-17: every WebFetch to a finance or news domain — stooq.com, marketwatch.com, stockanalysis.com, investing.com, finance.yahoo.com, cnbc.com, bls.gov, tradingeconomics.com, coingecko.com, coinmarketcap.com, reuters.com, thestreet.com — was refused by the proxy, while WebSearch worked normally all run.
+SO: WebSearch FIRST for every researched figure, and WebFetch only to confirm a number search has already given you. When a fetch comes back EGRESS_BLOCKED, do not retry it and do not route around it: take what the search results state, and mark the figure "not verified — search snippet only, the source page was blocked" so the reader knows which numbers were confirmed on a page and which were not. A figure no source states at all is still omitted rather than guessed, and the section is still rendered rather than left hollow. Record every blocked domain in the Domain allowlist block the same way a failed domain is recorded, so the pattern is visible across runs.
 
 DO NOT ask for, request, or wait on URL/site permission for financial news, market data, crypto, AI/programming news, or any other source — not in the chat reply, not through a permission prompt, not by retrying a blocked fetch. No prompt will ever be answered on this run.
 

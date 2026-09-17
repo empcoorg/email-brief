@@ -126,12 +126,12 @@ def rows(totals, new=None):
     it would say nothing about today.
 
     >>> rows({"Acme AI": 120.0, "Northwind AI": 40.0}, {"Acme AI": 20.0})
-    [['Acme AI', 120.0, 20.0, '75% of AI spend this year'], ['Northwind AI', 40.0, 0.0, '25% of AI spend this year']]
+    [['Acme AI', 120.0, 20.0, '75% of AI spend'], ['Northwind AI', 40.0, 0.0, '25% of AI spend']]
     """
     grand = sum(totals.values())
     new = new or {}
     out = []
     for service, total in sorted(totals.items(), key=lambda kv: (-kv[1], kv[0])):
-        share = f"{round(100 * total / grand)}% of AI spend this year" if grand else "no charges yet"
+        share = f"{round(100 * total / grand)}% of AI spend" if grand else "no charges yet"
         out.append([service, round(float(total), 2), round(float(new.get(service, 0.0)), 2), share])
     return out

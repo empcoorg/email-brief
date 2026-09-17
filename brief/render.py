@@ -535,7 +535,10 @@ td.num{{text-align:right;white-space:nowrap}}
 .dbar .fill.right{{left:50%}} .dbar .fill.left{{right:50%}} .dbar .fill.center{{left:50%;transform:translateX(-50%)}} .fill.pos{{background:var(--positive)}} .fill.neg{{background:var(--negative)}} .fill.neu{{background:var(--ink-3)}}
 .daxis{{position:relative;height:16px;width:150px;margin-top:3px;box-sizing:border-box;border:1px solid transparent}}
 .dbar.money,.daxis.money{{width:100%;min-width:150px;max-width:280px}}
-.dhead{{position:relative;height:13px;width:150px;min-width:150px;max-width:280px}}
+/* The heading's "0" must sit exactly over the ruler's, so it takes the ruler's
+   width rule rather than a fixed one: in a wider column a 150px heading centred
+   its zero 65px left of the bars' zero, over negative territory. */
+.dhead{{position:relative;height:13px;width:100%;min-width:150px;max-width:280px}}
 .dhead span{{position:absolute;top:0;white-space:nowrap}}
 .dhead .l{{right:50%;margin-right:7px}} .dhead .c{{left:50%;transform:translateX(-50%)}} .dhead .r{{left:50%;margin-left:7px}}
 .daxis i{{position:absolute;top:0;height:3px;width:1px;background:var(--line)}}
@@ -721,7 +724,7 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
                  + '>Stays &amp; other bookings</h3><div class="tbl-wrap"><table><thead><tr>'
                  '<th>Type</th><th>Booking</th><th>Dates</th><th>Where</th><th>Confirmation</th></tr></thead><tbody>')
         for kind, what, when, where, conf, link, *rest in TRAVEL:
-            source = (rest[0] if rest else "").strip()
+            source = booking_source(what, rest[0] if rest else "")
             booking = f'<span class="lead">{e(what)}</span>'
             if link.strip():
                 booking = f'<a href="{url(link)}"><b>{e(what)}</b></a>'
@@ -771,7 +774,12 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
             o.append('<tr>' + tdl("Date", e(d_), "mono") + tdl("Sender", e(s_)) + tdl("Addressee (as printed)", e(a_), "mono") + tdl("Type / notes", e(ty), "meta") + '</tr>')
         o.append('</tbody></table></div>')
     for n, (uri, cap_) in enumerate(USPS_SCANS, 1):
-        o.append(f'<figure class="scanfig" id="{scan_anchor(n)}"><img src="{url(uri)}" alt="Full mailpiece scan (mock)"><figcaption>{e(cap_)}</figcaption></figure>')
+        o.append(f'<figure class="scanfig" id="{scan_anchor(n)}"><img src="{url(uri)}" alt="Full mailpiece scan"><figcaption>{e(cap_)}</figcaption></figure>')
+    # A detailed piece with no embedded scan is a gap the reader cannot see: the
+    # page is the one place the image is meant to live, so say it is missing
+    # rather than letting the section look complete.
+    if USPS["pieces"] and not USPS_SCANS:
+        o.append(f'<div class="nothing">{e(SCAN_MISSING)}</div>')
     counts = li_lead(USPS["counts"])
     o.append((f'<ul>{counts}</ul>' if counts else "")
              + (f'<p class="meta">{e(USPS["note"])}</p>' if USPS["note"].strip() else "")
@@ -915,6 +923,8 @@ def lbl(t): return f'<div style="font:600 10.5px {F_H};text-transform:uppercase;
 # disappearing (its absence would be ambiguous) or drawing an empty table (which
 # reads as missing data). Research cards are conditional and are omitted instead.
 NOTHING_TODAY = "Nothing needs you today."
+SCAN_MISSING = ("Mailpiece scan not embedded for this piece — the run detailed it but sent no "
+                "image. The scan belongs here, full width, and in the email as a JPG attachment.")
 TRAVEL_SUB = "flights, stays and bookings, carried until each date passes"
 TRAVEL_NOTE = ("Each booking stays in the brief until its date has passed, whether or not "
                "new mail about it arrived in the window.")
@@ -1067,6 +1077,28 @@ def leg_conf(leg):
 def leg_terminals(leg):
     """Departure and arrival terminal/gate text, as the airline stated it."""
     return str(leg.get("term") or "").strip()
+
+
+_GENERIC_PROPERTY = _re.compile(r"\b(the property|the hotel|the venue|the operator)\b", _re.I)
+
+
+def booking_source(what, source):
+    """Where a booking was made, with the generic word replaced by the name.
+
+    "Booked direct with the property" tells a reader nothing they cannot see;
+    "Booked direct with Northwind Harbor Hotel" is who to call. The run writes
+    either, so the renderer names it.
+
+    >>> booking_source("Northwind Harbor Hotel", "Booked direct with the property")
+    'Booked direct with Northwind Harbor Hotel'
+    >>> booking_source("Northwind Harbor Hotel", "Booking.com")
+    'Booking.com'
+    >>> booking_source("", "Booked direct with the property")
+    'Booked direct with the property'
+    """
+    name = str(what or "").strip()
+    text = str(source or "").strip()
+    return _GENERIC_PROPERTY.sub(name, text) if name else text
 
 
 def booking_split(text):
@@ -1621,7 +1653,7 @@ def email_html(budget=None):
         inner += h3("Stays & other bookings")
         rws = []
         for kind, what, when, where, conf, link, *rest in TRAVEL:
-            source = (rest[0] if rest else "").strip()
+            source = booking_source(what, rest[0] if rest else "")
             dates, times = booking_split(when)
             place, place_detail = booking_split(where)
             name = (f'<a href="{url(link)}" style="color:{L["accent"]};font-weight:600">{e(what)}</a>'
@@ -1662,6 +1694,8 @@ def email_html(budget=None):
     if rws:
         inner += tbl(["Date · sender", "Addressee (as printed)", "Type / notes"], rws)
     inner += scan_links_html()
+    if USPS["pieces"] and not USPS_SCANS:
+        inner += f'<div style="color:{L["warn"]};font-style:italic">{e(SCAN_MISSING)}</div>'
     counts = em_li(USPS["counts"])
     inner += ('<ul style="margin:8px 0 0;padding-left:20px">' + counts + '</ul>' if counts else "")
     if USPS["note"].strip():
@@ -1932,7 +1966,7 @@ def plain_text(budget=None):
     if TRAVEL:
         A("Stays & other bookings:")
         for kind, what, when, where, conf, link, *rest in TRAVEL:
-            source = (rest[0] if rest else "").strip()
+            source = booking_source(what, rest[0] if rest else "")
             dates, times = booking_split(when)
             place, place_detail = booking_split(where)
             A(f"  - {dates} · {kind}: {what}"
@@ -1960,6 +1994,7 @@ def plain_text(budget=None):
         A(f"  Mailpiece scan {n}: "
           + ("attached at the end of this email" if scan_attached(n) else "not attached (did not fit in this email)")
           + (f"; also at {scan_url(n)} (claude.ai sign-in required)" if FULL_URL else ""))
+    if USPS["pieces"] and not USPS_SCANS: A("  " + SCAN_MISSING)
     if USPS["counts"].strip(): A("  " + USPS["counts"])
     if USPS["note"].strip(): A("  Note: " + USPS["note"])
     if PKG:

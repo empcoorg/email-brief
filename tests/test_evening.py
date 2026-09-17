@@ -131,8 +131,13 @@ class TestFullPageLink(unittest.TestCase):
         self.assertNotIn("view on claude.ai", em)
 
     def test_no_scan_line_when_there_is_no_scan(self):
+        """No scan, no per-scan line - but a detailed piece still says one is missing."""
         p = payload()
         p["USPS_SCANS"] = []
+        _, em, tx = R.render_all(p, None, None, URL)
+        self.assertNotIn("Mailpiece scan 1", em + tx)
+        self.assertIn(R.SCAN_MISSING, em, "the sample details a piece, so the gap is named")
+        p["USPS"]["pieces"] = []
         _, em, tx = R.render_all(p, None, None, URL)
         self.assertNotIn("Mailpiece scan", em + tx)
 

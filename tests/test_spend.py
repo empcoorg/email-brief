@@ -104,8 +104,8 @@ class TestAccumulating(unittest.TestCase):
 
     def test_rows_are_largest_first_with_each_service_share(self):
         self.assertEqual(rows({"Northwind AI": 40.0, "Acme AI": 120.0}),
-                         [["Acme AI", 120.0, 0.0, "75% of AI spend this year"],
-                          ["Northwind AI", 40.0, 0.0, "25% of AI spend this year"]])
+                         [["Acme AI", 120.0, 0.0, "75% of AI spend"],
+                          ["Northwind AI", 40.0, 0.0, "25% of AI spend"]])
         self.assertEqual(rows({}), [])
 
     def test_rows_carry_what_this_window_billed_beside_the_year(self):
@@ -124,8 +124,8 @@ class TestAccumulating(unittest.TestCase):
 
 class TestRenderedIntoTheBrief(unittest.TestCase):
     BLOCK = {"year": "2026",
-             "rows": [["Acme AI", 120.0, "75% of AI spend this year"],
-                      ["Northwind AI", 40.0, "25% of AI spend this year"]],
+             "rows": [["Acme AI", 120.0, "75% of AI spend"],
+                      ["Northwind AI", 40.0, "25% of AI spend"]],
              "note": "Acme AI carries an opening balance agreed for 2026."}
 
     def test_it_sits_inside_deposits_and_finances(self):
@@ -144,6 +144,8 @@ class TestRenderedIntoTheBrief(unittest.TestCase):
             self.assertIn("$40.00", doc)
             self.assertIn("$160.00", doc, "the caption totals the services")
             self.assertIn("1 January", doc, "the reader is told when it resets")
+            self.assertNotIn("of AI spend this year", doc,
+                             "the column heading already says year to date")
             self.assertIn("not back-dated", doc)
 
     def test_the_text_copy_ends_the_section_with_the_machine_line(self):
@@ -194,7 +196,7 @@ class TestAiSpendCli(unittest.TestCase):
                                   "--note", "counted from today")
         self.assertEqual(res.returncode, 0, res.stderr)
         self.assertEqual(block, {"year": "2026",
-                                 "rows": [["Acme AI", 20.0, 20.0, "100% of AI spend this year"]],
+                                 "rows": [["Acme AI", 20.0, 20.0, "100% of AI spend"]],
                                  "note": "counted from today"})
         validate(payload(AI_SPEND=block))
 

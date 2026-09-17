@@ -19,7 +19,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 from brief import render_all
-from brief.render import EMAIL_BUDGET_BYTES as R_EMAIL_BUDGET, money_side
+from brief.render import EMAIL_BUDGET_BYTES as R_EMAIL_BUDGET, SCAN_MISSING, money_side
 from brief.theme import attr, e, url
 
 SAMPLE = os.path.join(ROOT, "sample_payload.json")
@@ -241,12 +241,25 @@ class TestUpcomingTravel(unittest.TestCase):
 
     def test_a_booking_can_say_where_it_was_booked(self):
         """Direct with the property or through an agent changes who to call."""
-        row = self.STAY + ["Booked direct with the property"]
+        row = self.STAY + ["Booking.com"]
         f, em, tx = render_all(payload(TRAVEL=[row]))
         for doc in (f, em, tx):
-            self.assertIn("Booked direct with the property", doc)
+            self.assertIn("Booking.com", doc)
         no_source, _, _ = render_all(payload(TRAVEL=[self.STAY]))
-        self.assertNotIn("Booked direct", no_source)
+        self.assertNotIn("Booking.com", no_source)
+
+    def test_a_generic_booking_source_is_named(self):
+        """"Booked direct with the property" tells a reader nothing they cannot see."""
+        from brief.render import booking_source
+        self.assertEqual(booking_source("Northwind Harbor Hotel", "Booked direct with the property"),
+                         "Booked direct with Northwind Harbor Hotel")
+        self.assertEqual(booking_source("Bluepine Hall", "booked direct with the venue"),
+                         "booked direct with Bluepine Hall")
+        self.assertEqual(booking_source("Northwind Harbor Hotel", "Booking.com"), "Booking.com")
+        row = self.STAY + ["Booked direct with the property"]
+        for doc in render_all(payload(TRAVEL=[row])):
+            self.assertIn("Booked direct with Northwind Harbor Hotel", doc)
+            self.assertNotIn("with the property", doc)
 
     def test_the_section_says_bookings_are_carried_until_their_date(self):
         f, em, tx = render_all(payload(TRAVEL=[self.STAY]))
@@ -780,8 +793,8 @@ class TestMovementOrder(unittest.TestCase):
 
 
 class TestAiSpendColumn(unittest.TestCase):
-    ROWS = [["Acme AI", 120.0, 24.0, "71% of AI spend this year"],
-            ["Northwind AI", 34.0, 0.0, "20% of AI spend this year"]]
+    ROWS = [["Acme AI", 120.0, 24.0, "71% of AI spend"],
+            ["Northwind AI", 34.0, 0.0, "20% of AI spend"]]
 
     def block(self, rows=None):
         return {"year": "2026", "rows": rows if rows is not None else self.ROWS}
@@ -821,6 +834,30 @@ class TestAiSpendColumn(unittest.TestCase):
             self.assertIn("AI services", doc)
             self.assertIn("$120.00", doc)
         self.assertIn("nothing new in this window", tx)
+
+
+class TestMailpieceScanIsEmbedded(unittest.TestCase):
+    """The page is where the scan lives; a detailed piece without one is a gap."""
+
+    def test_the_scan_is_embedded_in_the_postal_section_itself(self):
+        f, _, _ = render_all(payload())
+        usps = f.split("USPS Informed Delivery")[1].split("</section>")[0]
+        self.assertIn('<figure class="scanfig" id="usps-scan-1">', usps)
+        self.assertIn('<img src="data:image/', usps, "the image is inline, not a link")
+        self.assertIn("<figcaption>", usps)
+        self.assertNotIn(SCAN_MISSING, f)
+
+    def test_a_detailed_piece_with_no_scan_says_so(self):
+        p = payload(USPS_SCANS=[])
+        self.assertTrue(p["USPS"]["pieces"], "the sample must detail a piece")
+        for doc in render_all(p):
+            self.assertIn(SCAN_MISSING, doc)
+
+    def test_nothing_is_said_when_no_piece_was_detailed(self):
+        p = payload(USPS_SCANS=[])
+        p["USPS"]["pieces"] = []
+        for doc in render_all(p):
+            self.assertNotIn(SCAN_MISSING, doc)
 
 
 class TestFlightColumns(unittest.TestCase):

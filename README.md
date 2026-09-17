@@ -198,6 +198,24 @@ high-priority item its detail becomes a pointer to the section below, and sectio
 1's rows carry the same severity stripe the bar uses, so one item reads as one
 item in both places.
 
+### Web research: what the domain list is, and what it is not
+
+The prompt's pre-approved domain list is a set of sources to **prefer**, not
+network configuration. The Routine's sandbox sits behind an **egress proxy with
+its own allowlist**, and a domain missing from that returns
+`{"error_type":"EGRESS_BLOCKED"}` however the prompt is written. On 2026-09-17
+every `WebFetch` to a finance or news domain — stooq, MarketWatch,
+stockanalysis, Investing.com, Yahoo Finance, CNBC, bls.gov, TradingEconomics,
+CoinGecko, CoinMarketCap, Reuters — was refused, while `WebSearch` worked all
+run, so the market and crypto tables came out empty rather than wrong.
+
+So the template puts **WebSearch first** for every researched figure and uses
+`WebFetch` only to confirm a number search already gave, marks a figure the
+proxy blocked as "not verified — search snippet only", and records the blocked
+domain. Widening what a run can fetch is a **change to the environment's egress
+allowlist**, made where the Routine's environment is configured — not something
+this repo or the prompt can grant.
+
 ### Phone numbers are dialable
 
 A brief is read on a phone, so every phone number it prints carries its country

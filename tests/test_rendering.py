@@ -81,10 +81,24 @@ class _BrowserCase(unittest.TestCase):
         # brief now draws two of them (money movements, and AI billing), and
         # measuring one table's bars against the other's ruler compares scales
         # that were never meant to agree.
-        r = pg.evaluate("""() => {
-          const table = [...document.querySelectorAll('table')]
-            .find(t => t.querySelector('th .daxis.money') && t.querySelector('td .dbar.money'));
-          if (!table) return null;
+        for index in range(4):
+            r = self._axis_geometry(pg, index)
+            if r == "done":
+                break
+            if r is None:
+                if index:
+                    break
+                self.skipTest("money table not present at this width")
+            self._check_axis(r, f"{what} (money table {index + 1})")
+
+    def _axis_geometry(self, pg, index):
+        """One money table's ruler, heading and bars, measured in the browser."""
+        return pg.evaluate("""(index) => {
+          const tables = [...document.querySelectorAll('table')]
+            .filter(t => t.querySelector('th .daxis.money') && t.querySelector('td .dbar.money'));
+          if (!tables.length) return null;
+          const table = tables[index];
+          if (!table) return "done";
           const ax = table.querySelector('th .daxis.money');
           const bars = [...table.querySelectorAll('td .dbar.money')];
           if (!ax || !bars.length) return null;
@@ -102,9 +116,9 @@ class _BrowserCase(unittest.TestCase):
                     return {box: box(b), fill: [f.left, f.right],
                             cls: b.querySelector('.fill').className};
                   })};
-        }""")
-        if r is None:
-            self.skipTest("money table not present at this width")
+        }""", index)
+
+    def _check_axis(self, r, what):
         ax_l, ax_r, ax_c = r["axis"]
         self.assertAlmostEqual(r["zeroCentre"], ax_c, delta=1.0,
                                msg=f"{what}: the '0' label is not on the axis centre")
