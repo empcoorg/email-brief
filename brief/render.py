@@ -607,7 +607,7 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
     if TRAVEL:
         o.append('<h3' + (' style="margin-top:0"' if not FLIGHTS["legs"] else "")
                  + '>Stays &amp; other bookings</h3><div class="tbl-wrap"><table><thead><tr>'
-                 '<th>Type</th><th>Booking</th><th>When</th><th>Where</th><th>Confirmation</th></tr></thead><tbody>')
+                 '<th>Type</th><th>Booking</th><th>Dates</th><th>Where</th><th>Confirmation</th></tr></thead><tbody>')
         for kind, what, when, where, conf, link in TRAVEL:
             booking = f'<span class="lead">{e(what)}</span>'
             if link.strip():
@@ -616,7 +616,7 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
             place, place_detail = booking_split(where)
             o.append('<tr>' + tdl("Type", e(kind))
                      + tdl("Booking", booking)
-                     + tdl("When", f'<span class="mono">{e(dates)}</span>'
+                     + tdl("Dates", f'<span class="mono">{e(dates)}</span>'
                            + (f'<br><span class="meta">{e(times)}</span>' if times else ""))
                      + tdl("Where", e(place) + (f'<br><span class="meta">{e(place_detail)}</span>' if place_detail else ""))
                      + tdl("Confirmation", e(conf) if conf.strip() else '<span class="muted">not stated</span>', "mono") + '</tr>')
@@ -1398,7 +1398,7 @@ def email_html(budget=None):
                    + (f'<br>{small(e(place))}' if place else "")
                    + (f'<br>{small(e(place_detail))}' if place_detail else "")),
                 td((f'<span style="font-family:{F_M}">{e(conf)}</span>' if conf.strip() else muted("not stated")))])
-        inner += tbl(["When", "Booking", "Confirmation"], rws, ["34%", "44%", "22%"])
+        inner += tbl(["Dates", "Booking", "Confirmation"], rws, ["34%", "44%", "22%"])
         inner += cap(TRAVEL_NOTE)
     if FLIGHTS["legs"] or TRAVEL:
         o.append(card(inner))
