@@ -51,6 +51,38 @@ CEILING_B64_CHARS = 24_600
 # is the worse trade.
 SEND_CALL_BYTES = int(os.environ.get("BRIEF_SEND_CALL_BYTES", 135 * 1024))
 
+# THE CONNECTOR'S OWN CEILING, which is a different limit from the one above.
+# A provider refuses a message larger than this outright, attachments included.
+# These are the providers' published defaults; an administrator can raise or
+# lower them, so BRIEF_CONNECTOR_LIMIT_BYTES overrides whatever is picked here.
+CONNECTOR_SEND_LIMITS = {
+    "gmail": 25 * 1024 * 1024,
+    "outlook": 20 * 1024 * 1024,          # outlook.com
+    "microsoft365": 25 * 1024 * 1024,     # the Exchange Online default
+    "": 20 * 1024 * 1024,                 # unknown connector: the lowest of these
+}
+
+# How much of the connector's ceiling a brief may use. Not 100%: MIME headers,
+# base64 re-encoding and the provider's own framing all sit between this count
+# and what the provider weighs, and a message refused for being one byte over
+# is a brief that did not arrive.
+USABLE_FRACTION = float(os.environ.get("BRIEF_USABLE_FRACTION", "0.98"))
+
+
+def connector_limit(connector=None):
+    """98% of the named connector's send ceiling, in bytes.
+
+    >>> connector_limit("gmail") == int(0.98 * 25 * 1024 * 1024)
+    True
+    >>> connector_limit("nobody's heard of this one") == connector_limit("")
+    True
+    """
+    override = os.environ.get("BRIEF_CONNECTOR_LIMIT_BYTES")
+    if override:
+        return int(int(override) * USABLE_FRACTION)
+    name = str(connector or os.environ.get("BRIEF_CONNECTOR") or "").strip().lower()
+    return int(CONNECTOR_SEND_LIMITS.get(name, CONNECTOR_SEND_LIMITS[""]) * USABLE_FRACTION)
+
 # Headroom when attachments ride along. This was 30 KB, bought on the theory
 # that corruption was truncation under size pressure. The second failure
 # disproved that: the file came back the SAME LENGTH with one byte wrong at
@@ -67,13 +99,25 @@ ATTACHMENT_RESERVE_BYTES = int(
     os.environ.get("BRIEF_ATTACHMENT_RESERVE_BYTES", 8 * 1024))
 
 
-def call_limit(n_attachments, limit=None):
+def call_limit(n_attachments, limit=None, connector=None):
     """The ceiling for one send call, tightened when attachments ride along.
+
+    TWO ceilings apply and the SMALLER wins: the connector will not accept a
+    message past its own limit, and the run cannot emit more than SEND_CALL_BYTES
+    in one response, because the body, the text part and every attachment's
+    base64 are inline arguments of a single tool call.
+
+    Today the emit ceiling binds by three orders of magnitude - 98% of Gmail's
+    25 MB is ~25 MB, and one call carries ~135 KB - so raising the provider's
+    limit changes nothing until BRIEF_SEND_CALL_BYTES proves a run can emit
+    more. Both are written down here so neither is silently assumed.
 
     >>> call_limit(0) - call_limit(1) == ATTACHMENT_RESERVE_BYTES
     True
+    >>> call_limit(0) == min(SEND_CALL_BYTES, connector_limit())
+    True
     """
-    base = limit or SEND_CALL_BYTES
+    base = limit or min(SEND_CALL_BYTES, connector_limit(connector))
     return base - (ATTACHMENT_RESERVE_BYTES if n_attachments else 0)
 
 
@@ -86,13 +130,13 @@ def call_bytes(html_bytes, text_bytes, scan_sizes=()):
     return html_bytes + text_bytes + sum(b64_chars(n) for n in scan_sizes)
 
 
-def html_room(text_bytes, scan_sizes=(), limit=None):
+def html_room(text_bytes, scan_sizes=(), limit=None, connector=None):
     """How many bytes of HTML body the send call can still carry.
 
     >>> html_room(15_508, [15_000, 15_000]) == call_limit(2) - 15_508 - 2 * 20_000
     True
     """
-    limit = call_limit(len(list(scan_sizes)), limit)
+    limit = call_limit(len(list(scan_sizes)), limit, connector)
     return limit - text_bytes - sum(b64_chars(n) for n in scan_sizes)
 
 

@@ -191,7 +191,7 @@ def _verify(source, readback):
     return 5
 
 
-def _check_attachments(paths, out_dir=None):
+def _check_attachments(paths, out_dir=None, connector=None):
     """Are the files within the size limits, and does the WHOLE call fit?
 
     Two different limits. Each attachment must stay under the per-file ceiling
@@ -226,7 +226,7 @@ def _check_attachments(paths, out_dir=None):
             return 4
         sizes = [os.path.getsize(p) for p in paths]
         total = call_bytes(html, text, sizes)
-        limit = call_limit(len(sizes))
+        limit = call_limit(len(sizes), connector=connector)
         print(f"\nwhole send call: htmlBody {html:,} + text {text:,} + "
               f"{len(sizes)} attachment(s) {sum(b64_chars(n) for n in sizes):,} "
               f"(base64) = {total:,} B of {limit:,}")
@@ -261,7 +261,13 @@ def main(argv=None):
                    help="max HTML body before cards are shed (default 85 KB; "
                         "past ~85 KB Gmail clips rather than rejects)")
     r.add_argument("--send-budget", type=int, default=None, metavar="BYTES",
-                   help="max total for one send call: HTML + text + attachments")
+                   help="max total for one send call: HTML + text + attachments. "
+                        "Overrides both ceilings below")
+    r.add_argument("--connector", default=None, metavar="NAME",
+                   help="the email connector the brief is sent from (gmail, outlook, "
+                        "microsoft365). The send call is capped at 98%% of that "
+                        "connector's limit, or at what one call can carry, whichever "
+                        "is smaller")
     r.add_argument("--clip-guard", action="store_true",
                    help="shed HTML cards to stay under Gmail's clip threshold. "
                         "Off by default: a clip is a link, a shed card is gone")
@@ -309,6 +315,9 @@ def main(argv=None):
     at.add_argument("files", nargs="+")
     at.add_argument("--out-dir", help="also check the whole send call against "
                                       "the rendered email in this directory")
+    at.add_argument("--connector", default=None, metavar="NAME",
+                    help="the email connector the brief is sent from (gmail, outlook, "
+                         "microsoft365)")
     sp_ = sub.add_parser("ai-spend",
                          help="carry AI billing totals forward and add this run's "
                               "charges; writes the payload's AI_SPEND block")
@@ -353,7 +362,7 @@ def main(argv=None):
         return _expired(a.sources, a.today)
 
     if a.cmd == "attachment":
-        return _check_attachments(a.files, a.out_dir)
+        return _check_attachments(a.files, a.out_dir, a.connector)
 
     try:
         payload = load(a.payload)
@@ -395,7 +404,7 @@ def main(argv=None):
     from .attachments import call_bytes, call_limit, html_room
     from .render import TEXT_BUDGET_BYTES, plain_text
     sizes = [os.path.getsize(s_) for s_ in a.scans]
-    limit = call_limit(len(sizes), a.send_budget or None)
+    limit = call_limit(len(sizes), a.send_budget or None, a.connector)
     cap = a.email_budget or (EMAIL_BUDGET if a.clip_guard else None)
     # Only a run that passes --scans says how many ride along; without it the
     # count is unknown, and the email keeps saying each scan is attached.
@@ -419,7 +428,7 @@ def main(argv=None):
         pt = plain_text(min(room_for_text, a.text_budget or room_for_text))
         total = call_bytes(len(eh.encode("utf-8")), len(pt.encode("utf-8")), sizes)
     if total > limit:
-        room = html_room(len(pt.encode("utf-8")), sizes, a.send_budget or None)
+        room = html_room(len(pt.encode("utf-8")), sizes, a.send_budget or None, a.connector)
         if cap:
             room = min(room, cap)
         print(f"still {total:,} B of {limit:,}; the HTML must shed to {room:,} B.")

@@ -249,6 +249,42 @@ class TestAttachmentHeadroom(unittest.TestCase):
                            "a call this size is no longer blocked on size alone; "
                            "brief verify against the draft is what blocks it")
 
+    def test_the_connector_ceiling_is_98_percent_of_its_published_limit(self):
+        """The brief may fill a connector's message, all but a 2% margin."""
+        from brief.attachments import (CONNECTOR_SEND_LIMITS, USABLE_FRACTION,
+                                       connector_limit)
+        self.assertEqual(USABLE_FRACTION, 0.98)
+        for name, published in CONNECTOR_SEND_LIMITS.items():
+            self.assertEqual(connector_limit(name), int(published * USABLE_FRACTION), name)
+
+    def test_an_unknown_connector_falls_back_to_the_lowest_ceiling(self):
+        from brief.attachments import CONNECTOR_SEND_LIMITS, connector_limit
+        self.assertEqual(connector_limit("a provider nobody named"), connector_limit(""))
+        self.assertEqual(CONNECTOR_SEND_LIMITS[""], min(CONNECTOR_SEND_LIMITS.values()))
+
+    def test_the_smaller_of_the_two_ceilings_wins(self):
+        """The connector will not accept more, and the run cannot emit more."""
+        from brief.attachments import SEND_CALL_BYTES, call_limit, connector_limit
+        self.assertEqual(call_limit(0, connector="gmail"),
+                         min(SEND_CALL_BYTES, connector_limit("gmail")))
+        self.assertEqual(call_limit(0, connector="gmail"), SEND_CALL_BYTES,
+                         "today the emit ceiling is the binding one")
+
+    def test_a_connector_limit_override_is_honoured_and_still_takes_the_margin(self):
+        import os
+        from brief.attachments import call_limit, connector_limit
+        os.environ["BRIEF_CONNECTOR_LIMIT_BYTES"] = "100000"
+        try:
+            self.assertEqual(connector_limit("gmail"), 98_000)
+            self.assertEqual(call_limit(0, connector="gmail"), 98_000,
+                             "a connector smaller than one call now binds instead")
+        finally:
+            del os.environ["BRIEF_CONNECTOR_LIMIT_BYTES"]
+
+    def test_an_explicit_send_budget_still_overrides_both(self):
+        from brief.attachments import call_limit
+        self.assertEqual(call_limit(0, 50_000, "gmail"), 50_000)
+
     def test_attachments_buy_headroom(self):
         from brief.attachments import call_limit, ATTACHMENT_RESERVE_BYTES
         self.assertEqual(call_limit(0) - call_limit(1), ATTACHMENT_RESERVE_BYTES)

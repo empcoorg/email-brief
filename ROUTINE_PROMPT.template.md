@@ -194,6 +194,7 @@ STEP 2 — write ONE payload file, /tmp/eb/payload.json, holding everything you 
 
 STEP 3 — render and check:
   cd /tmp/eb && python3 -m brief render payload.json --out-dir /mnt/user-data/outputs --date YYYY-MM-DD
+  PASS THE CONNECTOR YOU SEND FROM: `--connector gmail` (or outlook, microsoft365). The whole message — body, plain-text part and every attachment — is allowed up to 98% of that connector's send limit, and up to what one send call can carry, whichever is smaller. Without the flag the renderer assumes the lowest ceiling it knows.
   IF YOU HAVE MAILPIECE SCANS, ALWAYS PASS THEM: `--scans /path/to/scan1.jpg /path/to/scan2.jpg`. They ride in the same send call as the body, and the renderer allocates the whole call for you: it trims the plain-text part first (it is an alternative body, not the brief), and only sheds HTML cards if that is still not enough. Omitting --scans is what produces a corrupted attachment.
   It writes morning-brief-<date>.html, email.html and email.txt, prints the email's size against the 85 KB send budget, and prints a BUILD MARKER of the form brief-xxxxxxxxxxxx.
   QUOTE THAT MARKER in your chat reply. It is embedded in all three outputs, so it is the proof the renderer produced what you sent. If your reply has no marker, you hand-wrote HTML instead of rendering it — which silently breaks section order, escaping and link handling in ways the repo's tests cannot catch, because they test the renderer and a hand-written document never reaches it. Redo the run through the renderer. If it exits non-zero, READ THE ERROR — it names the key and row that is wrong — fix the payload and run it again. Never work around a validation error by hand-writing HTML.
@@ -218,7 +219,7 @@ STEP 4 — deliver:
       3. Only when every attachment verifies, send the draft: send_message with that draftId.
     DRAFTING IS FREE AND REPEATABLE. The one-send rule binds SENDING, not drafting — rewrite the draft as many times as it takes. A run has already shipped a scan that was the right length with one wrong byte at offset 218: a single mistyped base64 character out of 13,568. No size check can catch that, and reading the message back AFTER sending only tells you it is too late.
     CHECK EACH SCAN'S SIZE BEFORE DRAFTING — the send path truncates an oversized attachment SILENTLY, shipping the top of the image and solid grey below with no error:
-      cd /tmp/eb && python3 -m brief attachment /path/to/scan1.jpg /path/to/scan2.jpg --out-dir /mnt/user-data/outputs
+      cd /tmp/eb && python3 -m brief attachment /path/to/scan1.jpg /path/to/scan2.jpg --out-dir /mnt/user-data/outputs --connector gmail
     ONLY if the combined message would exceed the total send limit may scans be omitted: attach as many as fit, keeping the most consequential pieces (government, First-Class, handwritten) over marketing, and add an OBVIOUS warning at the TOP of the postal section and in the chat reply stating exactly how many were omitted and for which rows. Never omit silently. Attachments are for mailpiece scans ONLY.
   * If the send fails, retry at most ONCE without attachments and say so.
 
