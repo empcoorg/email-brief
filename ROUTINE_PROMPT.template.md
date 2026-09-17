@@ -161,6 +161,7 @@ Jobs: linkedin.com · indeed.com · api.ashbyhq.com · jobs.ashbyhq.com · board
 Travel: flightaware.com · faa.gov
 World/news: aljazeera.com
 
+A HOST IS NOT A DOMAIN. The proxy matches the exact hostname: with the apex listed, www.<same domain> can still be refused, and the two must both be allowed. A fetch that returns "unable to fetch" rather than EGRESS_BLOCKED is usually the SITE refusing a bot, not the proxy - a raw CSV can also come back empty because the fetch summarises pages, not files. In either case take the figure from search results, mark it "not verified", and move on.
 KNOWN-DIFFICULT SOURCES (fail fast, don't retry): markets.ft.com · money.usnews.com · investor.vanguard.com · bloomberg.com · wtop.com · cmegroup.com FedWatch (JS-only) · nasdaq.com fund pages ("data not available") · cnbc.com and forbes.com (frequent 403) · coinglass.com (loads but JS-only, returns empty) · cts.indeed.com tracking links (decode the token instead) · jobs.ashbyhq.com HTML (JS-only — use the api.ashbyhq.com JSON). The LIVE status list is the one in the most recent sent brief, not this static line.
 
 === BLOCKED-DOMAIN RE-CHECK (WEEKLY, SELF-UPDATING) ===

@@ -240,6 +240,15 @@ omits. Strip the comments if the field will not take them:
 blind: there are open reports of Custom lists not reaching the proxy, and a
 single working fetch tells you which situation you are in.
 
+**A host is not a domain.** The proxy matches the exact hostname, so the file
+lists `coingecko.com` *and* `www.coingecko.com`. Measured in a live environment
+on 2026-09-18: with only the apex listed, `www.coingecko.com` and `www.bls.gov`
+still returned `EGRESS_BLOCKED`, while `stockanalysis.com`, which serves at the
+apex, went through. A fetch that fails with "unable to fetch" rather than
+`EGRESS_BLOCKED` is usually the *site* refusing a bot, and a raw CSV can come
+back empty because the fetch summarises pages rather than downloading files —
+neither is something the allowlist can fix.
+
 **What it costs.** Every allowed domain is somewhere a run that has just read a
 mailbox could send a request, which is why the list is finite and boring, why
 there is no wildcard, and why the prompt forbids putting anything from the

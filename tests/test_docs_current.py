@@ -98,6 +98,22 @@ class TestEgressAllowlist(unittest.TestCase):
         missing = sorted(d for d in wanted if d not in listed)
         self.assertEqual(missing, [], f"the allowlist omits sources the prompt reads: {missing}")
 
+    def test_every_apex_domain_also_lists_its_www_host(self):
+        """The proxy matches the exact hostname, not the registered domain.
+
+        With only "coingecko.com" listed, a fetch of www.coingecko.com came back
+        EGRESS_BLOCKED, while stockanalysis.com - which serves at the apex -
+        went through. Measured in the Routine's own environment, 2026-09-18.
+        """
+        listed = set(self.domains())
+        multi = (".co.uk", ".com.au", ".co.jp", ".org.uk", ".ac.uk")
+
+        def apex(d):
+            return d.count(".") == (2 if any(d.endswith(m) for m in multi) else 1)
+
+        missing = sorted(f"www.{d}" for d in listed if apex(d) and f"www.{d}" not in listed)
+        self.assertEqual(missing, [], f"hosts the proxy would still refuse: {missing}")
+
     def test_the_list_is_finite_boring_and_free_of_wildcards(self):
         doms = self.domains()
         self.assertEqual(sorted(doms), sorted(set(doms)), "a domain is listed twice")
