@@ -100,6 +100,15 @@ async def main():
                     break
             _require("usps", usps)
             await usps.screenshot(path=os.path.join(DOCS, "mock-brief-usps.png"))
+            # Section 4: upcoming travel (flights, then stays and other bookings)
+            travel = None
+            for s in secs:
+                txt = (await s.inner_text()).lower()
+                if "upcoming travel" in txt:
+                    travel = s
+                    break
+            _require("travel", travel)
+            await travel.screenshot(path=os.path.join(DOCS, "mock-brief-travel.png"))
             # Section 6: package tracking
             pkg = None
             for s in secs:
@@ -122,7 +131,7 @@ async def main():
             await b.close()
         # inside the temp dir, which is removed on exit from this block
         _write_lock(page_html)
-    print("wrote mock-brief-top/jobs/sections/usps/packages/markets PNGs (dark mode)")
+    print("wrote mock-brief-top/jobs/sections/travel/usps/packages/markets PNGs (dark mode)")
     print(f"wrote {LOCK} — CI fails if the UI changes without regenerating these")
 
 asyncio.run(main())

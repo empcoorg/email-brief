@@ -24,6 +24,10 @@ Section 3, Deposits & finances — summary tiles, and the money-movements table:
 
 ![Mock brief — deposits and finances section](docs/mock-brief-sections.png)
 
+Section 4, Upcoming travel — flights with their airport-local times, per-leg confirmation codes, terminals and each flight's recent on-time record, then stays and other bookings: dates first with the check-in or door times under them, and where each was booked. Every booking is carried forward until its own date passes, whether or not new mail about it arrived:
+
+![Mock brief — upcoming travel: flights, hotel, rail and event bookings](docs/mock-brief-travel.png)
+
 The USPS digest — only the intended recipient's mail is detailed, with the full mailpiece scan rendered (downsampled but readable); other named recipients and generic addressees ("Current Resident", "Homeowner") appear only as counts:
 
 ![Mock brief — USPS Informed Delivery section with full mailpiece scan](docs/mock-brief-usps.png)
@@ -44,7 +48,7 @@ The researched cards — US indexes, your fund tickers and crypto, each carrying
 
 Connect your email connector(s) in Claude (Settings → Connectors), then paste this to Claude:
 
-> Read the template at https://raw.githubusercontent.com/empcoorg/email-brief/main/ROUTINE_PROMPT.template.md and set up the email brief for me. Ask me for each {{PLACEHOLDER}} value one section at a time — use my connected email connector(s), ask which mailboxes to read and where to deliver the brief, and drop any OPTIONAL section that doesn't apply to me. Ask me to list my top few scientific journals for the new-publications section, or omit that section if I'm not interested. Then create the scheduled Routine with the filled-in prompt (my choice of cadence, time and timezone, fresh session per run, my email connector(s) attached) and fire one test run so I can check the delivered email.
+> Read the template at https://raw.githubusercontent.com/empcoorg/email-brief/main/ROUTINE_PROMPT.template.md and set up the email brief for me. Walk me through every `{{PLACEHOLDER}}` in its table one at a time, and for each OPTIONAL section ask whether I want it before filling it in — drop the whole block if I don't. Cover all of them: which mailboxes to read and where to deliver the brief; which connector the brief is sent from; my timezone, cadence and run time; job-hunting keywords; the funds and the individual stocks I want in the market tables; whether to track what AI services bill me this year, and any opening balance they should start from; whether I want the VoIP, USPS Informed Delivery, package-tracking and retail-sales sections, and the details each needs; my scientific journals for the new-publications section; whether I want an evening update as a second Routine, and at what time. Tell me what each answer changes in the brief, and say which sections you dropped. Then create the scheduled Routine with the filled-in prompt (fresh session per run, my email connector(s) attached, the `Artifact` tool allowed so it can publish the full-brief page) and fire one test run so I can check the delivered email.
 
 That's the whole setup. The rest of this README explains what you get and how to do the same steps by hand.
 

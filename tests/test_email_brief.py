@@ -513,6 +513,20 @@ class TestTemplate(unittest.TestCase):
         """
         self.assertIn("Never omit silently", self.fence)
 
+    def test_every_optional_section_is_something_setup_asks_about(self):
+        """A new user is walked through the whole template, not most of it.
+
+        Each OPTIONAL block and each configurable list is a question; a block
+        nobody is asked about ships switched on, with someone else's defaults
+        in it.
+        """
+        readme_setup = README.split("## Quick start")[1].split("## ")[0].lower()
+        for topic in ("connector", "timezone", "cadence", "job", "funds", "stocks",
+                      "ai services", "opening balance", "voip", "usps", "package",
+                      "retail", "journals", "evening"):
+            self.assertIn(topic, readme_setup,
+                          f"the setup walkthrough never asks about {topic}")
+
     def test_placeholders_documented_and_used(self):
         documented = set(re.findall(r"\{\{(\w+)\}\}", self.doc)) - {"PLACEHOLDER"}
         used = set(re.findall(r"\{\{(\w+)\}\}", self.fence))
