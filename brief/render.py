@@ -104,6 +104,7 @@ def render_all(payload, email_budget=None, text_budget=None, full_url=None,
     # Optional keys are bound explicitly, so a payload written against an older
     # prompt renders with the section simply absent.
     globals()["AI_SPEND"] = payload.get("AI_SPEND") or {}
+    globals()["TRAVEL"] = payload.get("TRAVEL") or []
     if full_url and url(full_url) == "#":
         # A refused link would still print its text, so refuse the address
         # outright and let the run see why, instead of shipping a dead link.
@@ -573,11 +574,13 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
         o.append('<h3>Bills, statements &amp; notices</h3><ul>' + "".join(li_lead(n) for n in FIN_NOTES) + '</ul>')
     o.append('</div></section>')
     # 3 voip
-    # 4 upcoming flights — persists until the trip date passes
-    # Omitted with no legs, like package tracking: the section exists to carry a
-    # known flight forward, and without one there is nothing to carry.
+    # 4 upcoming travel — flights, stays and other bookings, each carried until
+    # its own date passes. Omitted when there is nothing booked at all, like
+    # package tracking: the section exists to carry something forward.
+    if FLIGHTS["legs"] or TRAVEL:
+        o.append(f'<section><h2><span class="num">{num()}.</span> Upcoming travel <span class="sub">{e(TRAVEL_SUB)}</span></h2><div class="card">')
     if FLIGHTS["legs"]:
-        o.append(f'<section><h2><span class="num">{num()}.</span> Upcoming flights <span class="sub">carried forward until the trip date passes</span></h2><div class="card">')
+        o.append(f'<h3 style="margin-top:0">Flights</h3>')
         o.append(f'<p><span class="lead">{e(FLIGHTS["airline"])}, confirmation {e(FLIGHTS["conf"])}</span> — {e(FLIGHTS["pax"])}</p>')
         o.append(f'<p class="meta">{e(FLIGHTS["booked"])}</p>')
         # The on-time column exists only when at least one leg actually has a
@@ -595,7 +598,23 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
             if show_stats:
                 row += tdl("Recent on-time record", e(g.get("stats") or "not available"), "meta")
             o.append('<tr>' + row + '</tr>')
-        o.append(f'</tbody></table></div><div class="cap">{e(FLIGHTS["note"])}</div></div></section>')
+        o.append(f'</tbody></table></div><div class="cap">{e(FLIGHTS["note"])}</div>')
+    if TRAVEL:
+        o.append('<h3' + (' style="margin-top:0"' if not FLIGHTS["legs"] else "")
+                 + '>Stays &amp; other bookings</h3><div class="tbl-wrap"><table><thead><tr>'
+                 '<th>Type</th><th>Booking</th><th>When</th><th>Where</th><th>Confirmation</th></tr></thead><tbody>')
+        for kind, what, when, where, conf, link in TRAVEL:
+            booking = f'<span class="lead">{e(what)}</span>'
+            if link.strip():
+                booking = f'<a href="{url(link)}"><b>{e(what)}</b></a>'
+            o.append('<tr>' + tdl("Type", e(kind))
+                     + tdl("Booking", booking)
+                     + tdl("When", e(when), "mono")
+                     + tdl("Where", e(where))
+                     + tdl("Confirmation", e(conf) if conf.strip() else '<span class="muted">not stated</span>', "mono") + '</tr>')
+        o.append(f'</tbody></table></div><div class="cap">{e(TRAVEL_NOTE)}</div>')
+    if FLIGHTS["legs"] or TRAVEL:
+        o.append('</div></section>')
     o.append(f'<section><h2><span class="num">{num()}.</span> VoIP voicemails &amp; texts <span class="sub">provider senders + Google Voice, Twilio, OpenPhone, Grasshopper, RingCentral, Dialpad</span></h2><div class="card">')
     if voip_empty():
         o.append(f'<div class="nothing">{e(nothing_new())}</div>')
@@ -772,6 +791,9 @@ def lbl(t): return f'<div style="font:600 10.5px {F_H};text-transform:uppercase;
 # disappearing (its absence would be ambiguous) or drawing an empty table (which
 # reads as missing data). Research cards are conditional and are omitted instead.
 NOTHING_TODAY = "Nothing needs you today."
+TRAVEL_SUB = "flights, stays and bookings, carried until each date passes"
+TRAVEL_NOTE = ("Each booking stays in the brief until its date has passed, whether or not "
+               "new mail about it arrived in the window.")
 
 
 def nothing_new():
@@ -1046,7 +1068,7 @@ SECTION_KEYS = {
     "High priority": ("HIPRI",),
     "Relevant job posts": ("JOBS_TOP", "JOBS_STATUS", "JOBS_OTHER"),
     "Deposits & finances": ("FIN_SUMMARY", "FIN_MOVES", "FIN_NOTES", "FIN_INTERNAL"),
-    "Upcoming flights": ("FLIGHTS",),
+    "Upcoming travel": ("FLIGHTS", "TRAVEL"),
     "VoIP voicemails & texts": ("VOIP",),
     "USPS Informed Delivery": ("USPS", "USPS_SCANS"),
     "Package tracking": ("PKG", "PKG_NOTE"),
@@ -1319,9 +1341,11 @@ def email_html(budget=None):
     o.append(card(inner))
     # 3 voip
     # 4 upcoming flights — persists until the trip date passes
-    # Omitted with no legs, like package tracking.
+    # Omitted when nothing is booked, like package tracking.
+    if FLIGHTS["legs"] or TRAVEL:
+        inner = h2(f'{sp(f"{num()}.", L["accent"])} Upcoming travel', TRAVEL_SUB)
     if FLIGHTS["legs"]:
-        inner = h2(f'{sp(f"{num()}.", L["accent"])} Upcoming flights', "carried forward until the trip date passes")
+        inner += h3("Flights")
         inner += f'<p>{lead(FLIGHTS["airline"] + ", confirmation " + FLIGHTS["conf"])} — {e(FLIGHTS["pax"])}</p>'
         inner += f'<p style="font-size:13px;color:{L["ink3"]}">{e(FLIGHTS["booked"])}</p>'
         show_stats = any(g.get("stats") for g in FLIGHTS["legs"])
@@ -1337,6 +1361,16 @@ def email_html(budget=None):
         else:
             inner += tbl(["Date · flight", "Route (airport local times)"], rws, ["32%", "68%"])
         inner += cap(FLIGHTS["note"])
+    if TRAVEL:
+        inner += h3("Stays & other bookings")
+        inner += tbl(["Type · when", "Booking · where", "Confirmation"],
+                     [[td(f'{e(kind)}<br><span style="font-family:{F_M}">{e(when)}</span>'),
+                       td((f'<a href="{url(link)}" style="color:{L["accent"]};font-weight:600">{e(what)}</a>'
+                           if link.strip() else lead(what)) + (f'<br>{small(e(where))}' if where.strip() else "")),
+                       td(f'<span style="font-family:{F_M}">{e(conf)}</span>' if conf.strip() else muted("not stated"))]
+                      for kind, what, when, where, conf, link in TRAVEL], ["26%", "50%", "24%"])
+        inner += cap(TRAVEL_NOTE)
+    if FLIGHTS["legs"] or TRAVEL:
         o.append(card(inner))
     inner = h2(f'{sp(f"{num()}.", L["accent"])} VoIP voicemails &amp; texts', "searched by the configured provider senders + Google Voice, Twilio, OpenPhone, Grasshopper, RingCentral, Dialpad")
     if voip_empty():
@@ -1493,7 +1527,7 @@ TEXT_BUDGET_BYTES = int(os.environ.get("BRIEF_TEXT_BUDGET_BYTES", 10 * 1024))
 # client shows HTML never sees it. So it keeps shedding, least actionable
 # first, and the three that carry the day's actions are never touched.
 TEXT_LAST_RESORT = ("SOURCES", "DOMAIN ALLOWLIST", "RETAIL", "PACKAGE TRACKING",
-                    "USPS INFORMED DELIVERY", "VOIP VOICEMAILS", "UPCOMING FLIGHTS",
+                    "USPS INFORMED DELIVERY", "VOIP VOICEMAILS", "UPCOMING TRAVEL",
                     "RELEVANT JOB POSTS", "DEPOSITS & FINANCES")
 TEXT_NEVER_SHED = ("MORNING BRIEF", "NEEDS YOU TODAY", "HIGH PRIORITY")
 
@@ -1610,8 +1644,10 @@ def plain_text(budget=None):
         A("  " + spend_line())
     if FIN_INTERNAL: A(f"Transfers between own accounts: {FIN_INTERNAL}")
     for n in FIN_NOTES: A(f"  - {n}")
+    if FLIGHTS["legs"] or TRAVEL:
+        A(""); A(f"{tnum()}. UPCOMING TRAVEL ({TRAVEL_SUB})")
     if FLIGHTS["legs"]:
-        A(""); A(f"{tnum()}. UPCOMING FLIGHTS (carried forward until the trip date passes)")
+        A("Flights:")
         A(f"  {FLIGHTS['airline']}, confirmation {FLIGHTS['conf']} — {FLIGHTS['pax']}")
         A(f"  {FLIGHTS['booked']}")
         for g in FLIGHTS["legs"]:
@@ -1620,6 +1656,13 @@ def plain_text(budget=None):
                 A(f"    on-time: {g['stats']}")
             A(f"    {g['fa']}")
         A(f"  {FLIGHTS['note']}")
+    if TRAVEL:
+        A("Stays & other bookings:")
+        for kind, what, when, where, conf, link in TRAVEL:
+            A(f"  - {kind}: {what} · {when}" + (f" · {where}" if where.strip() else "")
+              + (f" · confirmation {conf}" if conf.strip() else "")
+              + (f"\n    {link}" if link.strip() else ""))
+        A(f"  {TRAVEL_NOTE}")
     A(""); A(f"{tnum()}. VOIP VOICEMAILS & TEXTS")
     if voip_empty():
         A("  " + nothing_new())

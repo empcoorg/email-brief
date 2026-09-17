@@ -64,6 +64,8 @@ SPEC = {
 OPTIONAL_SPEC = {
     "AI_SPEND": ("obj", ("year", "rows"), "AI billing year to date: year, rows of "
                                           "(service, usd_total, note), optional note"),
+    "TRAVEL": ("rows", 6, "non-flight reservations, kept until the date passes: "
+                          "(kind, what, when, where, confirmation, link)"),
 }
 
 FIT_TIERS = ("strong", "related", "")
@@ -129,6 +131,18 @@ def validate(payload):
             absent = [k2 for k2 in arity if k2 not in v]
             if absent:
                 _fail(key, f"missing field(s) {', '.join(absent)} ({desc})")
+
+    travel = payload.get("TRAVEL")
+    if travel is not None:
+        if not isinstance(travel, list):
+            _fail("TRAVEL", f"expected a list of rows ({OPTIONAL_SPEC['TRAVEL'][2]})")
+        for n, row in enumerate(travel):
+            if not isinstance(row, (list, tuple)) or len(row) != 6:
+                _fail("TRAVEL", f"row {n} must have 6 fields (kind, what, when, where, "
+                                "confirmation, link) — use an empty string for a field "
+                                "the booking does not state, never a placeholder")
+            if not all(isinstance(x, str) for x in row):
+                _fail("TRAVEL", f"row {n}: every field must be a string")
 
     ai = payload.get("AI_SPEND")
     if ai is not None:

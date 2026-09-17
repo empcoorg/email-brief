@@ -335,6 +335,32 @@
   ],
   "note": "All times are LOCAL TO EACH AIRPORT — departure in the origin's zone, arrival in the destination's. On-time rates and average delays are that flight number's recent history from FlightAware, not a prediction. No schedule changes since booking."
  },
+ "TRAVEL": [
+  [
+   "Hotel",
+   "Northwind Harbor Hotel",
+   "Fri Mar 6 → Sun Mar 8",
+   "Springfield ST · 2 nights, king, breakfast included",
+   "SAMPLE-HTL-4471",
+   "https://example.com/booking/SAMPLE-HTL-4471"
+  ],
+  [
+   "Rail",
+   "Cascade Rail 88, Springfield → Lakeshore",
+   "Fri Mar 6, 7:10 AM EST",
+   "Seat 12A · reserved coach",
+   "MOCK-RAIL-2210",
+   ""
+  ],
+  [
+   "Concert",
+   "Bluepine Hall — Helixware Quartet",
+   "Sat Mar 7, 8:00 PM EST",
+   "Row H, seats 4-5 · doors 7:15 PM",
+   "DEMO-TIX-90210",
+   "https://example.org/tickets/DEMO-TIX-90210"
+  ]
+ ],
  "MKT_ROWS": [
   [
    "S&P 500",

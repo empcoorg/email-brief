@@ -50,9 +50,11 @@ class TestReadmeDescribesTheCode(unittest.TestCase):
         page = render_all(load(os.path.join(ROOT, "sample_payload.json")))[0]
         headings = re.findall(r'<h[23]>(?:<span class="num">\d+\.</span> )?([^<]+)', page)
         blurb = README.split("## What a brief contains")[1].split("## ")[0].lower()
+        # Sub-headings inside a section the blurb already describes.
         skip = {"morning brief", "application status", "ranked leads", "also seen (lower fit)",
                 "jobs by sector", "transfers between your own accounts",
-                "bills, statements &amp; notices", "large caps", "vanguard funds"}
+                "bills, statements &amp; notices", "large caps", "vanguard funds",
+                "flights", "stays &amp; other bookings", "ai services — billed year to date"}
         missing = sorted({h.strip() for h in headings
                           if h.strip().lower() not in skip
                           and h.strip().lower().replace("&amp;", "&") not in blurb})

@@ -117,9 +117,9 @@ class TestRenderedIntoTheBrief(unittest.TestCase):
 
     def test_it_sits_inside_deposits_and_finances(self):
         f, em, tx = render_all(payload(AI_SPEND=self.BLOCK))
-        for doc, finances, after in ((f, "Deposits &amp; finances", "Upcoming flights"),
-                                     (em, "Deposits &amp; finances", "Upcoming flights"),
-                                     (tx, "DEPOSITS & FINANCES", "UPCOMING FLIGHTS")):
+        for doc, finances, after in ((f, "Deposits &amp; finances", "Upcoming travel"),
+                                     (em, "Deposits &amp; finances", "Upcoming travel"),
+                                     (tx, "DEPOSITS & FINANCES", "UPCOMING TRAVEL")):
             here = doc.index("AI services")
             self.assertGreater(here, doc.index(finances))
             self.assertLess(here, doc.index(after), "it must not spill into the next section")

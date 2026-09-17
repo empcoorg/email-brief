@@ -72,7 +72,7 @@ class TestGeneratorOutputs(unittest.TestCase):
         for i in range(1, 8):
             self.assertIn(f">{i}.</span>", self.r["email"], f"email missing section {i}")
         for line in ("1. HIGH PRIORITY", "2. RELEVANT JOB POSTS",
-                     "4. UPCOMING FLIGHTS", "6. USPS INFORMED DELIVERY",
+                     "4. UPCOMING TRAVEL", "6. USPS INFORMED DELIVERY",
                      "PACKAGE TRACKING", "8. RETAIL SALES"):
             self.assertIn(line, self.r["text"])
 
@@ -81,7 +81,7 @@ class TestGeneratorOutputs(unittest.TestCase):
         ("High priority", "High priority", "HIGH PRIORITY"),
         ("Relevant job posts", "Relevant job posts", "RELEVANT JOB POSTS"),
         ("Deposits &amp; finances", "Deposits &amp; finances", "DEPOSITS & FINANCES"),
-        ("Upcoming flights", "Upcoming flights", "UPCOMING FLIGHTS"),
+        ("Upcoming travel", "Upcoming travel", "UPCOMING TRAVEL"),
         ("VoIP voicemails", "VoIP voicemails", "VOIP VOICEMAILS"),
         ("USPS Informed Delivery", "USPS Informed Delivery", "USPS INFORMED DELIVERY"),
         ("Package tracking", "Package tracking", "PACKAGE TRACKING"),
@@ -254,9 +254,9 @@ class TestGeneratorOutputs(unittest.TestCase):
     def test_flights_persist_link_flightaware_and_use_airport_local_time(self):
         page, em, tx = self.r["page"], self.r["email"], self.r["text"]
         # standing section 4, directly after Deposits & finances
-        self.assertIn('<span class="num">4.</span> Upcoming flights', page)
-        self.assertLess(page.index("Deposits &amp; finances"), page.index("Upcoming flights"))
-        self.assertLess(page.index("Upcoming flights"), page.index("VoIP voicemails"))
+        self.assertIn('<span class="num">4.</span> Upcoming travel', page)
+        self.assertLess(page.index("Deposits &amp; finances"), page.index("Upcoming travel"))
+        self.assertLess(page.index("Upcoming travel"), page.index("VoIP voicemails"))
         for out in (page, em, tx):
             self.assertIn("LOCAL TO EACH AIRPORT", out.upper())
             self.assertIn("carried forward", out.lower())

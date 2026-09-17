@@ -167,6 +167,70 @@ class TestMoneyDirection(unittest.TestCase):
         self.assertNotIn("fill pos", f.split("Deposits &amp; finances")[1].split("</section>")[0])
 
 
+class TestUpcomingTravel(unittest.TestCase):
+    """Section 4 carries flights AND everything else that is booked.
+
+    A stay, a train or a ticket is as much "upcoming" as a flight, and each is
+    kept until its own date passes - the section exists to carry a booking
+    forward whether or not new mail about it arrived.
+    """
+
+    STAY = ["Hotel", "Northwind Harbor Hotel", "Fri Mar 6 → Sun Mar 8",
+            "Springfield ST · 2 nights", "SAMPLE-HTL-4471",
+            "https://example.com/booking/SAMPLE-HTL-4471"]
+
+    def test_the_section_is_named_for_travel_not_flights(self):
+        f, em, tx = render_all(payload())
+        for doc in (f, em):
+            self.assertIn("Upcoming travel", doc)
+            self.assertNotIn("Upcoming flights", doc)
+        self.assertIn("UPCOMING TRAVEL", tx)
+        self.assertNotIn("UPCOMING FLIGHTS", tx)
+
+    def test_bookings_render_with_their_dates_and_confirmations(self):
+        f, em, tx = render_all(payload(TRAVEL=[self.STAY]))
+        for doc in (f, em, tx):
+            for field in ("Hotel", "Northwind Harbor Hotel", "Fri Mar 6", "SAMPLE-HTL-4471"):
+                self.assertIn(field, doc, field)
+        self.assertIn('href="https://example.com/booking/SAMPLE-HTL-4471"', f)
+        self.assertIn('href="https://example.com/booking/SAMPLE-HTL-4471"', em)
+
+    def test_a_booking_without_a_link_or_confirmation_still_renders(self):
+        row = ["Rail", "Cascade Rail 88", "Fri Mar 6, 7:10 AM EST", "Seat 12A", "", ""]
+        f, em, tx = render_all(payload(TRAVEL=[row]))
+        for doc in (f, em):
+            self.assertIn("Cascade Rail 88", doc)
+            self.assertIn("not stated", doc)
+        self.assertIn("Cascade Rail 88", tx)
+
+    def test_flights_alone_and_bookings_alone_each_hold_the_section(self):
+        only_flights = payload(TRAVEL=[])
+        f, em, tx = render_all(only_flights)
+        self.assertIn("Upcoming travel", f)
+        self.assertNotIn("Stays &amp; other bookings", f + em)
+        only_stays = payload(TRAVEL=[self.STAY])
+        only_stays["FLIGHTS"]["legs"] = []
+        f, em, tx = render_all(only_stays)
+        self.assertIn("Upcoming travel", f)
+        self.assertIn("Stays &amp; other bookings", f)
+        self.assertNotIn("Route (airport local times)", em, "no flight table without legs")
+        self.assertIn("Northwind Harbor Hotel", tx)
+
+    def test_the_section_says_bookings_are_carried_until_their_date(self):
+        f, em, tx = render_all(payload(TRAVEL=[self.STAY]))
+        for doc in (f, em, tx):
+            self.assertIn("until its date has passed", doc)
+
+    def test_the_contract_refuses_a_malformed_booking(self):
+        from brief.model import PayloadError, validate
+        for bad in ([["Hotel", "Northwind", "Fri", "Springfield", "SAMPLE-1"]],
+                    [["Hotel", "Northwind", "Fri", "Springfield", "SAMPLE-1", "x", "extra"]],
+                    [["Hotel", "Northwind", "Fri", "Springfield", 4471, ""]],
+                    "not a list"):
+            with self.assertRaises(PayloadError, msg=repr(bad)):
+                validate(payload(TRAVEL=bad))
+
+
 class TestFlightOnTimeColumn(unittest.TestCase):
     """When no leg has an on-time record the column is dropped, not filled with
     an apology in every row — on a phone that column costs a third of the table
@@ -195,8 +259,8 @@ class TestFlightOnTimeColumn(unittest.TestCase):
 
     def test_flights_still_render_without_records(self):
         f, em, tx = render_all(self._without_stats())
-        for out, probe in ((f, "Upcoming flights"), (em, "Upcoming flights"),
-                           (tx, "UPCOMING FLIGHTS")):
+        for out, probe in ((f, "Upcoming travel"), (em, "Upcoming travel"),
+                           (tx, "UPCOMING TRAVEL")):
             self.assertIn(probe, out)
             self.assertIn("NW 412", out)
         # the row keeps its other three columns, so the table stays well formed
@@ -508,12 +572,12 @@ class TestNoHollowSections(unittest.TestCase):
         self.assertIn("No voicemails or texts since Friday.", voip)
         self.assertNotIn("No new data in this period", voip)
 
-    def test_flights_without_legs_are_omitted_and_the_rest_renumber(self):
-        p = payload()
+    def test_travel_with_nothing_booked_is_omitted_and_the_rest_renumber(self):
+        p = payload(TRAVEL=[])
         p["FLIGHTS"]["legs"] = []
         f, em, tx = render_all(p)
-        self.assertNotIn("Upcoming flights", f + em)
-        self.assertNotIn("UPCOMING FLIGHTS", tx)
+        self.assertNotIn("Upcoming travel", f + em)
+        self.assertNotIn("UPCOMING TRAVEL", tx)
         self.assertEqual(re.findall(r'<span class="num">(\d)\.', f), list("1234567"))
 
     def test_the_fed_card_keeps_its_caption_when_only_the_jobs_table_goes(self):
@@ -692,14 +756,14 @@ if __name__ == "__main__":
 class TestSectionOrderAndOmission(unittest.TestCase):
     """Document order is fixed by the renderer, not by a prose instruction.
 
-    A live brief once shipped with Upcoming flights after Retail sales and High
+    A live brief once shipped with Upcoming travel after Retail sales and High
     priority away from the top — an order this renderer cannot produce. Pinning
     it here makes any future report of that kind immediately diagnosable: if
     these pass, the document did not come from this code.
     """
 
     ORDER = ["High priority", "Relevant job posts", "Deposits &amp; finances",
-             "Upcoming flights", "VoIP voicemails", "USPS Informed Delivery",
+             "Upcoming travel", "VoIP voicemails", "USPS Informed Delivery",
              "Package tracking", "US market", "Cryptocurrency",
              "AI &amp; programming", "Research &amp; publications", "Retail sales"]
 
@@ -731,13 +795,13 @@ class TestSectionOrderAndOmission(unittest.TestCase):
         f, em, tx = render_all(payload())
         for doc in (f, em):
             between = doc[doc.index("Needs you today"):doc.index("High priority")]
-            for other in ("Relevant job posts", "Retail sales", "Upcoming flights"):
+            for other in ("Relevant job posts", "Retail sales", "Upcoming travel"):
                 self.assertNotIn(other, between, f"{other} sits between the action bar and High priority")
         self.assertLess(tx.index("NEEDS YOU TODAY"), tx.index("1. HIGH PRIORITY"))
 
     def test_retail_is_last_and_flights_are_not(self):
         f, _, _ = render_all(payload())
-        self.assertGreater(f.index("Retail sales"), f.index("Upcoming flights"))
+        self.assertGreater(f.index("Retail sales"), f.index("Upcoming travel"))
         self.assertGreater(f.index("Retail sales"), f.index("Research &amp; publications"))
 
     def test_numbering_closes_the_gap_when_a_section_is_omitted(self):
@@ -995,7 +1059,7 @@ class TestEmailBudgetShedding(unittest.TestCase):
     def test_standing_sections_are_never_shed(self):
         """Only research cards may go. What needs action always ships."""
         _f, em, _t = self._render_at(50 * 1024)
-        for probe in ("High priority", "Deposits &amp; finances", "Upcoming flights"):
+        for probe in ("High priority", "Deposits &amp; finances", "Upcoming travel"):
             self.assertIn(probe, em, f"{probe} must never be shed")
 
 
