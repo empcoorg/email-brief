@@ -132,6 +132,7 @@ def cur_sym(cur): return {"USD": "$", "MXN": "MX$", "EUR": "\u20ac", "GBP": "\u0
 import re as _re
 
 from .retention import RETENTION_DAYS
+from .tone import macro_tone, move_tone
 
 
 def short_url(u):
@@ -718,7 +719,8 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
                    + tdl("Departs (airport local)", f'{e(g["frm"])}<br><span class="mono">{e(g["dep"])}</span>')
                    + tdl("Arrives (airport local)", f'{e(g["to"])}<br><span class="mono">{e(g["arr"])}</span>'))
             if show_terms:
-                row += tdl("Terminal", e(leg_terminals(g)) or '<span class="muted">not stated</span>', "meta")
+                lines = "<br>".join(e(t) for t in terminal_lines(g))
+                row += tdl("Terminal", lines or '<span class="muted">not stated</span>', "meta")
             row += tdl("Confirmation", f'<span class="mono">{e(leg_conf(g))}</span>' if leg_conf(g)
                        else '<span class="muted">not stated</span>')
             if show_stats:
@@ -811,8 +813,9 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
         research.append('<div class="card wide"><h2>US market</h2>')
         if MKT_ROWS:
             research.append('<div class="tbl-wrap"><table><thead><tr><th>Index</th><th style="text-align:right">Close</th><th>1D{0}</th><th>1W{1}</th><th>YTD{2}</th></tr></thead><tbody>'.format(axis_div(MKT_24), axis_div(MKT_7D), axis_div(MKT_YTD)))
-            for n, c, p1, v1, p7, v7, py, vy in MKT_ROWS:
-                research.append('<tr>' + tdl("Index", e(n), "mono") + tdl("Close", e(c), "num mono")
+            for n, c, p1, v1, p7, v7, py, vy, *asof in MKT_ROWS:
+                research.append('<tr>' + tdl("Index", e(n), "mono")
+                                + tdl("Close", quote_cell_file(c, v1, asof), "num mono")
                                 + tdl("1D", horizon_cell_file(p1, v1, MKT_24, "pts"))
                                 + tdl("1W", horizon_cell_file(p7, v7, MKT_7D, "pts"))
                                 + tdl("YTD", horizon_cell_file(py, vy, MKT_YTD, "pts")) + '</tr>')
@@ -821,16 +824,17 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
             research.append(f'<h3>Vanguard funds</h3><div class="tbl-wrap"><table><thead><tr><th>Fund</th><th style="text-align:right">NAV</th><th>1D{axis_div(FUND_1D)}</th><th>1W{axis_div(FUND_1W)}</th><th>YTD{axis_div(FUND_YTD)}</th><th>As of</th></tr></thead><tbody>')
             for tk, nm, nav, a1, v1, a7, v7, ay, vy, asof, note in FUNDS:
                 research.append('<tr>' + tdl("Fund", f'<span class="lead">{e(tk)}</span><br><span class="meta">{e(nm)}</span>', "mono")
-                                + tdl("NAV", e(nav), "num mono")
+                                + tdl("NAV", quote_cell_file(nav, v1, asof), "num mono")
                                 + tdl("1D", horizon_cell_file(a1, v1, FUND_1D))
                                 + tdl("1W", horizon_cell_file(a7, v7, FUND_1W))
                                 + tdl("YTD", horizon_cell_file(ay, vy, FUND_YTD))
-                                + tdl("As of", f'<span class="meta">{e(asof)}</span>') + '</tr>')
+                                + tdl("As of", f'<span class="meta">{e(with_year(asof))}</span>') + '</tr>')
             research.append(f'</tbody></table></div>{axis_foot(FUND_1D, "1D NAV change, %")}{axis_foot(FUND_1W, "1W NAV change, %")}{axis_foot(FUND_YTD, "YTD NAV change, %")}<div class="cap">Change from the prior published NAV (1D), over one trading week (1W), and since the previous year-end (YTD) - each in $ and %. {axis_note(FUND_1D, "1D axis")}; {axis_note(FUND_1W, "1W axis")}; {axis_note(FUND_YTD, "YTD axis")}. ' + e(" ".join(f"{tk}: {note}" for tk, nm, nav, a1, v1, a7, v7, ay, vy, asof, note in FUNDS)) + '</div>')
         if STOCKS:
             research.append(f'<h3>Large caps</h3><div class="tbl-wrap"><table><thead><tr><th>Ticker</th><th style="text-align:right">Price</th><th>1D{axis_div(STK_1D)}</th><th>1W{axis_div(STK_1W)}</th><th>YTD{axis_div(STK_YTD)}</th></tr></thead><tbody>')
-            for tk, pr, a1, v1, a7, v7, ay, vy in STOCKS:
-                research.append('<tr>' + tdl("Ticker", f'<span class="lead">{e(tk)}</span>', "mono") + tdl("Price", e(pr), "num mono")
+            for tk, pr, a1, v1, a7, v7, ay, vy, *asof in STOCKS:
+                research.append('<tr>' + tdl("Ticker", f'<span class="lead">{e(tk)}</span>', "mono")
+                                + tdl("Price", quote_cell_file(pr, v1, asof), "num mono")
                                 + tdl("1D", horizon_cell_file(a1, v1, STK_1D))
                                 + tdl("1W", horizon_cell_file(a7, v7, STK_1W))
                                 + tdl("YTD", horizon_cell_file(ay, vy, STK_YTD)) + '</tr>')
@@ -840,8 +844,9 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
         research.append('<div class="card wide"><h2>Cryptocurrency</h2>')
         if CRYPTO_ROWS:
             research.append(f'<div class="tbl-wrap"><table><thead><tr><th>Asset</th><th style="text-align:right">Price</th><th>1D{axis_div(CRY_24)}</th><th>1W{axis_div(CRY_7D)}</th><th>YTD{axis_div(CRY_YTD)}</th></tr></thead><tbody>')
-            for n, pr, v1, a1, v7, a7, vy, ay in CRYPTO_ROWS:
-                research.append('<tr>' + tdl("Asset", f'<span class="lead">{e(n)}</span>', "mono") + tdl("Price", e(pr), "num mono")
+            for n, pr, v1, a1, v7, a7, vy, ay, *asof in CRYPTO_ROWS:
+                research.append('<tr>' + tdl("Asset", f'<span class="lead">{e(n)}</span>', "mono")
+                                + tdl("Price", quote_cell_file(pr, v1, asof), "num mono")
                                 + tdl("1D", horizon_cell_file(a1, v1, CRY_24, reverse=True))
                                 + tdl("1W", horizon_cell_file(a7, v7, CRY_7D, reverse=True))
                                 + tdl("YTD", horizon_cell_file(ay, vy, CRY_YTD, reverse=True)) + '</tr>')
@@ -855,9 +860,9 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
             research.append('<div class="tbl-wrap"><table><thead><tr><th>Indicator</th><th>Latest</th><th>Change · context</th><th>As of</th></tr></thead><tbody>')
             for name, latest, context, asof in MACRO_ROWS:
                 research.append('<tr>' + tdl("Indicator", f'<span class="lead">{e(name)}</span>')
-                                + tdl("Latest", f'<b class="mono">{e(latest)}</b>')
+                                + tdl("Latest", macro_cell(latest, name, context))
                                 + tdl("Change · context", e(context))
-                                + tdl("As of", f'<span class="meta">{e(asof)}</span>') + '</tr>')
+                                + tdl("As of", f'<span class="meta">{e(with_year(asof))}</span>') + '</tr>')
             research.append('</tbody></table></div>')
         if JOBS_SECTORS:
             research.append('<h3>Jobs by sector</h3><div class="tbl-wrap"><table><thead><tr><th>Sector</th><th style="text-align:right">Payrolls</th><th>Context</th><th>As of</th></tr></thead><tbody>')
@@ -866,7 +871,7 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
                 research.append('<tr>' + tdl("Sector", e(sector))
                                 + tdl("Payrolls", f'<span class="{cls} mono">{e(change)}</span>', "num")
                                 + tdl("Context", e(context))
-                                + tdl("As of", f'<span class="meta">{e(asof)}</span>') + '</tr>')
+                                + tdl("As of", f'<span class="meta">{e(with_year(asof))}</span>') + '</tr>')
             research.append('</tbody></table></div>')
         research.append(f'<div class="cap">{e(MACRO_NOTE)}</div></div>')
     if AI_ITEMS:
@@ -1085,7 +1090,99 @@ def leg_terminals(leg):
     return str(leg.get("term") or "").strip()
 
 
+_AIRPORT = _re.compile(r"\(([A-Z]{3})\)")
+
+
+def terminal_lines(leg):
+    """One line per airport: ["DEN: Terminal A, gate A12", "ORD: Terminal 2"].
+
+    A run writes the pair as one string - "Terminal A, gate A12 \u2192 Terminal 2" -
+    which reads as a sentence when what a traveller wants is a label per
+    airport. The codes come from the leg's own from/to, so a string this cannot
+    split is returned whole rather than guessed at.
+
+    >>> terminal_lines({"frm": "Denver (DEN)", "to": "Chicago (ORD)",
+    ...                 "term": "Terminal A, gate A12 \u2192 Terminal 2"})
+    ['DEN: Terminal A, gate A12', 'ORD: Terminal 2']
+    >>> terminal_lines({"frm": "Denver (DEN)", "to": "Chicago (ORD)", "term": "Terminal 2"})
+    ['Terminal 2']
+    >>> terminal_lines({"frm": "", "to": "", "term": ""})
+    []
+    """
+    text = leg_terminals(leg)
+    if not text:
+        return []
+    parts = [p.strip() for p in _re.split(r"\s*(?:\u2192|->|;)\s*", text) if p.strip()]
+    codes = [(_AIRPORT.search(str(leg.get(k) or "")) or [None]) for k in ("frm", "to")]
+    codes = [m.group(1) if hasattr(m, "group") else None for m in codes]
+    if len(parts) != 2 or not all(codes):
+        return parts
+    return [f"{code}: {part}" for code, part in zip(codes, parts)]
+
+
 _GENERIC_PROPERTY = _re.compile(r"\b(the property|the hotel|the venue|the operator)\b", _re.I)
+
+
+_MONTH = _re.compile(r"\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.?"
+                     r"(\s+\d{1,2})?\b")
+
+
+def brief_year():
+    """The year this brief is for, from its own dateline."""
+    m = _re.search(r"\b(20\d{2})\b", str(MAST.get("dateline") or "") + " " + str(FILE_STAMP))
+    return m.group(1) if m else ""
+
+
+def with_year(text):
+    """An as-of that names a month but no year gets this brief's year.
+
+    "Feb data" is ambiguous the moment a brief is read in March of the next
+    year - or carried forward, or opened out of the archive. A string that
+    already states a year, or names no month at all, is left alone.
+
+    >>> MAST["dateline"] = "Tuesday, March 3, 2026"
+    >>> with_year("Feb data"), with_year("as of Mar 2")
+    ('Feb 2026 data', 'as of Mar 2, 2026')
+    >>> with_year("Feb 2025 data"), with_year("last close"), with_year("")
+    ('Feb 2025 data', 'last close', '')
+    """
+    text = str(text or "")
+    year = brief_year()
+    if not text or not year or _re.search(r"\b(19|20)\d{2}\b", text):
+        return text
+    m = _MONTH.search(text)
+    if not m:
+        return text
+    sep = ", " if m.group(2) else " "
+    return text[:m.end()] + sep + year + text[m.end():]
+
+
+def _asof_text(asof):
+    """" (as of 4:00 PM EST)" when the row states a time, else nothing."""
+    when = (asof[0] if asof else "").strip() if isinstance(asof, list) else str(asof or "").strip()
+    return f" (as of {when})" if when else ""
+
+
+def quote_cell_file(value, pct, asof, cls="mono"):
+    """A close, NAV or price for the page: coloured by its own 1D move, with the
+    time it was taken under it when the run states one."""
+    tone = {"pos": "dir-pos", "neg": "dir-neg", "neu": ""}[move_tone(pct)]
+    inner = f'<span class="{tone}">{e(value)}</span>'
+    when = (asof[0] if asof else "").strip() if isinstance(asof, list) else str(asof or "").strip()
+    return inner + (f'<br><span class="meta">{e(when)}</span>' if when else "")
+
+
+def quote_cell_email(value, pct, asof):
+    """The same, for the email: inline colour, and the time beneath."""
+    col = {"pos": L["pos"], "neg": L["neg"], "neu": L["ink"]}[move_tone(pct)]
+    when = (asof[0] if asof else "").strip() if isinstance(asof, list) else str(asof or "").strip()
+    return sp(e(value), col) + (f'<br>{small(e(when))}' if when else "")
+
+
+def macro_cell(value, indicator, change):
+    """A macro figure for the page, coloured by what the move MEANS."""
+    tone = {"pos": "dir-pos", "neg": "dir-neg", "neu": ""}[macro_tone(indicator, change)]
+    return f'<b class="{tone} mono">{e(value)}</b>'
 
 
 def booking_source(what, source):
@@ -1643,8 +1740,8 @@ def email_html(budget=None):
         for g in FLIGHTS["legs"]:
             route = (f'{e(g["frm"])} <span style="font-family:{F_M}">{e(g["dep"])}</span>'
                      f'<br>→ {e(g["to"])} <span style="font-family:{F_M}">{e(g["arr"])}</span>')
-            if leg_terminals(g):
-                route += f'<br>{small(e(leg_terminals(g)))}'
+            for line in terminal_lines(g):
+                route += f'<br>{small(e(line))}'
             conf = (f'<span style="font-family:{F_M}">{e(leg_conf(g))}</span>' if leg_conf(g)
                     else muted("not stated"))
             if show_stats:
@@ -1722,9 +1819,9 @@ def email_html(budget=None):
         inner = h2("US market")
         if MKT_ROWS:
             rws = []
-            for n, c, p1, v1, p7, v7, py, vy in MKT_ROWS:
+            for n, c, p1, v1, p7, v7, py, vy, *asof in MKT_ROWS:
                 ky = L["pos"] if vy >= 0 else L["neg"]
-                rws.append([td(f'{lead(n)}<br>{small(e(c))}<br>{sp(f"YTD {pct_str(vy)} {arrow(vy)}", ky)}', mono=True),
+                rws.append([td(f'{lead(n)}<br>{quote_cell_email(c, v1, asof)}<br>{sp(f"YTD {pct_str(vy)} {arrow(vy)}", ky)}', mono=True),
                             td(f'<div style="text-align:center">{sp(f"{e(p1)} pts · {pct_str(v1)} {arrow(v1)}", L["pos"] if v1 >= 0 else L["neg"])}</div>{em_bar_div(v1, MKT_24)}', mono=True),
                             td(f'<div style="text-align:center">{sp(f"{e(p7)} pts · {pct_str(v7)} {arrow(v7)}", L["pos"] if v7 >= 0 else L["neg"])}</div>{em_bar_div(v7, MKT_7D)}', mono=True)])
             inner += tbl(["Index · close · YTD", th_axis("1D", pct_labels(MKT_24)), th_axis("1W", pct_labels(MKT_7D))], rws, ["30%", "35%", "35%"]) + cap(f"1D = close → close vs the prior session; 1W = trailing 5 sessions; YTD = since the previous year-end, shown as a figure because the email is capped at three columns. {axis_note(MKT_24, '1D axis')}; {axis_note(MKT_7D, '1W axis')}.")
@@ -1732,7 +1829,7 @@ def email_html(budget=None):
             rws = []
             for tk, nm, nav, a1, v1, a7, v7, ay, vy, asof, note in FUNDS:
                 ky = L["pos"] if vy >= 0 else L["neg"]
-                rws.append([td(f'{lead(tk)}<br>{small(e(nav))}<br>{sp(f"YTD {pct_str(vy)} {arrow(vy)}", ky)}', mono=True),
+                rws.append([td(f'{lead(tk)}<br>{quote_cell_email(nav, v1, asof)}<br>{sp(f"YTD {pct_str(vy)} {arrow(vy)}", ky)}', mono=True),
                             td(f'<div style="text-align:center">{sp(f"{e(a1)} · {pct_str(v1)} {arrow(v1)}", L["pos"] if v1 >= 0 else L["neg"])}</div>{em_bar_div(v1, FUND_1D)}', mono=True),
                             td(f'<div style="text-align:center">{sp(f"{e(a7)} · {pct_str(v7)} {arrow(v7)}", L["pos"] if v7 >= 0 else L["neg"])}</div>{em_bar_div(v7, FUND_1W)}', mono=True)])
             inner += h3("Vanguard funds") + tbl(["Fund · NAV · YTD", th_axis("1D", pct_labels(FUND_1D)), th_axis("1W", pct_labels(FUND_1W))], rws, ["30%", "35%", "35%"]) + cap("Change from the prior published NAV (1D), over one trading week (1W), and since the previous year-end (YTD). " + " ".join(f"{tk}: {note}" for tk, nm, nav, a1, v1, a7, v7, ay, vy, asof, note in FUNDS))
@@ -1745,9 +1842,9 @@ def email_html(budget=None):
     if STOCKS:
         inner = h2("Large caps")
         rws = []
-        for tk, pr, a1, v1, a7, v7, ay, vy in STOCKS:
+        for tk, pr, a1, v1, a7, v7, ay, vy, *asof in STOCKS:
             ky = L["pos"] if vy >= 0 else L["neg"]
-            rws.append([td(f'{lead(tk)}<br>{small(e(pr))}<br>{sp(f"YTD {pct_str(vy)} {arrow(vy)}", ky)}', mono=True),
+            rws.append([td(f'{lead(tk)}<br>{quote_cell_email(pr, v1, asof)}<br>{sp(f"YTD {pct_str(vy)} {arrow(vy)}", ky)}', mono=True),
                         td(f'<div style="text-align:center">{sp(f"{e(a1)} · {pct_str(v1)} {arrow(v1)}", L["pos"] if v1 >= 0 else L["neg"])}</div>{em_bar_div(v1, STK_1D)}', mono=True),
                         td(f'<div style="text-align:center">{sp(f"{e(a7)} · {pct_str(v7)} {arrow(v7)}", L["pos"] if v7 >= 0 else L["neg"])}</div>{em_bar_div(v7, STK_1W)}', mono=True)])
         inner += tbl(["Ticker · price · YTD", th_axis("1D", pct_labels(STK_1D)), th_axis("1W", pct_labels(STK_1W))], rws, ["30%", "35%", "35%"])
@@ -1757,14 +1854,16 @@ def email_html(budget=None):
         inner = h2("Fed &amp; labor market")
         if MACRO_ROWS:
             inner += tbl(["Indicator", "Latest", "Change · context"],
-                         [[td(lead(n)), td(f"<b>{e(v)}</b>", mono=True), td(f"{e(c)}<br>{small(e(a))}")]
+                         [[td(lead(n)),
+                           td(sp(e(v), {"pos": L["pos"], "neg": L["neg"], "neu": L["ink"]}[macro_tone(n, c)]), mono=True),
+                           td(f"{e(c)}<br>{small(e(with_year(a)))}")]
                           for n, v, c, a in MACRO_ROWS], ["28%", "22%", "50%"])
         if JOBS_SECTORS:
             inner += h3("Jobs by sector")
             inner += tbl(["Sector", "Payrolls", "Context"],
                          [[td(e(sec)),
                            td(sp(e(ch), L["neg"] if str(ch).lstrip().startswith(("\u2212", "-")) else L["pos"]), mono=True),
-                           td(f"{e(ctx)}<br>{small(e(a))}")]
+                           td(f"{e(ctx)}<br>{small(e(with_year(a)))}")]
                           for sec, ch, ctx, a in JOBS_SECTORS], ["30%", "18%", "52%"])
         inner += cap(MACRO_NOTE)
         o.append(card(inner))
@@ -1773,9 +1872,9 @@ def email_html(budget=None):
         inner = h2("Cryptocurrency")
         if CRYPTO_ROWS:
             rws = []
-            for n, pr, v1, a1, v7, a7, vy, ay in CRYPTO_ROWS:
+            for n, pr, v1, a1, v7, a7, vy, ay, *asof in CRYPTO_ROWS:
                 ky = L["pos"] if vy >= 0 else L["neg"]
-                rws.append([td(f'{lead(n)}<br>{small(e(pr))}<br>{sp(f"YTD {pct_str(vy)} {arrow(vy)}", ky)}', mono=True),
+                rws.append([td(f'{lead(n)}<br>{quote_cell_email(pr, v1, asof)}<br>{sp(f"YTD {pct_str(vy)} {arrow(vy)}", ky)}', mono=True),
                             td(f'<div style="text-align:center">{sp(f"{pct_str(v1)} {arrow(v1)} · {e(a1)}", L["pos"] if v1 >= 0 else L["neg"])}</div>{em_bar_div(v1, CRY_24)}', mono=True),
                             td(f'<div style="text-align:center">{sp(f"{pct_str(v7)} {arrow(v7)} · {e(a7)}", L["pos"] if v7 >= 0 else L["neg"])}</div>{em_bar_div(v7, CRY_7D)}', mono=True)])
             inner += tbl(["Asset · price · YTD", th_axis("1D", pct_labels(CRY_24)), th_axis("1W", pct_labels(CRY_7D))], rws, ["30%", "35%", "35%"]) + cap(f"1D = rolling 24 h; 1W = rolling 7 days; YTD = since the previous year-end — crypto trades continuously, so every window runs back from the quote time. {axis_note(CRY_24, '1D axis')}; {axis_note(CRY_7D, '1W axis')}. {CRYPTO_NOTE}")
@@ -1963,8 +2062,8 @@ def plain_text(budget=None):
         A(f"  {FLIGHTS['booked']}")
         for g in FLIGHTS["legs"]:
             A(f"  - {g['date']}: {g['flight']} · {g['frm']} {g['dep']} -> {g['to']} {g['arr']}"
-              + (f" · {leg_terminals(g)}" if leg_terminals(g) else "")
-              + (f" · confirmation {leg_conf(g)}" if leg_conf(g) else ""))
+              + (f" · confirmation {leg_conf(g)}" if leg_conf(g) else "")
+              + "".join(f"\n    {t}" for t in terminal_lines(g)))
             if g.get("stats"):
                 A(f"    on-time: {g['stats']}")
             A(f"    {g['fa']}")
@@ -2011,8 +2110,8 @@ def plain_text(budget=None):
     if MKT_ROWS or FUNDS or MKT_BULLETS:
         A(""); A("US MARKET")
         if MKT_ROWS:
-            for n, c, p1, v1, p7, v7, py, vy in MKT_ROWS:
-                A(f"  {n}: {c} | 1D {p1} pts, {pct_str(v1)} {'Up' if v1>=0 else 'Down'}"
+            for n, c, p1, v1, p7, v7, py, vy, *asof in MKT_ROWS:
+                A(f"  {n}: {c}{_asof_text(asof)} | 1D {p1} pts, {pct_str(v1)} {'Up' if v1>=0 else 'Down'}"
                   f" | 1W {p7} pts, {pct_str(v7)} {'Up' if v7>=0 else 'Down'}"
                   f" | YTD {py} pts, {pct_str(vy)} {'Up' if vy>=0 else 'Down'}")
             A("  " + "1D = close → close vs the prior session; 1W = trailing 5 sessions (one trading week). Both in index points and %.")
@@ -2026,22 +2125,22 @@ def plain_text(budget=None):
         for b in MKT_BULLETS: A(f"  - {b}")
     if STOCKS:
         A(""); A("LARGE CAPS")
-        for tk, pr, a1, v1, a7, v7, ay, vy in STOCKS:
-            A(f"  {tk}: {pr} | 1D {a1}, {pct_str(v1)} | 1W {a7}, {pct_str(v7)} | YTD {ay}, {pct_str(vy)}")
+        for tk, pr, a1, v1, a7, v7, ay, vy, *asof in STOCKS:
+            A(f"  {tk}: {pr}{_asof_text(asof)} | 1D {a1}, {pct_str(v1)} | 1W {a7}, {pct_str(v7)} | YTD {ay}, {pct_str(vy)}")
     if MACRO_ROWS or JOBS_SECTORS:
         A(""); A("FED & LABOR MARKET")
         for n, v, c, a in MACRO_ROWS:
-            A(f"  {n}: {v} — {c} ({a})")
+            A(f"  {n}: {v} — {c} ({with_year(a)})")
         if JOBS_SECTORS:
             A("  Jobs by sector:")
             for sec, ch, ctx, a in JOBS_SECTORS:
-                A(f"    {sec}: {ch} — {ctx} ({a})")
+                A(f"    {sec}: {ch} — {ctx} ({with_year(a)})")
         A("  " + MACRO_NOTE)
     if CRYPTO_ROWS or CRYPTO_BULLETS:
         A(""); A("CRYPTOCURRENCY")
         if CRYPTO_ROWS:
-            for n, pr, v1, a1, v7, a7, vy, ay in CRYPTO_ROWS:
-                A(f"  {n}: {pr} | 1D {pct_str(v1)} ({a1}) | 1W {pct_str(v7)} ({a7})"
+            for n, pr, v1, a1, v7, a7, vy, ay, *asof in CRYPTO_ROWS:
+                A(f"  {n}: {pr}{_asof_text(asof)} | 1D {pct_str(v1)} ({a1}) | 1W {pct_str(v7)} ({a7})"
                   f" | YTD {pct_str(vy)} ({ay})")
             A("  " + "1D = rolling 24 h; 1W = rolling 7 days — crypto trades continuously, so there is no daily close and both windows are measured back from the quote time.")
             A(f"  (1D axis ±{CRY_24[1]:g}%, step {CRY_24[0]:g}%; 1W axis ±{CRY_7D[1]:g}%, step {CRY_7D[0]:g}%.)")
