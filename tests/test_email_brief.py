@@ -549,15 +549,15 @@ class TestTemplate(unittest.TestCase):
         numbers in it, which is indistinguishable from a real quote unless
         something else agrees with it.
         """
-        rule = TEMPLATE.split("=== WEB ACCESS")[1].split("PRE-APPROVED DOMAINS")[0]
+        rule = TEMPLATE.split("=== WEB ACCESS")[-1].split("PRE-APPROVED DOMAINS")[0]
         self.assertIn("A FETCH IS NOT PROOF ON ITS OWN", rule)
         self.assertIn("SECOND source", rule)
         self.assertIn("not verified (single source)", rule)
 
     def test_the_fund_chain_leads_with_a_source_that_answers(self):
         """stooq is a CSV, and the fetch tool summarises pages rather than files."""
-        chain = TEMPLATE.split("WORK DOWN THIS CHAIN")[1][:1200]
-        first = chain.split("2.")[0]
+        chain = TEMPLATE.split("WORK DOWN THIS CHAIN")[1].split("ALWAYS state the source")[0]
+        first = chain.split("\n  2.")[0]
         self.assertIn("stockanalysis.com", first, "the chain must lead with a source that answers")
         self.assertNotIn("stooq", first, "a CSV endpoint cannot be the first thing tried")
         self.assertIn("returns empty content rather than rows", chain)
