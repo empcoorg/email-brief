@@ -216,6 +216,29 @@ class TestUpcomingTravel(unittest.TestCase):
         self.assertNotIn("Route (airport local times)", em, "no flight table without legs")
         self.assertIn("Northwind Harbor Hotel", tx)
 
+    def test_a_long_field_is_split_into_a_headline_and_its_fine_print(self):
+        """A run writes dates and check-in times in one field; a narrow column made that a wall."""
+        row = ["Hotel", "Northwind Harbor Hotel",
+               "Mon, Sep 21 → Wed, Sep 23, 2026 (2 nights) · check-in 3:00 PM, check-out 11:00 AM",
+               "Springfield ST · king, breakfast included", "SAMPLE-HTL-4471", ""]
+        f, em, tx = render_all(payload(TRAVEL=[row]))
+        for doc in (f, em):
+            # the dates stand alone in their cell, the times sit under them
+            self.assertRegex(doc, r"Mon, Sep 21 → Wed, Sep 23, 2026 \(2 nights\)</(b|span)>")
+            self.assertIn("check-in 3:00 PM, check-out 11:00 AM", doc)
+            self.assertNotIn("(2 nights) · check-in", doc, "the field was printed as one run of text")
+            self.assertNotIn("Springfield ST · king", doc)
+        lines = [l.strip() for l in tx.splitlines()]
+        self.assertIn("- Mon, Sep 21 → Wed, Sep 23, 2026 (2 nights) · Hotel: Northwind Harbor Hotel · confirmation SAMPLE-HTL-4471", lines)
+        self.assertIn("check-in 3:00 PM, check-out 11:00 AM", lines)
+
+    def test_a_field_with_no_fine_print_renders_as_one_line(self):
+        row = ["Concert", "Bluepine Hall", "Sat Mar 7, 8:00 PM EST", "Row H", "DEMO-TIX-90210", ""]
+        f, em, tx = render_all(payload(TRAVEL=[row]))
+        for doc in (f, em, tx):
+            self.assertIn("Sat Mar 7, 8:00 PM EST", doc)
+            self.assertIn("Row H", doc)
+
     def test_the_section_says_bookings_are_carried_until_their_date(self):
         f, em, tx = render_all(payload(TRAVEL=[self.STAY]))
         for doc in (f, em, tx):

@@ -612,10 +612,13 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
             booking = f'<span class="lead">{e(what)}</span>'
             if link.strip():
                 booking = f'<a href="{url(link)}"><b>{e(what)}</b></a>'
+            dates, times = booking_split(when)
+            place, place_detail = booking_split(where)
             o.append('<tr>' + tdl("Type", e(kind))
                      + tdl("Booking", booking)
-                     + tdl("When", e(when), "mono")
-                     + tdl("Where", e(where))
+                     + tdl("When", f'<span class="mono">{e(dates)}</span>'
+                           + (f'<br><span class="meta">{e(times)}</span>' if times else ""))
+                     + tdl("Where", e(place) + (f'<br><span class="meta">{e(place_detail)}</span>' if place_detail else ""))
                      + tdl("Confirmation", e(conf) if conf.strip() else '<span class="muted">not stated</span>', "mono") + '</tr>')
         o.append(f'</tbody></table></div><div class="cap">{e(TRAVEL_NOTE)}</div>')
     if FLIGHTS["legs"] or TRAVEL:
@@ -853,6 +856,19 @@ def ai_spend_caption():
             f"{usd_str(ai_spend_total())}. Counted from billing emails as they arrive - earlier "
             f"charges are not back-dated - and reset to $0.00 on 1 January.")
     return f"{base} {note}".strip()
+
+
+def booking_split(text):
+    """A booking field as (what it says first, the fine print after it).
+
+    A run writes one field as "Mon, Sep 21 → Wed, Sep 23, 2026 (2 nights) ·
+    check-in 3:00 PM, check-out 11:00 AM property-local time". Printed as one
+    run of text in a narrow column that is a wall. The part before the first
+    "\u00b7" is what the reader scans for - the dates, the room, the seat - and
+    the rest is detail that belongs under it, smaller.
+    """
+    head, _, rest = str(text or "").partition("\u00b7")
+    return head.strip(), rest.strip()
 
 
 def voip_empty():
@@ -1368,12 +1384,21 @@ def email_html(budget=None):
         inner += cap(FLIGHTS["note"])
     if TRAVEL:
         inner += h3("Stays & other bookings")
-        inner += tbl(["Type · when", "Booking · where", "Confirmation"],
-                     [[td(f'{e(kind)}<br><span style="font-family:{F_M}">{e(when)}</span>'),
-                       td((f'<a href="{url(link)}" style="color:{L["accent"]};font-weight:600">{e(what)}</a>'
-                           if link.strip() else lead(what)) + (f'<br>{small(e(where))}' if where.strip() else "")),
-                       td(f'<span style="font-family:{F_M}">{e(conf)}</span>' if conf.strip() else muted("not stated"))]
-                      for kind, what, when, where, conf, link in TRAVEL], ["26%", "50%", "24%"])
+        rws = []
+        for kind, what, when, where, conf, link in TRAVEL:
+            dates, times = booking_split(when)
+            place, place_detail = booking_split(where)
+            name = (f'<a href="{url(link)}" style="color:{L["accent"]};font-weight:600">{e(what)}</a>'
+                    if link.strip() else lead(what))
+            # The date is the column a reader scans, so it is set in the body
+            # face: monospace is wider and wrapped three deep at phone width.
+            rws.append([
+                td(f'<b>{e(dates)}</b>' + (f'<br>{small(e(times))}' if times else "")),
+                td(f'{small(e(kind))}<br>{name}'
+                   + (f'<br>{small(e(place))}' if place else "")
+                   + (f'<br>{small(e(place_detail))}' if place_detail else "")),
+                td((f'<span style="font-family:{F_M}">{e(conf)}</span>' if conf.strip() else muted("not stated")))])
+        inner += tbl(["When", "Booking", "Confirmation"], rws, ["34%", "44%", "22%"])
         inner += cap(TRAVEL_NOTE)
     if FLIGHTS["legs"] or TRAVEL:
         o.append(card(inner))
@@ -1664,9 +1689,13 @@ def plain_text(budget=None):
     if TRAVEL:
         A("Stays & other bookings:")
         for kind, what, when, where, conf, link in TRAVEL:
-            A(f"  - {kind}: {what} · {when}" + (f" · {where}" if where.strip() else "")
-              + (f" · confirmation {conf}" if conf.strip() else "")
-              + (f"\n    {link}" if link.strip() else ""))
+            dates, times = booking_split(when)
+            place, place_detail = booking_split(where)
+            A(f"  - {dates} · {kind}: {what}"
+              + (f" · confirmation {conf}" if conf.strip() else ""))
+            for line in (times, place, place_detail, link):
+                if line.strip():
+                    A(f"      {line}")
         A(f"  {TRAVEL_NOTE}")
     A(""); A(f"{tnum()}. VOIP VOICEMAILS & TEXTS")
     if voip_empty():
