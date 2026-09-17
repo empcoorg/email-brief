@@ -527,6 +527,21 @@ class TestTemplate(unittest.TestCase):
             self.assertIn(topic, readme_setup,
                           f"the setup walkthrough never asks about {topic}")
 
+    def test_the_prompt_forbids_mailbox_content_in_web_requests(self):
+        """Widening what a run may fetch widens where its mail could go.
+
+        The brief reads a mailbox and then talks to the open web in the same
+        session, so the one rule that keeps those apart has to be in the prompt
+        the run actually follows - not only in the README.
+        """
+        rule = TEMPLATE.split("=== WEB ACCESS — WHAT MAY LEAVE THIS RUN ===")[1].split("===", 1)[0]
+        self.assertIn("NOTHING FROM THE MAILBOX EVER GOES INTO A WEB REQUEST", rule)
+        for forbidden in ("email address", "account or card number", "confirmation code",
+                          "tracking number", "subject line"):
+            self.assertIn(forbidden, rule, f"the rule does not name {forbidden}")
+        self.assertIn("PUBLIC TERMS ONLY", rule)
+        self.assertIn("not verified", rule, "a figure that needs private data is dropped")
+
     def test_placeholders_documented_and_used(self):
         documented = set(re.findall(r"\{\{(\w+)\}\}", self.doc)) - {"PLACEHOLDER"}
         used = set(re.findall(r"\{\{(\w+)\}\}", self.fence))

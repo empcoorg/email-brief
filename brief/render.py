@@ -535,6 +535,11 @@ td.num{{text-align:right;white-space:nowrap}}
 .dbar .fill.right{{left:50%}} .dbar .fill.left{{right:50%}} .dbar .fill.center{{left:50%;transform:translateX(-50%)}} .fill.pos{{background:var(--positive)}} .fill.neg{{background:var(--negative)}} .fill.neu{{background:var(--ink-3)}}
 .daxis{{position:relative;height:16px;width:150px;margin-top:3px;box-sizing:border-box;border:1px solid transparent}}
 .dbar.money,.daxis.money{{width:100%;min-width:150px;max-width:280px}}
+/* A labelled money column: the label, the heading and the ruler share one box,
+   so the label centres on the same zero the bars grow from. Left-aligned in the
+   cell, it sat wherever the column happened to be wide. */
+.dcol{{width:100%;min-width:150px;max-width:280px}}
+.dcol .dlabel{{text-align:center}}
 /* The heading's "0" must sit exactly over the ruler's, so it takes the ruler's
    width rule rather than a fixed one: in a wider column a 150px heading centred
    its zero 65px left of the bars' zero, over negative territory. */
@@ -666,7 +671,8 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
     if ai_spend_rows():
         o.append('<h3>AI services — billed year to date</h3><div class="tbl-wrap"><table><thead><tr>'
                  '<th>Service</th><th style="text-align:right">Billed ' + e(AI_SPEND["year"]) + '</th>'
-                 + '<th>New this window' + money_head() + money_axis(AI_AXIS, "ai") + '</th>'
+                 + '<th><div class="dcol"><div class="dlabel">New this window</div>'
+                 + money_head() + money_axis(AI_AXIS, "ai") + '</div></th>'
                  '<th>Share AI spend (YTD)</th></tr></thead><tbody>')
         for row in ai_spend_rows():
             service, total, note = row[0], row[1], row[-1]

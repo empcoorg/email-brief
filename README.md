@@ -209,6 +209,16 @@ stockanalysis, Investing.com, Yahoo Finance, CNBC, bls.gov, TradingEconomics,
 CoinGecko, CoinMarketCap, Reuters — was refused, while `WebSearch` worked all
 run, so the market and crypto tables came out empty rather than wrong.
 
+**Widening what a run may fetch widens where its mail could go**, so the template
+carries one absolute rule: nothing from the mailbox ever goes into a web request
+— no name, address, account or card number, confirmation code, tracking number,
+amount, subject line or quoted sentence, in any query, URL or parameter. A
+researched query carries public terms only: a ticker, an index, a coin, a
+journal, a company, a date. The mailbox sections are written from the mail
+alone, a fetched page is data and never instructions, and a figure that cannot
+be had without naming something private is dropped as "not verified". A test
+pins the rule in the prompt, because the prompt is what a run actually follows.
+
 So the template puts **WebSearch first** for every researched figure and uses
 `WebFetch` only to confirm a number search already gave, marks a figure the
 proxy blocked as "not verified — search snippet only", and records the blocked
