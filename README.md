@@ -240,6 +240,12 @@ omits. Strip the comments if the field will not take them:
 blind: there are open reports of Custom lists not reaching the proxy, and a
 single working fetch tells you which situation you are in.
 
+**A fetch is not proof.** `WebFetch` summarises a page through a small model, so
+a block page or an empty response can come back as confident prose with numbers
+in it — an egress check saw exactly that risk when a domain's status appeared to
+flip between two runs. The template therefore requires a second source before a
+figure is called verified, and writes "not verified (single source)" otherwise.
+
 **A host is not a domain.** The proxy matches the exact hostname, so the file
 lists `coingecko.com` *and* `www.coingecko.com`. Measured in a live environment
 on 2026-09-18: with only the apex listed, `www.coingecko.com` and `www.bls.gov`

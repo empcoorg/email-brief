@@ -542,6 +542,26 @@ class TestTemplate(unittest.TestCase):
         self.assertIn("PUBLIC TERMS ONLY", rule)
         self.assertIn("not verified", rule, "a figure that needs private data is dropped")
 
+    def test_a_figure_needs_a_second_source_before_it_is_called_verified(self):
+        """A fetch summarises a page through a small model.
+
+        A block page or an empty response can come back as confident prose with
+        numbers in it, which is indistinguishable from a real quote unless
+        something else agrees with it.
+        """
+        rule = TEMPLATE.split("=== WEB ACCESS")[1].split("PRE-APPROVED DOMAINS")[0]
+        self.assertIn("A FETCH IS NOT PROOF ON ITS OWN", rule)
+        self.assertIn("SECOND source", rule)
+        self.assertIn("not verified (single source)", rule)
+
+    def test_the_fund_chain_leads_with_a_source_that_answers(self):
+        """stooq is a CSV, and the fetch tool summarises pages rather than files."""
+        chain = TEMPLATE.split("WORK DOWN THIS CHAIN")[1][:1200]
+        first = chain.split("2.")[0]
+        self.assertIn("stockanalysis.com", first, "the chain must lead with a source that answers")
+        self.assertNotIn("stooq", first, "a CSV endpoint cannot be the first thing tried")
+        self.assertIn("returns empty content rather than rows", chain)
+
     def test_placeholders_documented_and_used(self):
         documented = set(re.findall(r"\{\{(\w+)\}\}", self.doc)) - {"PLACEHOLDER"}
         used = set(re.findall(r"\{\{(\w+)\}\}", self.fence))
