@@ -389,7 +389,8 @@ def lead_inner(text):
 
 
 def li_lead(text):
-    return f"<li>{lead_inner(text)}</li>"
+    """A bullet, or nothing at all: an empty string used to render as a bare dot."""
+    return f"<li>{lead_inner(text)}</li>" if str(text).strip() else ""
 
 def tdl(label, inner, cls=""):
     return f'<td class="{cls}" data-l="{attr(label)}">{inner}</td>'
@@ -508,7 +509,7 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
     num = SectionNumber()
     o.append(f'<section><h2><span class="num">{num()}.</span> High priority <span class="sub">ranked by severity \u00b7 act on these first</span></h2><div class="card">')
     if not HIPRI:
-        o.append(f'<div class="nothing">{NOTHING_NEW}</div>')
+        o.append(f'<div class="nothing">{e(nothing_new())}</div>')
     else:
         o.append('<div class="tbl-wrap"><table><thead><tr><th>What needs attention</th><th>Detail</th></tr></thead><tbody>')
     for sev, t, items in HIPRI:
@@ -522,7 +523,7 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
     # 1 jobs
     o.append(f'<section><h2><span class="num">{num()}.</span> Relevant job posts <span class="sub">{e(JOBS_RANKED_NOTE)}</span></h2><div class="card">')
     if not (JOBS_STATUS or JOBS_TOP or JOBS_OTHER):
-        o.append(f'<div class="nothing">{NOTHING_NEW}</div>')
+        o.append(f'<div class="nothing">{e(nothing_new())}</div>')
     if JOBS_STATUS:
         o.append('<h3 style="margin-top:0">Application status</h3><ul class="jobs">')
         for t, m, d in JOBS_STATUS:
@@ -549,7 +550,7 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
     # 2 finances
     o.append(f'<section><h2><span class="num">{num()}.</span> Deposits &amp; finances</h2><div class="card">')
     if not (FIN_SUMMARY or FIN_MOVES or FIN_NOTES):
-        o.append(f'<div class="nothing">{NOTHING_NEW}</div>')
+        o.append(f'<div class="nothing">{e(nothing_new())}</div>')
     if FIN_SUMMARY:
         o.append('<div class="tiles">' + "".join(f'<div class="tile"><div class="lbl">{e(l)}</div><div class="v mono">{e(v)}</div><div class="d">{e(d)}</div></div>' for l, v, d in FIN_SUMMARY) + '</div>')
     if FIN_MOVES:
@@ -595,7 +596,11 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
                 row += tdl("Recent on-time record", e(g.get("stats") or "not available"), "meta")
             o.append('<tr>' + row + '</tr>')
         o.append(f'</tbody></table></div><div class="cap">{e(FLIGHTS["note"])}</div></div></section>')
-    o.append(f'<section><h2><span class="num">{num()}.</span> VoIP voicemails &amp; texts <span class="sub">provider senders + Google Voice, Twilio, OpenPhone, Grasshopper, RingCentral, Dialpad</span></h2><div class="card"><div class="nothing">{e(VOIP["headline"])}</div>')
+    o.append(f'<section><h2><span class="num">{num()}.</span> VoIP voicemails &amp; texts <span class="sub">provider senders + Google Voice, Twilio, OpenPhone, Grasshopper, RingCentral, Dialpad</span></h2><div class="card">')
+    if voip_empty():
+        o.append(f'<div class="nothing">{e(nothing_new())}</div>')
+    elif VOIP["headline"].strip():
+        o.append(f'<div class="nothing">{e(VOIP["headline"])}</div>')
     if VOIP["messages"]:
         o.append('<div class="tbl-wrap"><table><thead><tr><th>When \u00b7 from</th><th>To \u00b7 type</th><th>Message</th></tr></thead><tbody>')
         for when, frm, to, kind, text in VOIP["messages"]:
@@ -610,7 +615,11 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
         o.append("<ul>" + "".join(li_lead(n) for n in voip_tail()) + "</ul>")
     o.append('</div></section>')
     # 5 USPS
-    o.append(f'<section><h2><span class="num">{num()}.</span> USPS Informed Delivery <span class="sub">mail addressed to the intended recipient only; everyone else counted, never named</span></h2><div class="card"><div class="nothing">{e(USPS["headline"])}</div>')
+    o.append(f'<section><h2><span class="num">{num()}.</span> USPS Informed Delivery <span class="sub">mail addressed to the intended recipient only; everyone else counted, never named</span></h2><div class="card">')
+    if usps_empty():
+        o.append(f'<div class="nothing">{e(nothing_new())}</div>')
+    elif USPS["headline"].strip():
+        o.append(f'<div class="nothing">{e(USPS["headline"])}</div>')
     # The headline already says how many pieces there were; an empty table
     # under it would only repeat that as a header with no rows.
     if USPS["pieces"]:
@@ -620,7 +629,10 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
         o.append('</tbody></table></div>')
     for n, (uri, cap_) in enumerate(USPS_SCANS, 1):
         o.append(f'<figure class="scanfig" id="{scan_anchor(n)}"><img src="{url(uri)}" alt="Full mailpiece scan (mock)"><figcaption>{e(cap_)}</figcaption></figure>')
-    o.append(f'<ul>{li_lead(USPS["counts"])}</ul><p class="meta">{e(USPS["note"])}</p></div></section>')
+    counts = li_lead(USPS["counts"])
+    o.append((f'<ul>{counts}</ul>' if counts else "")
+             + (f'<p class="meta">{e(USPS["note"])}</p>' if USPS["note"].strip() else "")
+             + '</div></section>')
     # Omitted entirely when the window carries no shipments, the way flights
     # are; the counter renumbers whatever follows. Shipments stay until the
     # carrier reports delivery, so a package in flight is never dropped.
@@ -721,7 +733,10 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
         o.append('</div></section>')
     # 7 retail (low priority)
     o.append(f'<section><h2><span class="num">{num()}.</span> Retail sales <span class="sub">{e(RETAIL["sub"])}</span></h2><div class="card">')
-    o.append("<ul>" + li_lead(RETAIL["rewards"]) + "</ul>")
+    if retail_empty():
+        o.append(f'<div class="nothing">{e(nothing_new())}</div>')
+    elif li_lead(RETAIL["rewards"]):
+        o.append("<ul>" + li_lead(RETAIL["rewards"]) + "</ul>")
     if RETAIL["items"]:
         o.append('<div class="tbl-wrap"><table><thead><tr><th>Store</th><th>Offer</th><th>Dates \u00b7 caveats</th></tr></thead><tbody>')
         for store, offer, detail in RETAIL["items"]:
@@ -756,8 +771,17 @@ def lbl(t): return f'<div style="font:600 10.5px {F_H};text-transform:uppercase;
 # A standing section with nothing in its window says so in one line rather than
 # disappearing (its absence would be ambiguous) or drawing an empty table (which
 # reads as missing data). Research cards are conditional and are omitted instead.
-NOTHING_NEW = "Nothing new."
 NOTHING_TODAY = "Nothing needs you today."
+
+
+def nothing_new():
+    """One line for a standing section whose window brought nothing.
+
+    It names the window, because "nothing new" alone leaves the reader asking
+    nothing new SINCE WHEN - and on a late or long run that is exactly the
+    question. The section keeps its heading: its absence would be ambiguous.
+    """
+    return f"No new data in this period ({MAST['window']})."
 
 
 def actions_sub():
@@ -802,6 +826,20 @@ def ai_spend_caption():
             f"{usd_str(ai_spend_total())}. Counted from billing emails as they arrive - earlier "
             f"charges are not back-dated - and reset to $0.00 on 1 January.")
     return f"{base} {note}".strip()
+
+
+def voip_empty():
+    """Nothing to show at all - not a message, not a note, not even a headline."""
+    return not (VOIP["messages"] or voip_tail() or VOIP["headline"].strip())
+
+
+def usps_empty():
+    return not (USPS["pieces"] or USPS_SCANS or USPS["counts"].strip()
+                or USPS["headline"].strip() or USPS["note"].strip())
+
+
+def retail_empty():
+    return not (RETAIL["items"] or RETAIL["rewards"].strip())
 
 
 def voip_tail():
@@ -867,7 +905,8 @@ def em_lead_inner(text):
 
 
 def em_li(text):
-    return f'<li style="margin:9px 0">{em_lead_inner(text)}</li>'
+    """A bullet, or nothing at all - see li_lead."""
+    return f'<li style="margin:9px 0">{em_lead_inner(text)}</li>' if str(text).strip() else ""
 def ul(items): return '<ul style="margin:8px 0 0;padding-left:20px">' + "".join(f'<li style="margin:9px 0">{i}</li>' for i in items) + "</ul>"
 def _seg(w, col): return f'<span style="display:inline-block;width:0;height:0;border-left:{w}px solid {col};border-top:5px solid {col};border-bottom:5px solid {col}"></span>'
 # FLUID DIVERGING BAR for the email. Percentage table cells, so the track fills
@@ -1233,12 +1272,12 @@ def email_html(budget=None):
                 f'{SEV_WORD.get(sev, sev.upper())}</span>')
         rws.append([td(f"{chip} {sp(e(t_), sevcol[sev])}"),
                     td("<br>".join(em_lead_inner(i) for i in items))])
-    inner += tbl(["What needs attention", "Detail"], rws, ["40%", "60%"]) if rws else f'<div style="color:{L["ink3"]};font-style:italic">{NOTHING_NEW}</div>'
+    inner += tbl(["What needs attention", "Detail"], rws, ["40%", "60%"]) if rws else f'<div style="color:{L["ink3"]};font-style:italic">{e(nothing_new())}</div>'
     o.append(card(inner))
     # 1 jobs — 3 columns
     inner = h2(f'{sp(f"{num()}.", L["accent"])} Relevant job posts', JOBS_RANKED_NOTE)
     if not (JOBS_STATUS or JOBS_TOP or JOBS_OTHER):
-        inner += f'<div style="color:{L["ink3"]};font-style:italic">{NOTHING_NEW}</div>'
+        inner += f'<div style="color:{L["ink3"]};font-style:italic">{e(nothing_new())}</div>'
     if JOBS_STATUS:
         inner += h3("Application status") + ul([f'{lead(t)} {small("— " + e(m))}<br>{e(d)}' for t, m, d in JOBS_STATUS])
     rws = []
@@ -1258,7 +1297,7 @@ def email_html(budget=None):
     # 2 finances
     inner = h2(f'{sp(f"{num()}.", L["accent"])} Deposits &amp; finances')
     if not (FIN_SUMMARY or FIN_MOVES or FIN_NOTES):
-        inner += f'<div style="color:{L["ink3"]};font-style:italic">{NOTHING_NEW}</div>'
+        inner += f'<div style="color:{L["ink3"]};font-style:italic">{e(nothing_new())}</div>'
     inner += "".join(f'<div style="border:1px solid {L["line"]};border-left:4px solid {L["accent"]};padding:8px 12px;margin:6px 0">{lbl(l)}<div style="font-family:{F_M};font-size:20px;font-weight:700">{e(v)}</div>{small(e(d))}</div>' for l, v, d in FIN_SUMMARY)
     rws = []
     for when, payee, det, amt, cur, usd, dirw, sign in FIN_MOVES:
@@ -1300,7 +1339,10 @@ def email_html(budget=None):
         inner += cap(FLIGHTS["note"])
         o.append(card(inner))
     inner = h2(f'{sp(f"{num()}.", L["accent"])} VoIP voicemails &amp; texts', "searched by the configured provider senders + Google Voice, Twilio, OpenPhone, Grasshopper, RingCentral, Dialpad")
-    inner += f'<div style="color:{L["ink3"]};font-style:italic">{e(VOIP["headline"])}</div>'
+    if voip_empty():
+        inner += f'<div style="color:{L["ink3"]};font-style:italic">{e(nothing_new())}</div>'
+    elif VOIP["headline"].strip():
+        inner += f'<div style="color:{L["ink3"]};font-style:italic">{e(VOIP["headline"])}</div>'
     if VOIP["messages"]:
         rws = [[td(f'<span style="font-family:{F_M}">{e(w)}</span><br>{e(frm)}'),
                 td(f'<span style="font-family:{F_M}">{e(to)}</span><br>{small(e(kind))}'),
@@ -1311,12 +1353,18 @@ def email_html(budget=None):
     o.append(card(inner))
     # 5 USPS
     inner = h2(f'{sp(f"{num()}.", L["accent"])} USPS Informed Delivery', "mail addressed to the intended recipient only; everyone else counted, never named")
-    inner += f'<div style="color:{L["ink3"]};font-style:italic">{e(USPS["headline"])}</div>'
+    if usps_empty():
+        inner += f'<div style="color:{L["ink3"]};font-style:italic">{e(nothing_new())}</div>'
+    elif USPS["headline"].strip():
+        inner += f'<div style="color:{L["ink3"]};font-style:italic">{e(USPS["headline"])}</div>'
     rws = [[td(f'<span style="font-family:{F_M}">{e(d_)}</span><br>{e(s_)}'), td(f'<span style="font-family:{F_M}">{e(a_)}</span>'), td(e(ty))] for d_, s_, a_, ty in USPS["pieces"]]
     if rws:
         inner += tbl(["Date · sender", "Addressee (as printed)", "Type / notes"], rws)
     inner += scan_links_html()
-    inner += '<ul style="margin:8px 0 0;padding-left:20px">' + em_li(USPS["counts"]) + '</ul>' + f'<p style="font-size:13px;color:{L["ink3"]}">{e(USPS["note"])}</p>'
+    counts = em_li(USPS["counts"])
+    inner += ('<ul style="margin:8px 0 0;padding-left:20px">' + counts + '</ul>' if counts else "")
+    if USPS["note"].strip():
+        inner += f'<p style="font-size:13px;color:{L["ink3"]}">{e(USPS["note"])}</p>'
     o.append(card(inner))
     # package tracking — omitted when the window carries no shipments; shipments
     # stay until the carrier reports delivery, so nothing in flight is dropped
@@ -1415,7 +1463,10 @@ def email_html(budget=None):
         mark("Research & publications")
     # 7 retail — lowest priority, so it sits last, after the research sections
     inner = h2(f'{sp(f"{num()}.", L["accent"])} Retail sales', RETAIL["sub"])
-    inner += '<ul style="margin:8px 0 0;padding-left:20px">' + em_li(RETAIL["rewards"]) + "</ul>"
+    if retail_empty():
+        inner += f'<div style="color:{L["ink3"]};font-style:italic">{e(nothing_new())}</div>'
+    elif em_li(RETAIL["rewards"]):
+        inner += '<ul style="margin:8px 0 0;padding-left:20px">' + em_li(RETAIL["rewards"]) + "</ul>"
     if RETAIL["items"]:
         inner += tbl(["Store", "Offer", "Dates · caveats"],
                      [[td(lead(store)), td(f"<b>{e(offer)}</b>"), td(small(e(det)))]
@@ -1523,9 +1574,9 @@ def plain_text(budget=None):
     for sev, t, items in HIPRI:
         A(f"[{sev.upper()}] {t}")
         for i in items: A(f"  - {i}")
-    if not HIPRI: A("  " + NOTHING_NEW)
+    if not HIPRI: A("  " + nothing_new())
     A(""); A(f"{tnum()}. RELEVANT JOB POSTS")
-    if not (JOBS_STATUS or JOBS_TOP or JOBS_OTHER): A("  " + NOTHING_NEW)
+    if not (JOBS_STATUS or JOBS_TOP or JOBS_OTHER): A("  " + nothing_new())
     if JOBS_STATUS:
         A("Application status:")
         for t, m, d in JOBS_STATUS: A(f"  - {t} — {m}\n    {d}")
@@ -1540,7 +1591,7 @@ def plain_text(budget=None):
         if x: A(x)
     A("")
     A(f"{tnum()}. DEPOSITS & FINANCES")
-    if not (FIN_SUMMARY or FIN_MOVES or FIN_NOTES): A("  " + NOTHING_NEW)
+    if not (FIN_SUMMARY or FIN_MOVES or FIN_NOTES): A("  " + nothing_new())
     for l, v, d in FIN_SUMMARY: A(f"  {l}: {v} ({d})")
     if FIN_MOVES:
         A("Money movements:")
@@ -1569,17 +1620,26 @@ def plain_text(budget=None):
                 A(f"    on-time: {g['stats']}")
             A(f"    {g['fa']}")
         A(f"  {FLIGHTS['note']}")
-    A(""); A(f"{tnum()}. VOIP VOICEMAILS & TEXTS"); A(VOIP["headline"])
+    A(""); A(f"{tnum()}. VOIP VOICEMAILS & TEXTS")
+    if voip_empty():
+        A("  " + nothing_new())
+    elif VOIP["headline"].strip():
+        A(VOIP["headline"])
     for w, frm, to, kind, text in VOIP["messages"]: A(f"  - {w} · from {frm} · to {to} · {kind}: {text}")
     for n in voip_tail(): A("  - " + n)
     A("")
-    A(""); A(f"{tnum()}. USPS INFORMED DELIVERY (intended recipient's mail only)"); A(USPS["headline"])
+    A(""); A(f"{tnum()}. USPS INFORMED DELIVERY (intended recipient's mail only)")
+    if usps_empty():
+        A("  " + nothing_new())
+    elif USPS["headline"].strip():
+        A(USPS["headline"])
     for d_, s_, a_, ty in USPS["pieces"]: A(f"  - {d_} · {s_} · addressed to {a_} · {ty}")
     for n, _ in enumerate(USPS_SCANS, 1):
         A(f"  Mailpiece scan {n}: "
           + ("attached at the end of this email" if scan_attached(n) else "not attached (did not fit in this email)")
           + (f"; also at {scan_url(n)} (claude.ai sign-in required)" if FULL_URL else ""))
-    A("  " + USPS["counts"]); A("  Note: " + USPS["note"])
+    if USPS["counts"].strip(): A("  " + USPS["counts"])
+    if USPS["note"].strip(): A("  Note: " + USPS["note"])
     if PKG:
         A(""); A(f"{tnum()}. PACKAGE TRACKING (kept until delivered)")
         for car, trk, item, rcpt, st, eta in PKG: A(f"  - {car} · {trk} · {item} · to {rcpt} · {st} · ETA {eta}")
@@ -1631,7 +1691,10 @@ def plain_text(budget=None):
         A(""); A("RESEARCH & PUBLICATIONS (" + JOURNALS + ")")
         for j, t, au, d, tk, l in JOURNAL_ITEMS: A(f"  - {j}: {t} ({au}, {d}) — {tk}\n    {l}")
     A(""); A(f"{tnum()}. RETAIL SALES (lowest priority — configured retailers)")
-    A("  - " + RETAIL["rewards"])
+    if retail_empty():
+        A("  " + nothing_new())
+    elif RETAIL["rewards"].strip():
+        A("  - " + RETAIL["rewards"])
     for store, offer, det in RETAIL["items"]: A(f"  - {store}: {offer} — {det}")
     A(""); A("DOMAIN ALLOWLIST")
     for k, v in ALLOWLIST.items(): A(f"  {k}: {v}")

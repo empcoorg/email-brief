@@ -378,9 +378,16 @@ class TestEmptySections(unittest.TestCase):
             self.assertGreater(len(out), 500, "an all-empty brief must still render")
 
 
+# The strings a section says when it has something to say: a headline, the
+# postal counts, the rewards line. A run with nothing leaves them empty too.
+_EMPTY_STRINGS = {"VOIP": ("headline", "last_msg", "last_acct"),
+                  "USPS": ("headline", "counts", "note"),
+                  "RETAIL": ("rewards",)}
+
+
 def _all_empty():
-    """The sample with every list emptied - a real quiet day, taken to the limit."""
-    p = payload()
+    """The sample with nothing in it - every list empty and every such string blank."""
+    p = payload(FIN_INTERNAL="")
     for k, v in p.items():
         if isinstance(v, list):
             p[k] = []
@@ -388,6 +395,8 @@ def _all_empty():
             for kk, vv in v.items():
                 if isinstance(vv, list):
                     v[kk] = []
+                elif kk in _EMPTY_STRINGS.get(k, ()):
+                    v[kk] = ""
     return p
 
 
@@ -420,7 +429,7 @@ class TestNoHollowSections(unittest.TestCase):
     nothing under it: the run had no large caps to report, and the renderer drew
     the section anyway. A heading over an empty table reads as missing data. So:
     research cards are omitted when they have nothing, and standing sections -
-    whose absence would be ambiguous - say "Nothing new." in one line.
+    whose absence would be ambiguous - say so in one line, naming the window.
     """
 
     @staticmethod
@@ -467,16 +476,37 @@ class TestNoHollowSections(unittest.TestCase):
         for heading in ("US MARKET", "LARGE CAPS", "CRYPTOCURRENCY", "FED & LABOR MARKET"):
             self.assertNotIn(heading, tx)
 
-    def test_standing_sections_say_nothing_new_instead_of_vanishing(self):
-        f, em, tx = render_all(_all_empty())
+    def test_standing_sections_say_what_was_swept_instead_of_vanishing(self):
+        """A section with nothing keeps its heading and names the window it swept."""
+        p = _all_empty()
+        window = p["MAST"]["window"]
+        f, em, tx = render_all(p)
+        line = f"No new data in this period ({window})."
         for out in (f, em, tx):
             self.assertIn("Nothing needs you today.", out)
-            self.assertGreaterEqual(out.count("Nothing new."), 3,
-                                    "high priority, jobs and finances each say so")
+            self.assertGreaterEqual(out.count(line), 6,
+                                    "every standing section with nothing says so, naming the window")
         for heading in ("High priority", "Relevant job posts", "Deposits &amp; finances",
                         "VoIP voicemails", "USPS Informed Delivery", "Retail sales"):
             self.assertIn(heading, f)
             self.assertIn(heading, em)
+
+    def test_an_empty_string_never_renders_as_a_bare_bullet(self):
+        """A live brief showed USPS as a heading over a single empty dot."""
+        f, em, _ = render_all(_all_empty())
+        self.assertEqual(re.findall(r"<li>\s*</li>", f), [])
+        self.assertEqual(re.findall(r"<li[^>]*>\s*</li>", em), [])
+        for doc in (f, em):
+            self.assertNotIn("<ul></ul>", doc)
+
+    def test_a_section_with_only_a_headline_keeps_its_headline(self):
+        """"One text message in the window" is data; it must not be overwritten."""
+        p = _all_empty()
+        p["VOIP"]["headline"] = "No voicemails or texts since Friday."
+        _, em, _ = render_all(p)
+        voip = em[em.find("VoIP voicemails"):em.find("USPS Informed Delivery")]
+        self.assertIn("No voicemails or texts since Friday.", voip)
+        self.assertNotIn("No new data in this period", voip)
 
     def test_flights_without_legs_are_omitted_and_the_rest_renumber(self):
         p = payload()
