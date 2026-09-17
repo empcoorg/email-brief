@@ -239,6 +239,15 @@ class TestUpcomingTravel(unittest.TestCase):
             self.assertIn("Sat Mar 7, 8:00 PM EST", doc)
             self.assertIn("Row H", doc)
 
+    def test_a_booking_can_say_where_it_was_booked(self):
+        """Direct with the property or through an agent changes who to call."""
+        row = self.STAY + ["Booked direct with the property"]
+        f, em, tx = render_all(payload(TRAVEL=[row]))
+        for doc in (f, em, tx):
+            self.assertIn("Booked direct with the property", doc)
+        no_source, _, _ = render_all(payload(TRAVEL=[self.STAY]))
+        self.assertNotIn("Booked direct", no_source)
+
     def test_the_section_says_bookings_are_carried_until_their_date(self):
         f, em, tx = render_all(payload(TRAVEL=[self.STAY]))
         for doc in (f, em, tx):
@@ -247,7 +256,7 @@ class TestUpcomingTravel(unittest.TestCase):
     def test_the_contract_refuses_a_malformed_booking(self):
         from brief.model import PayloadError, validate
         for bad in ([["Hotel", "Northwind", "Fri", "Springfield", "SAMPLE-1"]],
-                    [["Hotel", "Northwind", "Fri", "Springfield", "SAMPLE-1", "x", "extra"]],
+                    [["Hotel", "Northwind", "Fri", "Springfield", "SAMPLE-1", "x", "src", "extra"]],
                     [["Hotel", "Northwind", "Fri", "Springfield", 4471, ""]],
                     "not a list"):
             with self.assertRaises(PayloadError, msg=repr(bad)):
@@ -269,7 +278,8 @@ class TestFlightOnTimeColumn(unittest.TestCase):
     def test_column_present_when_records_exist(self):
         f, em, tx = render_all(payload())
         self.assertIn("Recent on-time record", f)
-        self.assertIn("On-time record", em)
+        self.assertIn("on-time", em.split("Upcoming travel")[1][:2000],
+                      "the email folds the record in beside the confirmation")
         self.assertIn("on-time:", tx)
 
     def test_column_dropped_when_no_leg_has_a_record(self):
@@ -313,6 +323,7 @@ class TestCurrencyOnOneAxis(unittest.TestCase):
         ]
         f, _, _ = render_all(p)
         fin = f.split("Deposits &amp; finances")[1].split("</section>")[0]
+        fin = fin.split("Money movements")[1].split("AI services")[0]
         widths = [float(w) for w in re.findall(r'class="fill \w+ \w+" style="width:([\d.]+)%"', fin)]
         self.assertEqual(len(widths), 2)
         # axis top is an even 1000 -> the USD charge is 50% of a half-track,
@@ -668,6 +679,177 @@ class TestStringsFollowTheData(unittest.TestCase):
         for out in (f, em, tx):
             self.assertEqual(out.count("Maple Street Dental"), 1,
                              "on a quiet day the last message is the proof the line is alive")
+
+
+class TestActionBarAndHighPriority(unittest.TestCase):
+    """The bar and section 1 are written from the same facts, and must read as one."""
+
+    def test_a_repeated_item_points_at_section_1_instead_of_repeating_itself(self):
+        from brief.render import DETAIL_IN_HIPRI
+        p = payload()
+        title = p["HIPRI"][0][1]
+        p["ACTIONS"] = [["neg", title, "The very same sentence, twice over."]] + p["ACTIONS"]
+        f, em, tx = render_all(p)
+        for doc in (f, em, tx):
+            self.assertIn(DETAIL_IN_HIPRI, doc)
+            self.assertNotIn("The very same sentence, twice over.", doc)
+            self.assertIn(title, doc, "the row itself stays: the bar is what a reader acts from")
+
+    def test_an_item_only_in_the_bar_keeps_its_own_detail(self):
+        from brief.render import DETAIL_IN_HIPRI
+        p = payload(HIPRI=[])
+        p["ACTIONS"] = [["warn", "Only in the bar", "Detail that exists nowhere else."]]
+        for doc in render_all(p):
+            self.assertIn("Detail that exists nowhere else.", doc)
+            self.assertNotIn(DETAIL_IN_HIPRI, doc)
+
+    def test_matching_is_not_fooled_by_case_or_punctuation(self):
+        from brief.render import DETAIL_IN_HIPRI
+        p = payload()
+        p["HIPRI"] = [["neg", "Utility autopay failed — resubmit", ["detail"]]]
+        p["ACTIONS"] = [["neg", "utility autopay failed - resubmit", "duplicate detail"]]
+        self.assertIn(DETAIL_IN_HIPRI, render_all(p)[0])
+
+    def test_section_1_carries_the_bars_severity_stripe(self):
+        f, em, _ = render_all(payload())
+        severities = {row[0] for row in payload()["HIPRI"]}
+        for sev in severities:
+            self.assertIn(f'<tr class="hp {sev}">', f)
+        self.assertRegex(f, r"tr\.hp\.neg>td:first-child\{border-left-color:var\(--negative\)\}")
+        hp = em.split("What needs attention")[1][:2000]
+        self.assertIn("border-left:6px solid", hp, "the email stripes the row's first cell")
+
+
+class TestSummaryTiles(unittest.TestCase):
+    def test_a_tile_says_which_way_it_points(self):
+        from brief.render import tile_tone
+        self.assertEqual(tile_tone("In from outside"), "pos")
+        self.assertEqual(tile_tone("Outstanding"), "neg")
+        self.assertEqual(tile_tone("Bills due"), "neg")
+        self.assertEqual(tile_tone("Moved internally"), "neu")
+        self.assertEqual(tile_tone("Something nobody has coined yet"), "neu")
+
+    def test_the_figure_is_coloured_and_the_currency_set_beside_it(self):
+        f, em, _ = render_all(payload())
+        self.assertIn('class="tile pos"', f)
+        self.assertIn('class="tile neg"', f)
+        self.assertRegex(f, r'<span class="cur">USD</span>')
+        fin = em.split("Deposits &amp; finances")[1][:2500]
+        self.assertIn("USD", fin)
+
+    def test_a_currency_already_written_is_not_doubled(self):
+        from brief.render import tile_amount
+        self.assertEqual(tile_amount("$5,280.00 USD"), ("$5,280.00", "USD"))
+        self.assertEqual(tile_amount("$5,280.00"), ("$5,280.00", "USD"))
+        self.assertEqual(tile_amount("3 invoices"), ("3 invoices", ""))
+
+
+class TestMovementOrder(unittest.TestCase):
+    """In, then Out, then Internal, then Unclassified - newest first in each."""
+
+    MOVES = [
+        ["Mon Mar 2, 6:15 PM EST", "Older internal", "d", 500.0, "USD", 500.0, "Internal", "\u00b1"],
+        ["Tue Mar 3, 7:41 AM EST", "Older out", "d", 84.20, "USD", 84.20, "Past due", "\u2212"],
+        ["Mon Mar 2, 9:04 AM EST", "Older in", "d", 1000.0, "USD", 1000.0, "In", "+"],
+        ["Tue Mar 3, 8:12 AM EST", "Newer out", "d", 551.35, "USD", 551.35, "Out", "\u2212"],
+        ["Tue Mar 3, 9:30 AM EST", "Newer in", "d", 20.0, "USD", 20.0, "In", "+"],
+        ["Tue Mar 3, 6:00 AM EST", "No side", "d", 9.0, "USD", 9.0, "Receipt", "\u00b1"],
+    ]
+
+    def test_the_groups_come_in_order_and_each_is_newest_first(self):
+        from brief.render import moves_in_order
+        render_all(payload(FIN_MOVES=self.MOVES))
+        self.assertEqual([r[1] for r in moves_in_order()],
+                         ["Newer in", "Older in", "Newer out", "Older out",
+                          "Older internal", "No side"])
+
+    def test_the_rendered_order_matches_in_every_output(self):
+        f, em, tx = render_all(payload(FIN_MOVES=self.MOVES))
+        for doc in (f, em, tx):
+            seen = [n for n in sorted(("Newer in", "Older in", "Newer out", "Older out",
+                                       "Older internal", "No side"), key=doc.index)]
+            self.assertEqual(seen, ["Newer in", "Older in", "Newer out", "Older out",
+                                    "Older internal", "No side"], doc[:0])
+
+    def test_a_row_whose_date_cannot_be_read_keeps_its_place(self):
+        from brief.render import moves_in_order
+        moves = [["whenever", "Undated", "d", 5.0, "USD", 5.0, "In", "+"],
+                 ["Tue Mar 3, 9:30 AM EST", "Dated", "d", 20.0, "USD", 20.0, "In", "+"]]
+        render_all(payload(FIN_MOVES=moves))
+        self.assertEqual([r[1] for r in moves_in_order()], ["Dated", "Undated"])
+
+
+class TestAiSpendColumn(unittest.TestCase):
+    ROWS = [["Acme AI", 120.0, 24.0, "71% of AI spend this year"],
+            ["Northwind AI", 34.0, 0.0, "20% of AI spend this year"]]
+
+    def block(self, rows=None):
+        return {"year": "2026", "rows": rows if rows is not None else self.ROWS}
+
+    def test_this_windows_billing_is_drawn_as_a_diverging_bar(self):
+        f, em, tx = render_all(payload(AI_SPEND=self.block()))
+        ai = f.split("AI services")[1][:4000]
+        self.assertIn("New this window", ai)
+        self.assertRegex(ai, r'class="fill neg left"', "a charge draws left of zero, in red")
+        self.assertIn("nothing new", ai, "a service billed nothing draws no bar at all")
+        self.assertEqual(ai.count('class="dbar money ai"'), 1, "one bar, for the one charge")
+        self.assertIn("$24.00", ai)
+        self.assertIn("$24.00 billed in this window", tx)
+        self.assertIn("nothing new in this window", tx)
+        self.assertIn("New this window", em)
+
+    def test_the_share_column_is_named_in_full_and_carries_a_ring(self):
+        f, em, _ = render_all(payload(AI_SPEND=self.block()))
+        self.assertIn("Share AI spend (YTD)", f)
+        self.assertIn("share ai spend (ytd)", em.lower())
+        ai = f.split("AI services")[1][:4000]
+        self.assertEqual(ai.count('<svg class="ring"'), len(self.ROWS))
+        self.assertNotIn("<svg", em, "the sanitizer strips it, so the email states the share in words")
+
+    def test_the_ring_matches_the_percentage_the_row_states(self):
+        from brief.render import ai_ring, ai_share
+        self.assertEqual(ai_share(self.ROWS[0]), 71.0)
+        half, whole = ai_ring(50), ai_ring(100)
+        self.assertIn("stroke-dasharray", half)
+        self.assertNotEqual(half, whole)
+        self.assertEqual(ai_ring(None), "", "no percentage, no ring")
+
+    def test_a_row_written_before_the_column_existed_still_renders(self):
+        old = [["Acme AI", 120.0, "100% of AI spend this year"]]
+        f, em, tx = render_all(payload(AI_SPEND=self.block(old)))
+        for doc in (f, em, tx):
+            self.assertIn("AI services", doc)
+            self.assertIn("$120.00", doc)
+        self.assertIn("nothing new in this window", tx)
+
+
+class TestFlightColumns(unittest.TestCase):
+    def test_each_leg_shows_its_confirmation_and_terminal(self):
+        p = payload()
+        p["FLIGHTS"]["legs"][0]["conf"] = "SAMPLE7"
+        p["FLIGHTS"]["legs"][0]["term"] = "Terminal A, gate A12 → Terminal 2"
+        f, em, tx = render_all(p)
+        for doc in (f, em, tx):
+            self.assertIn("SAMPLE7", doc)
+            self.assertIn("Terminal A, gate A12", doc)
+        self.assertIn("<th>Terminal</th>", f)
+        self.assertIn("<th>Confirmation</th>", f)
+
+    def test_a_leg_without_its_own_code_falls_back_to_the_bookings(self):
+        from brief.render import leg_conf
+        p = payload()
+        for leg in p["FLIGHTS"]["legs"]:
+            leg.pop("conf", None)
+        render_all(p)
+        self.assertEqual(leg_conf(p["FLIGHTS"]["legs"][0]), p["FLIGHTS"]["conf"])
+
+    def test_the_terminal_column_is_dropped_when_no_leg_states_one(self):
+        p = payload()
+        for leg in p["FLIGHTS"]["legs"]:
+            leg.pop("term", None)
+        f, _, _ = render_all(p)
+        self.assertNotIn("<th>Terminal</th>", f)
+        self.assertIn("<th>Confirmation</th>", f, "the confirmation column always stands")
 
 
 class TestAxisPathsNotInTheSample(unittest.TestCase):

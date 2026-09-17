@@ -86,7 +86,8 @@ def accumulate(previous_text, charges, today, basis=None, basis_year=None):
     adding it again would double-count. A basis applies only in its own year
     and only when nothing was carried forward.
 
-    Returns (year, {service: total}, carried_from_year or None).
+    Returns (year, {service: total}, carried_from_year or None). Use
+    `added(charges)` for what this window alone billed, which the brief plots.
     """
     year = year_of(today)
     prev_year, carried = parse_line(previous_text)
@@ -104,15 +105,33 @@ def accumulate(previous_text, charges, today, basis=None, basis_year=None):
     return year, totals, (prev_year if prev_year == year else None)
 
 
-def rows(totals):
-    """Payload rows, largest first: (service, total, share of the year's spend).
+def added(charges):
+    """What this window billed, per service - the figure the brief plots.
 
-    >>> rows({"Acme AI": 120.0, "Northwind AI": 40.0})
-    [['Acme AI', 120.0, '75% of AI spend this year'], ['Northwind AI', 40.0, '25% of AI spend this year']]
+    >>> added([("Acme AI", 12.0), ("Acme AI", 8.0), ("Northwind AI", 5.0)])
+    {'Acme AI': 20.0, 'Northwind AI': 5.0}
+    """
+    out = {}
+    for service, amount in charges or []:
+        service = str(service).strip()
+        out[service] = round(out.get(service, 0.0) + float(amount), 2)
+    return out
+
+
+def rows(totals, new=None):
+    """Payload rows, largest first: (service, total, this window, share note).
+
+    The third field is what arrived in THIS window, which is what the brief
+    draws a bar from; the year-to-date total is a running figure and plotting
+    it would say nothing about today.
+
+    >>> rows({"Acme AI": 120.0, "Northwind AI": 40.0}, {"Acme AI": 20.0})
+    [['Acme AI', 120.0, 20.0, '75% of AI spend this year'], ['Northwind AI', 40.0, 0.0, '25% of AI spend this year']]
     """
     grand = sum(totals.values())
+    new = new or {}
     out = []
     for service, total in sorted(totals.items(), key=lambda kv: (-kv[1], kv[0])):
         share = f"{round(100 * total / grand)}% of AI spend this year" if grand else "no charges yet"
-        out.append([service, round(float(total), 2), share])
+        out.append([service, round(float(total), 2), round(float(new.get(service, 0.0)), 2), share])
     return out

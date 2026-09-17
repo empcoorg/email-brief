@@ -63,9 +63,11 @@ SPEC = {
 # must never turn every existing payload into a refusal at 10am.
 OPTIONAL_SPEC = {
     "AI_SPEND": ("obj", ("year", "rows"), "AI billing year to date: year, rows of "
-                                          "(service, usd_total, note), optional note"),
-    "TRAVEL": ("rows", 6, "non-flight reservations, kept until the date passes: "
-                          "(kind, what, when, where, confirmation, link)"),
+                                          "(service, usd_total, usd_this_window, note) "
+                                          "- the third field optional - plus an optional note"),
+    "TRAVEL": ("rows", (6, 7), "non-flight reservations, kept until the date passes: "
+                               "(kind, what, when, where, confirmation, link) and an "
+                               "optional 7th field naming where it was booked"),
 }
 
 FIT_TIERS = ("strong", "related", "")
@@ -115,8 +117,10 @@ def validate(payload):
             for n, row in enumerate(v):
                 if not isinstance(row, (list, tuple)):
                     _fail(key, f"row {n} is {type(row).__name__}, expected a list ({desc})")
-                if len(row) != arity:
-                    _fail(key, f"row {n} has {len(row)} field(s), expected {arity} — {desc}")
+                allowed = arity if isinstance(arity, tuple) else (arity,)
+                if len(row) not in allowed:
+                    _fail(key, f"row {n} has {len(row)} field(s), expected "
+                               f"{' or '.join(map(str, allowed))} — {desc}")
         elif kind in ("map", "mapl"):
             if not isinstance(v, dict):
                 _fail(key, f"expected an object ({desc})")
@@ -137,10 +141,11 @@ def validate(payload):
         if not isinstance(travel, list):
             _fail("TRAVEL", f"expected a list of rows ({OPTIONAL_SPEC['TRAVEL'][2]})")
         for n, row in enumerate(travel):
-            if not isinstance(row, (list, tuple)) or len(row) != 6:
+            if not isinstance(row, (list, tuple)) or len(row) not in (6, 7):
                 _fail("TRAVEL", f"row {n} must have 6 fields (kind, what, when, where, "
-                                "confirmation, link) — use an empty string for a field "
-                                "the booking does not state, never a placeholder")
+                                "confirmation, link), or 7 with the booking source last "
+                                "— use an empty string for a field the booking does not "
+                                "state, never a placeholder")
             if not all(isinstance(x, str) for x in row):
                 _fail("TRAVEL", f"row {n}: every field must be a string")
 
@@ -158,11 +163,13 @@ def validate(payload):
         if not isinstance(ai["rows"], list):
             _fail("AI_SPEND", f"expected a list of rows ({desc})")
         for n, row in enumerate(ai["rows"]):
-            if not isinstance(row, (list, tuple)) or len(row) != 3:
-                _fail("AI_SPEND", f"row {n} must have 3 fields (service, usd_total, note)")
-            if not isinstance(row[1], (int, float)):
-                _fail("AI_SPEND", f"row {n}: the year-to-date total must be a number, got "
-                                  f"{row[1]!r} — a formatted string cannot be added up")
+            if not isinstance(row, (list, tuple)) or len(row) not in (3, 4):
+                _fail("AI_SPEND", f"row {n} must have 3 fields (service, usd_total, note), "
+                                  "or 4 with what this window billed third")
+            for i in range(1, len(row) - 1):
+                if not isinstance(row[i], (int, float)):
+                    _fail("AI_SPEND", f"row {n} field {i}: must be a number, got {row[i]!r} "
+                                      "— a formatted string can be neither added up nor plotted")
 
     for n, row in enumerate(payload["VOIP"]["messages"]):
         if not isinstance(row, (list, tuple)) or len(row) != 5:

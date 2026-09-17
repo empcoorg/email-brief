@@ -77,16 +77,23 @@ class _BrowserCase(unittest.TestCase):
         slide the whole scale without changing a single number. Measured in a
         browser because that is the only place the answer exists.
         """
+        # Each money ruler is checked against the bars in ITS OWN table: the
+        # brief now draws two of them (money movements, and AI billing), and
+        # measuring one table's bars against the other's ruler compares scales
+        # that were never meant to agree.
         r = pg.evaluate("""() => {
-          const ax = document.querySelector('th .daxis.money');
-          const bars = [...document.querySelectorAll('td .dbar.money')];
+          const table = [...document.querySelectorAll('table')]
+            .find(t => t.querySelector('th .daxis.money') && t.querySelector('td .dbar.money'));
+          if (!table) return null;
+          const ax = table.querySelector('th .daxis.money');
+          const bars = [...table.querySelectorAll('td .dbar.money')];
           if (!ax || !bars.length) return null;
           const box = el => { const b = el.getBoundingClientRect();
                               return [b.left, b.right, b.left + b.width / 2]; };
           const zero = [...ax.querySelectorAll('span')]
                          .find(s => s.textContent.trim() === '0');
           const z = zero.getBoundingClientRect();
-          const hz = document.querySelector('th .dhead .c');
+          const hz = table.querySelector('th .dhead .c');
           const h = hz ? hz.getBoundingClientRect() : null;
           return {axis: box(ax), zeroCentre: z.left + z.width / 2,
                   headZero: h ? h.left + h.width / 2 : null,

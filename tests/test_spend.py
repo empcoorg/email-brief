@@ -104,9 +104,22 @@ class TestAccumulating(unittest.TestCase):
 
     def test_rows_are_largest_first_with_each_service_share(self):
         self.assertEqual(rows({"Northwind AI": 40.0, "Acme AI": 120.0}),
-                         [["Acme AI", 120.0, "75% of AI spend this year"],
-                          ["Northwind AI", 40.0, "25% of AI spend this year"]])
+                         [["Acme AI", 120.0, 0.0, "75% of AI spend this year"],
+                          ["Northwind AI", 40.0, 0.0, "25% of AI spend this year"]])
         self.assertEqual(rows({}), [])
+
+    def test_rows_carry_what_this_window_billed_beside_the_year(self):
+        """The bar in the brief is drawn from the window, not the running total."""
+        self.assertEqual(rows({"Acme AI": 120.0}, {"Acme AI": 20.0})[0][:3],
+                         ["Acme AI", 120.0, 20.0])
+        self.assertEqual(rows({"Acme AI": 120.0}, {})[0][2], 0.0,
+                         "a quiet window is zero, not the year to date")
+
+    def test_added_sums_a_services_charges_in_this_window(self):
+        from brief.spend import added
+        self.assertEqual(added([("Acme AI", 12.0), ("Acme AI", 8.0), ("Northwind AI", 5.0)]),
+                         {"Acme AI": 20.0, "Northwind AI": 5.0})
+        self.assertEqual(added([]), {})
 
 
 class TestRenderedIntoTheBrief(unittest.TestCase):
@@ -180,7 +193,8 @@ class TestAiSpendCli(unittest.TestCase):
         res, block = self.run_cli("--today", "2026-09-15", "--add", "Acme AI=20.00",
                                   "--note", "counted from today")
         self.assertEqual(res.returncode, 0, res.stderr)
-        self.assertEqual(block, {"year": "2026", "rows": [["Acme AI", 20.0, "100% of AI spend this year"]],
+        self.assertEqual(block, {"year": "2026",
+                                 "rows": [["Acme AI", 20.0, 20.0, "100% of AI spend this year"]],
                                  "note": "counted from today"})
         validate(payload(AI_SPEND=block))
 

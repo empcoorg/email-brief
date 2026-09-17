@@ -51,7 +51,7 @@ That's the whole setup. The rest of this README explains what you get and how to
 ## What a brief contains
 
 - **A "needs you today" action bar** — severity-striped items ranked by urgency.
-- **Standing sections, numbered in this order:** high priority (first, so it sits directly under the action bar), relevant job posts (exact-posting links, never tracking redirects), deposits & finances (external money separate from transfers between your own accounts, plus a small **AI services — billed year to date** table), upcoming travel (flights with FlightAware links and each flight's recent on-time record, plus hotels, stays, rail, coach and event tickets — every booking carried forward until its own date passes, each showing its dates with the check-in or door times set under them), VoIP voicemails & texts, a US postal-mail digest via USPS Informed Delivery that details only your own mail and reduces everyone else's to a count, package tracking (kept until delivered, omitted entirely when nothing is in flight), and retail sales — always last, because it is the lowest-priority thing in the brief.
+- **Standing sections, numbered in this order:** high priority (first, so it sits directly under the action bar), relevant job posts (exact-posting links, never tracking redirects), deposits & finances (external money separate from transfers between your own accounts, each movement grouped **in, out, internal, unclassified** and newest first, summary tiles coloured by which way they point and naming the account behind the figure, plus a small **AI services — billed year to date** table whose bar shows what this window billed), upcoming travel (flights with FlightAware links, per-leg confirmation codes and terminals, and each flight's recent on-time record, plus hotels, stays, rail, coach and event tickets — every booking carried forward until its own date passes, each showing its dates with the check-in or door times set under them, and where it was booked), VoIP voicemails & texts, a US postal-mail digest via USPS Informed Delivery that details only your own mail and reduces everyone else's to a count, package tracking (kept until delivered, omitted entirely when nothing is in flight), and retail sales — always last, because it is the lowest-priority thing in the brief.
   Numbering is computed. A standing section with nothing new in its window says "Nothing new." in one line, because its absence would be ambiguous; flights and package tracking, which exist only to carry something forward, are omitted when there is nothing to carry, and the rest renumber rather than leaving a gap. **No section ever draws a heading over an empty table** — that reads as missing data, not as a quiet day.
 - **Researched cards** when there's news: US markets (indexes, and a Large caps table for the stocks you list — a private company is reported by its latest valuation instead of a price), your fund tickers, cryptocurrency, the Fed & labor market, AI & programming, and research & publications from journals you pick. Market, fund and crypto tables carry labelled even axes, an explicit horizon on every figure (1D and 1W, plus YTD on funds, with as-of stamps), and absolute magnitudes ($ / index points) beside every percentage.
 - A fixed visual identity, rendered by code — light/dark themed HTML file, a fluid email layout that survives email-provider HTML sanitizers, color-coded lead-ins, diverging bars on even axes, and mailpiece scans attached as JPGs.
@@ -184,6 +184,15 @@ The clip threshold the record uses is the same one the "Gmail will clip" note
 uses, so the two never disagree. It is conservative on purpose: carrying a
 section the reader could in fact see costs a few lines; missing one costs the
 section.
+
+### The action bar and section 1 say a thing once
+
+"Needs you today" and **1. High priority** are written from the same facts, so an
+item in both printed the same sentence twice, one under the other. The action row
+stays — the bar is what a reader acts from — but when its title matches a
+high-priority item its detail becomes a pointer to the section below, and section
+1's rows carry the same severity stripe the bar uses, so one item reads as one
+item in both places.
 
 ### Phone numbers are dialable
 

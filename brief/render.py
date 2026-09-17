@@ -59,6 +59,9 @@ def _derive():
     """Axes that depend on the payload's own numbers, recomputed per render."""
     g = globals()
     g["FIN_AXIS"] = _money_axis_calc([m[5] for m in FIN_MOVES])
+    # What each AI service billed in THIS window, on its own diverging axis: a
+    # charge is money out, so it draws left of zero exactly as a payment does.
+    g["AI_AXIS"] = _money_axis_calc([abs(r[2]) for r in ai_spend_rows() if len(r) > 3] or [0])
     g["FIN_BAR_SCALE"] = FIN_AXIS[2]
     g["MKT_24"] = pct_axis([r[3] for r in MKT_ROWS])
     g["MKT_7D"] = pct_axis([r[5] for r in MKT_ROWS])
@@ -213,14 +216,14 @@ def money_tick(v):
         return "0"
     s = f"{a / 1000:g}k" if a >= 1000 else f"{a:g}"
     return ("\u2212$" if v < 0 else "$") + s
-def _money_steps():
+def _money_steps(axis=None):
     """Steps per side of the center line."""
     import math
-    mode, a, b = FIN_AXIS
+    mode, a, b = axis or FIN_AXIS
     return int(round(b / a)) if mode == "linear" else int(round(math.log10(b / a)))
-def _money_frac(amt):
+def _money_frac(amt, axis=None):
     import math
-    mode, a, b = FIN_AXIS
+    mode, a, b = axis or FIN_AXIS
     if mode == "linear":
         return min(amt / b, 1.0)
     return max(0.0, min(1.0, (math.log10(max(amt, a)) - math.log10(a)) / (math.log10(b) - math.log10(a))))
@@ -293,6 +296,75 @@ def money_amount(amt, cur, usd, sign):
     return shown
 
 
+_MONTHS = {m: i for i, m in enumerate(
+    ("jan feb mar apr may jun jul aug sep oct nov dec").split(), 1)}
+
+
+def _when_key(when):
+    """A sortable key from a movement's own "when" text, newest first.
+
+    The payload writes it for a reader - "Tue Mar 3, 7:41 AM EST" - so this
+    reads what it can (month, day, 24h time) and leaves the rest alone: a row
+    it cannot parse keeps its position among its neighbours rather than being
+    thrown to one end.
+    """
+    t = str(when or "").lower()
+    m = _re.search(r"\b([a-z]{3})[a-z]*\.?\s+(\d{1,2})\b", t)
+    if not m or m.group(1) not in _MONTHS:
+        return None
+    month, day = _MONTHS[m.group(1)], int(m.group(2))
+    clock = _re.search(r"\b(\d{1,2}):(\d{2})\s*(am|pm)?", t)
+    minutes = 0
+    if clock:
+        hour = int(clock.group(1)) % 12
+        if clock.group(3) == "pm":
+            hour += 12
+        elif clock.group(3) is None:
+            hour = int(clock.group(1))
+        minutes = hour * 60 + int(clock.group(2))
+    return (month, day, minutes)
+
+
+# The order a reader wants: what arrived, what left, then movements with no
+# side - internal transfers, then anything the run could not classify.
+MOVE_GROUPS = ("+ In", "\u2212 Out", "\u00b1 Internal", "\u00b1 Unclassified")
+
+
+def move_group(dirw, sign=""):
+    """Which of the four groups a movement belongs to.
+
+    >>> move_group("In", "+"), move_group("Out", "\u2212")
+    ('+ In', '\u2212 Out')
+    >>> move_group("Internal"), move_group("Anything else")
+    ('\u00b1 Internal', '\u00b1 Unclassified')
+    """
+    _side, cls = money_side(dirw, sign)
+    if cls == "pos":
+        return MOVE_GROUPS[0]
+    if cls == "neg":
+        return MOVE_GROUPS[1]
+    return MOVE_GROUPS[2] if str(dirw).strip().lower() == "internal" else MOVE_GROUPS[3]
+
+
+def moves_in_order(moves=None):
+    """FIN_MOVES grouped In, Out, Internal, Unclassified - newest first in each.
+
+    A flat list in payload order made the reader do the grouping; the money that
+    arrived and the money that left are different questions.
+    """
+    rows = list(FIN_MOVES if moves is None else moves)
+    order = {g: i for i, g in enumerate(MOVE_GROUPS)}
+    keyed = []
+    for n, row in enumerate(rows):
+        when, dirw, sign = row[0], row[6], row[7]
+        stamp = _when_key(when)
+        # unparseable stamps keep payload order, after the dated rows
+        keyed.append((order[move_group(dirw, sign)],
+                      0 if stamp else 1,
+                      tuple(-v for v in stamp) if stamp else (n,), n, row))
+    return [k[-1] for k in sorted(keyed, key=lambda k: k[:4])]
+
+
 def money_side(dirw, sign=""):
     """Which side of zero a movement sits on, and in which color.
 
@@ -333,15 +405,16 @@ def money_side(dirw, sign=""):
 MONEY_COLORS = {"pos": "pos", "neg": "neg", "neu": "ink2"}
 
 
-def money_bar(amt, dirw, sign=""):
-    w = _money_frac(amt) * 50           # half-track either side of center
+def money_bar(amt, dirw, sign="", axis=None, cls=""):
+    w = _money_frac(amt, axis) * 50     # half-track either side of center
     side, fcls = money_side(dirw, sign)
     if side == "center":
         w /= 2                          # straddles zero: half each side
-    n = _money_steps()
+    n = _money_steps(axis)
     ticks = "".join(f'<i style="left:{50 + sgn * s * 50 / n:g}%"></i>'
                     for sgn in (-1, 1) for s in range(1, n + 1))
-    return f'<div class="dbar money" aria-hidden="true">{ticks}<div class="fill {fcls} {side}" style="width:{max(w, 1.5):.1f}%"></div></div>'
+    return (f'<div class="{" ".join(filter(None, ("dbar", "money", cls)))}" aria-hidden="true">{ticks}'
+            f'<div class="fill {fcls} {side}" style="width:{max(w, 1.5):.1f}%"></div></div>')
 def money_head(label_left="Out \u2190", label_right="\u2192 In, USD"):
     """The column heading, with its "0" pinned to the axis centre.
 
@@ -357,22 +430,24 @@ def money_head(label_left="Out \u2190", label_right="\u2192 In, USD"):
             f'<span class="r">{e(label_right)}</span></div>')
 
 
-def money_axis():
+def money_axis(axis=None, cls=""):
     """Minimal ticks: a notch at every even step, labels only at \u2212top, 0, +top."""
-    mode, a, b = FIN_AXIS
-    n = _money_steps()
+    axis = axis or FIN_AXIS
+    mode, a, b = axis
+    n = _money_steps(axis)
     t = [f'<i class="{"mj" if k in (-n, 0, n) else ""}" style="left:{50 + k * 50 / n:g}%"></i>'
          for k in range(-n, n + 1)]
-    lo, mid, hi = money_labels(FIN_AXIS, unit="")
+    lo, mid, hi = money_labels(axis, unit="")
     for lab, p, c in ((lo, 0, "l"), (mid, 50, ""), (hi, 100, "r")):
         t.append(f'<span class="{c}" style="left:{p}%">{e(lab)}</span>')
-    return '<div class="daxis money" aria-hidden="true">' + "".join(t) + "</div>"
+    return (f'<div class="{" ".join(filter(None, ("daxis", "money", cls)))}" aria-hidden="true">'
+            + "".join(t) + "</div>")
 def money_axis_ticks_text():
     """The same axis as text, for the email (no ruler survives the sanitizer)."""
     _m, _a, b = FIN_AXIS
     return f"{money_tick(-b)} \u00b7 0 \u00b7 {money_tick(b)}"
-def money_axis_note():
-    mode, a, b = FIN_AXIS
+def money_axis_note(axis=None):
+    mode, a, b = axis or FIN_AXIS
     if mode == "linear":
         return (f"diverging, 0 at center \u2192 {money_tick(b)} each side; "
                 f"even {_money_fmt(a)} steps")
@@ -432,6 +507,18 @@ h3{{font-size:14.5px;font-weight:600;margin:16px 0 6px;color:var(--ink-2)}}
 .act.warn .tag{{color:var(--warning);border-color:var(--warning)}} .act.ok .tag{{color:var(--positive);border-color:var(--positive)}} .act.info .tag{{color:var(--accent);border-color:var(--accent)}} .act.neg .tag{{color:var(--negative);border-color:var(--negative)}}
 .act .det{{color:var(--ink-2);font-size:14px;margin-top:2px}}
 .nothing{{color:var(--ink-3);font-style:italic;padding:8px 0}}
+/* Section 1's rows carry the action bar's severity stripe, so one item reads
+   as one item in both places. */
+tr.hp>td:first-child{{border-left:6px solid var(--line-strong)}}
+tr.hp.warn>td:first-child{{border-left-color:var(--warning)}}
+tr.hp.neg>td:first-child{{border-left-color:var(--negative)}}
+tr.hp.info>td:first-child{{border-left-color:var(--accent)}}
+tr.hp.ok>td:first-child{{border-left-color:var(--positive)}}
+.ringrow{{display:flex;align-items:center;gap:8px}} .ringrow .ring{{flex:0 0 auto}}
+/* A summary tile says which way it points: in, owed, or neither. */
+.tile.pos .v{{color:var(--positive)}} .tile.pos{{border-left-color:var(--positive)}}
+.tile.neg .v{{color:var(--negative)}} .tile.neg{{border-left-color:var(--negative)}}
+.tile .cur{{font-size:13px;font-weight:400;color:var(--ink-3)}}
 .lead{{color:var(--accent);font-weight:600}}
 .tbl-wrap{{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface)}}
 table{{border-collapse:collapse;width:100%;min-width:640px;font-size:14px}}
@@ -507,7 +594,7 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
     o.append(f'<section><h2>Needs you today <span class="sub">{e(actions_sub())}</span></h2><div class="actions">')
     tagmap = {"warn": "Check", "neg": "Urgent", "info": "Note", "ok": "Clear"}
     for sev, t, d in ACTIONS:
-        o.append(f'<div class="act {sev}"><div class="stripe"></div><div class="body"><div class="act-title"><span class="tag">{tagmap[sev]}</span>{e(t)}</div><div class="det">{e(d)}</div></div></div>')
+        o.append(f'<div class="act {sev}"><div class="stripe"></div><div class="body"><div class="act-title"><span class="tag">{tagmap[sev]}</span>{e(t)}</div><div class="det">{e(action_detail(t, d))}</div></div></div>')
     if not ACTIONS:
         o.append(f'<div class="nothing">{NOTHING_TODAY}</div>')
     o.append('</div></section>')
@@ -522,8 +609,8 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
         detail = "<br>".join(lead_inner(i) for i in items)
         # the chip rides WITH the title rather than in a column of its own: a
         # narrow column of its own wrapped "CHECK" to "CHEC/K" in mobile mail
-        o.append('<tr>' + tdl("What needs attention",
-                              f'{sev_chip(sev)} <b class="c-{sev}">{e(t)}</b>')
+        o.append(f'<tr class="hp {sev}">' + tdl("What needs attention",
+                                                 f'{sev_chip(sev)} <b class="c-{sev}">{e(t)}</b>')
                  + tdl("Detail", detail) + '</tr>')
     o.append(('</tbody></table></div>' if HIPRI else '') + '</div></section>')
     # 1 jobs
@@ -558,20 +645,37 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
     if not (FIN_SUMMARY or FIN_MOVES or FIN_NOTES):
         o.append(f'<div class="nothing">{e(nothing_new())}</div>')
     if FIN_SUMMARY:
-        o.append('<div class="tiles">' + "".join(f'<div class="tile"><div class="lbl">{e(l)}</div><div class="v mono">{e(v)}</div><div class="d">{e(d)}</div></div>' for l, v, d in FIN_SUMMARY) + '</div>')
+        tiles = []
+        for l, v, d in FIN_SUMMARY:
+            amount, cur = tile_amount(v)
+            tiles.append(f'<div class="tile {tile_tone(l)}"><div class="lbl">{e(l)}</div>'
+                         f'<div class="v mono">{e(amount)}'
+                         + (f' <span class="cur">{e(cur)}</span>' if cur else "")
+                         + f'</div><div class="d">{e(d)}</div></div>')
+        o.append('<div class="tiles">' + "".join(tiles) + '</div>')
     if FIN_MOVES:
         o.append('<h3 style="margin-top:0">Money movements (outside → you / you → outside)</h3><div class="tbl-wrap"><table><thead><tr><th>When</th><th>Payee / source</th><th>Detail</th><th>Direction</th><th style="text-align:right">Amount</th><th>{head_html}{axis_html}</th></tr></thead><tbody>'.format(head_html=money_head(), axis_html=money_axis()))
-        for when, payee, det, amt, cur, usd, dirw, sign in FIN_MOVES:
+        for when, payee, det, amt, cur, usd, dirw, sign in moves_in_order():
             cls = "dir-" + money_side(dirw, sign)[1]
             amt_s = money_amount(amt, cur, usd, sign)
             o.append('<tr>' + tdl("When", e(when), "mono") + tdl("Payee / source", e(payee)) + tdl("Detail", detail_html_file(det)) + tdl("Direction", f'<span class="{cls}">{e(sign)} {e(dirw)}</span>') + tdl("Amount", f'<span class="{cls}">{amt_s}</span>', "num mono") + tdl("Out ← 0 → In, USD", money_bar(usd, dirw, sign)) + '</tr>')
         o.append(f'</tbody></table></div><div class="daxis-foot">{money_head()}{money_axis()}<div class="meta">{money_axis_note()}</div></div><div class="cap">Bar axis, in USD: {money_axis_note()}. Amounts are shown in their original currency; bars are plotted from the USD equivalent. Money in = green on the right, out / past due = red on the left, no direction = neutral grey straddling zero (magnitude only — an internal or unclassified move has no side). The sign and direction word state it too.</div>')
     if ai_spend_rows():
-        o.append('<h3>AI services — billed year to date</h3><div class="tbl-wrap"><table><thead><tr><th>Service</th><th style="text-align:right">Billed ' + e(AI_SPEND["year"]) + '</th><th>Share</th></tr></thead><tbody>')
-        for service, total, note in ai_spend_rows():
+        o.append('<h3>AI services — billed year to date</h3><div class="tbl-wrap"><table><thead><tr>'
+                 '<th>Service</th><th style="text-align:right">Billed ' + e(AI_SPEND["year"]) + '</th>'
+                 + '<th>New this window' + money_head() + money_axis(AI_AXIS, "ai") + '</th>'
+                 '<th>Share AI spend (YTD)</th></tr></thead><tbody>')
+        for row in ai_spend_rows():
+            service, total, note = row[0], row[1], row[-1]
+            new = ai_new(row)
             o.append('<tr>' + tdl("Service", f'<span class="lead">{e(service)}</span>')
                      + tdl("Billed", f'<span class="mono">{e(usd_str(total))}</span>', "num")
-                     + tdl("Share", e(note), "meta") + '</tr>')
+                     + tdl("New this window",
+                           (f'<span class="dir-neg mono">{e(usd_str(new))}</span>'
+                            + money_bar(abs(new), "Out", axis=AI_AXIS, cls="ai")) if new
+                           else '<span class="muted">nothing new</span>')
+                     + tdl("Share AI spend (YTD)",
+                           f'<span class="ringrow">{ai_ring(ai_share(row))}<span>{e(note)}</span></span>') + '</tr>')
         o.append(f'</tbody></table></div><div class="cap">{e(ai_spend_caption())}</div>')
     if FIN_INTERNAL:
         o.append('<h3>Transfers between your own accounts</h3><div class="nothing">' + e(FIN_INTERNAL) + '</div>')
@@ -592,7 +696,11 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
         # record. A column of "not available" apologies costs a third of the table
         # width and tells the reader nothing they can act on.
         show_stats = any(g.get("stats") for g in FLIGHTS["legs"])
+        show_terms = any(leg_terminals(g) for g in FLIGHTS["legs"])
         hdr = '<th>Date · flight</th><th>Departs (airport local)</th><th>Arrives (airport local)</th>'
+        if show_terms:
+            hdr += '<th>Terminal</th>'
+        hdr += '<th>Confirmation</th>'
         if show_stats:
             hdr += '<th>Recent on-time record</th>'
         o.append(f'<div class="tbl-wrap"><table><thead><tr>{hdr}</tr></thead><tbody>')
@@ -600,6 +708,10 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
             row = (tdl("Date · flight", f'{e(g["date"])}<br><a href="{url(g["fa"])}" class="mono">{e(g["flight"])}</a>')
                    + tdl("Departs (airport local)", f'{e(g["frm"])}<br><span class="mono">{e(g["dep"])}</span>')
                    + tdl("Arrives (airport local)", f'{e(g["to"])}<br><span class="mono">{e(g["arr"])}</span>'))
+            if show_terms:
+                row += tdl("Terminal", e(leg_terminals(g)) or '<span class="muted">not stated</span>', "meta")
+            row += tdl("Confirmation", f'<span class="mono">{e(leg_conf(g))}</span>' if leg_conf(g)
+                       else '<span class="muted">not stated</span>')
             if show_stats:
                 row += tdl("Recent on-time record", e(g.get("stats") or "not available"), "meta")
             o.append('<tr>' + row + '</tr>')
@@ -608,7 +720,8 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
         o.append('<h3' + (' style="margin-top:0"' if not FLIGHTS["legs"] else "")
                  + '>Stays &amp; other bookings</h3><div class="tbl-wrap"><table><thead><tr>'
                  '<th>Type</th><th>Booking</th><th>Dates</th><th>Where</th><th>Confirmation</th></tr></thead><tbody>')
-        for kind, what, when, where, conf, link in TRAVEL:
+        for kind, what, when, where, conf, link, *rest in TRAVEL:
+            source = (rest[0] if rest else "").strip()
             booking = f'<span class="lead">{e(what)}</span>'
             if link.strip():
                 booking = f'<a href="{url(link)}"><b>{e(what)}</b></a>'
@@ -619,7 +732,10 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
                      + tdl("Dates", f'<span class="mono">{e(dates)}</span>'
                            + (f'<br><span class="meta">{e(times)}</span>' if times else ""))
                      + tdl("Where", e(place) + (f'<br><span class="meta">{e(place_detail)}</span>' if place_detail else ""))
-                     + tdl("Confirmation", e(conf) if conf.strip() else '<span class="muted">not stated</span>', "mono") + '</tr>')
+                     + tdl("Confirmation",
+                           (f'<span class="mono">{e(conf)}</span>' if conf.strip()
+                            else '<span class="muted">not stated</span>')
+                           + (f'<br><span class="meta">{e(source)}</span>' if source else "")) + '</tr>')
         o.append(f'</tbody></table></div><div class="cap">{e(TRAVEL_NOTE)}</div>')
     if FLIGHTS["legs"] or TRAVEL:
         o.append('</div></section>')
@@ -814,6 +930,57 @@ def nothing_new():
     return f"No new data in this period ({MAST['window']})."
 
 
+def _norm(text):
+    return _re.sub(r"[^a-z0-9]+", " ", str(text or "").lower()).strip()
+
+
+def action_detail(title, detail):
+    """An action row's detail, or a pointer when High priority repeats it.
+
+    The bar and section 1 are written from the same facts, so a run that puts
+    an item in both prints the same sentence twice, one under the other. The
+    row stays - the bar is what the reader acts from - but its detail becomes
+    a pointer, and nothing is lost: the full text is directly below.
+    """
+    if any(_norm(t) == _norm(title) for _sev, t, _items in HIPRI):
+        return DETAIL_IN_HIPRI
+    return detail
+
+
+DETAIL_IN_HIPRI = "Detail in 1. High priority, below."
+
+
+def tile_tone(label):
+    """Which way a summary tile reads: money in, money owed, or neither.
+
+    From the tile's own label, because the payload states the figure and not
+    its sense. Anything unrecognised stays neutral - a grey tile is merely
+    quiet, a wrongly green one says the opposite of the truth.
+
+    >>> tile_tone("In from outside"), tile_tone("Outstanding"), tile_tone("Moved internally")
+    ('pos', 'neg', 'neu')
+    """
+    t = _norm(label)
+    if any(w in t for w in ("in from outside", "received", "deposits", "income", "paid to you")):
+        return "pos"
+    if any(w in t for w in ("outstanding", "owed", "due", "bills", "payable", "out to")):
+        return "neg"
+    return "neu"
+
+
+def tile_amount(value):
+    """(the figure, its trailing currency) - "$1,326.64 USD" reads as two things.
+
+    The currency is set quietly beside the amount rather than inside it, so the
+    number stays the thing the eye lands on.
+    """
+    v = str(value).strip()
+    m = _re.match(r"^(.*?)(?:\s+([A-Z]{3}))$", v)
+    if m:
+        return m.group(1), m.group(2)
+    return v, ("USD" if v[:1] in "$-\u2212+" or v[:2] in ("MX", "US") else "")
+
+
 def actions_sub():
     """Subtitle for the action bar, counted from the rows it sits above.
 
@@ -841,6 +1008,40 @@ def ai_spend_rows():
     return (AI_SPEND or {}).get("rows") or []
 
 
+def ai_new(row):
+    """What this service billed in THIS window (0.0 on a row written before the field)."""
+    return float(row[2]) if len(row) > 3 else 0.0
+
+
+def ai_share(row):
+    """The share percentage as a number, read back from the row's own note.
+
+    The note is the authority - `brief ai-spend` computes it - so the ring and
+    the words can never disagree.
+    """
+    m = _re.match(r"\s*(\d+(?:\.\d+)?)\s*%", str(row[-1]))
+    return float(m.group(1)) if m else None
+
+
+def ai_ring(pct, size=26):
+    """A small ring showing one service's share, for the page.
+
+    An inline SVG, because the email's sanitizer strips it and the page is where
+    a reader compares services at a glance. aria-hidden: the same percentage is
+    written beside it in words.
+    """
+    if pct is None:
+        return ""
+    r = (size - 5) / 2
+    circ = 2 * 3.141592653589793 * r
+    on = max(0.0, min(pct, 100.0)) / 100 * circ
+    return (f'<svg class="ring" width="{size}" height="{size}" viewBox="0 0 {size} {size}" aria-hidden="true">'
+            f'<circle cx="{size/2:g}" cy="{size/2:g}" r="{r:g}" fill="none" stroke="var(--line-strong)" stroke-width="3"/>'
+            f'<circle cx="{size/2:g}" cy="{size/2:g}" r="{r:g}" fill="none" stroke="var(--accent)" stroke-width="3"'
+            f' stroke-linecap="round" stroke-dasharray="{on:.1f} {circ - on:.1f}"'
+            f' transform="rotate(-90 {size/2:g} {size/2:g})"/></svg>')
+
+
 def ai_spend_total():
     return sum(float(r[1]) for r in ai_spend_rows())
 
@@ -856,6 +1057,16 @@ def ai_spend_caption():
             f"{usd_str(ai_spend_total())}. Counted from billing emails as they arrive - earlier "
             f"charges are not back-dated - and reset to $0.00 on 1 January.")
     return f"{base} {note}".strip()
+
+
+def leg_conf(leg):
+    """A leg's own confirmation code, or the booking's when it carries none."""
+    return str(leg.get("conf") or FLIGHTS.get("conf") or "").strip()
+
+
+def leg_terminals(leg):
+    """Departure and arrival terminal/gate text, as the airline stated it."""
+    return str(leg.get("term") or "").strip()
 
 
 def booking_split(text):
@@ -924,10 +1135,12 @@ def th_axis(name, labels):
         f'<td width="33%" align="right" style="{cell}">{e(hi)}</td></tr></table>')
 
 
-def td(t, mono=False):
+def td(t, mono=False, border_left=None):
     # font-size / line-height / word-break are inherited from the table
     st = f'padding:8px 8px;border-bottom:1px solid {L["line"]};'
     if mono: st += f"font-family:{F_M};"
+    # a severity stripe, the one thing a cell borrows from the action bar
+    if border_left: st += f"border-left:6px solid {border_left};"
     return f'<td valign="top" style="{st}">{t}</td>'
 def tbl(headers, rows, widths=None):
     """`widths` pins the column proportions with width= attributes (which survive
@@ -996,10 +1209,10 @@ def _em_bar(frac, col, right):
 
 def em_bar_div(pct, ax):
     return _em_bar(min(abs(pct) / ax[1], 1.0), L["pos"] if pct >= 0 else L["neg"], pct >= 0)
-def em_bar_money(amt, dirw, sign=""):
+def em_bar_money(amt, dirw, sign="", axis=None):
     side, cls = money_side(dirw, sign)
     col = {"pos": L["pos"], "neg": L["neg"], "neu": L["ink3"]}[cls]
-    return _em_bar(_money_frac(amt), col,
+    return _em_bar(_money_frac(amt, axis), col,
                    None if side == "center" else side == "right")
 def cap(t): return f'<div style="font-size:12px;color:{L["ink3"]};padding:6px 2px">{e(t)}</div>'
 def stripe_row(color, title_html, det_html):
@@ -1299,7 +1512,7 @@ def email_html(budget=None):
              f'<div style="font-size:13px;color:{L["warn"]};font-weight:600;margin-top:6px">{e(MAST["revised"])}</div></td></tr></table>')
     sevcol = {"warn": L["warn"], "neg": L["neg"], "info": L["accent"], "ok": L["pos"]}
     tagmap = {"warn": "Check", "neg": "Urgent", "info": "Note", "ok": "Clear"}
-    rows = "".join(stripe_row(sevcol[sev], f'<span style="font-size:10.5px;text-transform:uppercase;padding:1px 6px;border:1px solid {sevcol[sev]};color:{sevcol[sev]};margin-right:8px">{tagmap[sev]}</span>{e(t)}', e(d)) for sev, t, d in ACTIONS)
+    rows = "".join(stripe_row(sevcol[sev], f'<span style="font-size:10.5px;text-transform:uppercase;padding:1px 6px;border:1px solid {sevcol[sev]};color:{sevcol[sev]};margin-right:8px">{tagmap[sev]}</span>{e(t)}', e(action_detail(t, d))) for sev, t, d in ACTIONS)
     if not ACTIONS:
         rows = f'<div style="color:{L["ink3"]};font-style:italic">{NOTHING_TODAY}</div>'
     o.append('<div style="margin-top:18px">' + h2("Needs you today", actions_sub()) + rows + '</div>')
@@ -1313,7 +1526,8 @@ def email_html(budget=None):
         chip = (f'<span style="font:600 10px {F_H};text-transform:uppercase;border:1px solid '
                 f'{sevcol[sev]};color:{sevcol[sev]};padding:1px 5px;border-radius:4px">'
                 f'{SEV_WORD.get(sev, sev.upper())}</span>')
-        rws.append([td(f"{chip} {sp(e(t_), sevcol[sev])}"),
+        # the same stripe the action bar uses, so one item reads as one item
+        rws.append([td(f"{chip} {sp(e(t_), sevcol[sev])}", border_left=sevcol[sev]),
                     td("<br>".join(em_lead_inner(i) for i in items))])
     inner += tbl(["What needs attention", "Detail"], rws, ["40%", "60%"]) if rws else f'<div style="color:{L["ink3"]};font-style:italic">{e(nothing_new())}</div>'
     o.append(card(inner))
@@ -1341,9 +1555,18 @@ def email_html(budget=None):
     inner = h2(f'{sp(f"{num()}.", L["accent"])} Deposits &amp; finances')
     if not (FIN_SUMMARY or FIN_MOVES or FIN_NOTES):
         inner += f'<div style="color:{L["ink3"]};font-style:italic">{e(nothing_new())}</div>'
-    inner += "".join(f'<div style="border:1px solid {L["line"]};border-left:4px solid {L["accent"]};padding:8px 12px;margin:6px 0">{lbl(l)}<div style="font-family:{F_M};font-size:20px;font-weight:700">{e(v)}</div>{small(e(d))}</div>' for l, v, d in FIN_SUMMARY)
+    for l, v, d in FIN_SUMMARY:
+        tone = tile_tone(l)
+        col = {"pos": L["pos"], "neg": L["neg"], "neu": L["ink"]}[tone]
+        edge = {"pos": L["pos"], "neg": L["neg"], "neu": L["accent"]}[tone]
+        amount, cur = tile_amount(v)
+        inner += (f'<div style="border:1px solid {L["line"]};border-left:4px solid {edge};'
+                  f'padding:8px 12px;margin:6px 0">{lbl(l)}'
+                  f'<div style="font-family:{F_M};font-size:20px;font-weight:700;color:{col}">{e(amount)}'
+                  + (f' <span style="font-size:13px;font-weight:400;color:{L["ink3"]}">{e(cur)}</span>' if cur else "")
+                  + f'</div>{small(e(d))}</div>')
     rws = []
-    for when, payee, det, amt, cur, usd, dirw, sign in FIN_MOVES:
+    for when, payee, det, amt, cur, usd, dirw, sign in moves_in_order():
         _, _mcls = money_side(dirw, sign)
         col = {"pos": L["pos"], "neg": L["neg"], "neu": L["ink2"]}[_mcls]
         amt_s = money_amount(amt, cur, usd, sign)
@@ -1351,10 +1574,18 @@ def email_html(budget=None):
     if FIN_MOVES:
         inner += h3("Money movements (outside → you / you → outside)") + tbl(["When · payee", "Detail", th_axis("Direction · amount", money_labels(FIN_AXIS))], rws, ["30%", "32%", "38%"]) + cap(f"Bar axis, in USD: {money_axis_note()}. Amounts shown in their original currency; bars plotted from the USD equivalent. In = green right of 0, out / past due = red left of 0, internal = grey (magnitude only) — sign and word state it too.")
     if ai_spend_rows():
-        inner += h3(f'AI services — billed year to date') + tbl(
-            ["Service", f'Billed {AI_SPEND["year"]}', "Share"],
-            [[td(lead(service)), td(sp(e(usd_str(total)), L["ink"]), mono=True), td(small(e(note)))]
-             for service, total, note in ai_spend_rows()], ["40%", "26%", "34%"]) + cap(ai_spend_caption())
+        rws = []
+        for row in ai_spend_rows():
+            service, total, note = row[0], row[1], row[-1]
+            new = ai_new(row)
+            rws.append([td(f'{lead(service)}<br>{small(e(note))}'),
+                        td(sp(e(usd_str(total)), L["ink"]), mono=True),
+                        td((sp(e(usd_str(new)), L["neg"]) + em_bar_money(abs(new), "Out", axis=AI_AXIS))
+                           if new else muted("nothing new"), mono=True)])
+        inner += h3("AI services — billed year to date") + tbl(
+            ["Service · share AI spend (YTD)", f'Billed {AI_SPEND["year"]}',
+             th_axis("New this window", money_labels(AI_AXIS))],
+            rws, ["40%", "22%", "38%"]) + cap(ai_spend_caption())
     if FIN_INTERNAL:
         inner += h3("Transfers between your own accounts") + f'<div style="color:{L["ink3"]};font-style:italic">{e(FIN_INTERNAL)}</div>'
     if FIN_NOTES:
@@ -1372,20 +1603,25 @@ def email_html(budget=None):
         show_stats = any(g.get("stats") for g in FLIGHTS["legs"])
         rws = []
         for g in FLIGHTS["legs"]:
-            row = [td(f'{e(g["date"])}<br><a href="{url(g["fa"])}" style="color:{L["accent"]};font-family:{F_M};font-weight:600">{e(g["flight"])}</a>'),
-                   td(f'{e(g["frm"])} <span style="font-family:{F_M}">{e(g["dep"])}</span><br>→ {e(g["to"])} <span style="font-family:{F_M}">{e(g["arr"])}</span>')]
+            route = (f'{e(g["frm"])} <span style="font-family:{F_M}">{e(g["dep"])}</span>'
+                     f'<br>→ {e(g["to"])} <span style="font-family:{F_M}">{e(g["arr"])}</span>')
+            if leg_terminals(g):
+                route += f'<br>{small(e(leg_terminals(g)))}'
+            conf = (f'<span style="font-family:{F_M}">{e(leg_conf(g))}</span>' if leg_conf(g)
+                    else muted("not stated"))
             if show_stats:
-                row.append(td(small(e(g.get("stats") or "not available"))))
-            rws.append(row)
-        if show_stats:
-            inner += tbl(["Date · flight", "Route (airport local times)", "On-time record"], rws, ["26%", "44%", "30%"])
-        else:
-            inner += tbl(["Date · flight", "Route (airport local times)"], rws, ["32%", "68%"])
+                conf += f'<br>{small(e(g.get("stats") or "not available"))}'
+            rws.append([td(f'{e(g["date"])}<br><a href="{url(g["fa"])}" style="color:{L["accent"]};font-family:{F_M};font-weight:600">{e(g["flight"])}</a>'),
+                        td(route), td(conf)])
+        inner += tbl(["Date · flight", "Route (airport local times)",
+                      "Confirmation" + (" · on-time" if show_stats else "")],
+                     rws, ["26%", "44%", "30%"])
         inner += cap(FLIGHTS["note"])
     if TRAVEL:
         inner += h3("Stays & other bookings")
         rws = []
-        for kind, what, when, where, conf, link in TRAVEL:
+        for kind, what, when, where, conf, link, *rest in TRAVEL:
+            source = (rest[0] if rest else "").strip()
             dates, times = booking_split(when)
             place, place_detail = booking_split(where)
             name = (f'<a href="{url(link)}" style="color:{L["accent"]};font-weight:600">{e(what)}</a>'
@@ -1397,7 +1633,8 @@ def email_html(budget=None):
                 td(f'{small(e(kind))}<br>{name}'
                    + (f'<br>{small(e(place))}' if place else "")
                    + (f'<br>{small(e(place_detail))}' if place_detail else "")),
-                td((f'<span style="font-family:{F_M}">{e(conf)}</span>' if conf.strip() else muted("not stated")))])
+                td((f'<span style="font-family:{F_M}">{e(conf)}</span>' if conf.strip() else muted("not stated"))
+                   + (f'<br>{small(e(source))}' if source else ""))])
         inner += tbl(["Dates", "Booking", "Confirmation"], rws, ["34%", "44%", "22%"])
         inner += cap(TRAVEL_NOTE)
     if FLIGHTS["legs"] or TRAVEL:
@@ -1631,7 +1868,8 @@ def plain_text(budget=None):
     A("MORNING BRIEF"); A(MAST["dateline"]); A(MAST["revised"]); A(f"Timezone: {MAST['tz']}")
     A(f"Window covered: {MAST['window']}"); A(f"Scheduled slot: {MAST['slot']}"); A(f"Run stamp: {MAST['run']}"); A(MAST["note"]); A("")
     A("NEEDS YOU TODAY")
-    for sev, t, d in ACTIONS: A(f"[{ {'warn':'CHECK','neg':'URGENT','info':'NOTE','ok':'CLEAR'}[sev] }] {t}\n    {d}")
+    for sev, t, d in ACTIONS:
+        A(f"[{ {'warn':'CHECK','neg':'URGENT','info':'NOTE','ok':'CLEAR'}[sev] }] {t}\n    {action_detail(t, d)}")
     if not ACTIONS: A("  " + NOTHING_TODAY)
     tnum = SectionNumber()
     A(""); A(f"{tnum()}. HIGH PRIORITY")
@@ -1660,14 +1898,17 @@ def plain_text(budget=None):
     if FIN_MOVES:
         A("Money movements:")
         A(f"  (Bar axis in the HTML outputs: {money_axis_note()}; in = green, out/past due = red, internal = grey.)")
-        for when, payee, det, amt, cur, usd, dirw, sign in FIN_MOVES:
+        for when, payee, det, amt, cur, usd, dirw, sign in moves_in_order():
             A(f"  - {when} · {payee} · {sign} {dirw} · {money_amount(amt, cur, usd, sign)}")
             for line in detail_lines(det):
                 A(f"      {line}")
     if ai_spend_rows():
         A(f"AI services — billed year to date ({AI_SPEND['year']}):")
-        for service, total, note in ai_spend_rows():
-            A(f"  - {service}: {usd_str(total)} ({note})")
+        for row in ai_spend_rows():
+            service, total, note = row[0], row[1], row[-1]
+            new = ai_new(row)
+            arrived = f", {usd_str(new)} billed in this window" if new else ", nothing new in this window"
+            A(f"  - {service}: {usd_str(total)} year to date{arrived} ({note})")
         A("  " + ai_spend_caption())
         # Machine-readable, and the reason the total survives to the next run:
         # tomorrow's brief reads this line out of today's sent email.
@@ -1681,18 +1922,22 @@ def plain_text(budget=None):
         A(f"  {FLIGHTS['airline']}, confirmation {FLIGHTS['conf']} — {FLIGHTS['pax']}")
         A(f"  {FLIGHTS['booked']}")
         for g in FLIGHTS["legs"]:
-            A(f"  - {g['date']}: {g['flight']} · {g['frm']} {g['dep']} -> {g['to']} {g['arr']}")
+            A(f"  - {g['date']}: {g['flight']} · {g['frm']} {g['dep']} -> {g['to']} {g['arr']}"
+              + (f" · {leg_terminals(g)}" if leg_terminals(g) else "")
+              + (f" · confirmation {leg_conf(g)}" if leg_conf(g) else ""))
             if g.get("stats"):
                 A(f"    on-time: {g['stats']}")
             A(f"    {g['fa']}")
         A(f"  {FLIGHTS['note']}")
     if TRAVEL:
         A("Stays & other bookings:")
-        for kind, what, when, where, conf, link in TRAVEL:
+        for kind, what, when, where, conf, link, *rest in TRAVEL:
+            source = (rest[0] if rest else "").strip()
             dates, times = booking_split(when)
             place, place_detail = booking_split(where)
             A(f"  - {dates} · {kind}: {what}"
-              + (f" · confirmation {conf}" if conf.strip() else ""))
+              + (f" · confirmation {conf}" if conf.strip() else "")
+              + (f" · {source}" if source else ""))
             for line in (times, place, place_detail, link):
                 if line.strip():
                     A(f"      {line}")

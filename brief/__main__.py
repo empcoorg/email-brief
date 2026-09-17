@@ -81,7 +81,7 @@ def _pairs(items, what):
 
 def _ai_spend(a):
     """Carry each AI service's year-to-date total forward and add this run's charges."""
-    from .spend import accumulate, format_line, rows
+    from .spend import accumulate, added, format_line, rows
     previous = ""
     if a.previous:
         try:
@@ -91,12 +91,13 @@ def _ai_spend(a):
             print(f"cannot read {a.previous}: {ex}", file=sys.stderr)
             return 2
     try:
-        year, totals, carried = accumulate(previous, _pairs(a.add, "--add"), a.today,
+        charges = _pairs(a.add, "--add")
+        year, totals, carried = accumulate(previous, charges, a.today,
                                            dict(_pairs(a.basis, "--basis")), a.basis_year)
     except ValueError as ex:
         print(f"cannot total AI spend: {ex}", file=sys.stderr)
         return 2
-    block = {"year": year, "rows": rows(totals)}
+    block = {"year": year, "rows": rows(totals, added(charges))}
     if a.note:
         block["note"] = a.note
     with open(a.out, "w", encoding="utf-8") as fh:
@@ -105,8 +106,9 @@ def _ai_spend(a):
              else "nothing carried forward — this is the first brief of "
                   f"{year}, or the previous one had no line")
     print(f"wrote {a.out} — {where}.")
-    for service, total, note in block["rows"]:
-        print(f"  {service}: ${total:,.2f}  ({note})")
+    for service, total, this_window, note in block["rows"]:
+        arrived = f" + ${this_window:,.2f} this window" if this_window else ""
+        print(f"  {service}: ${total:,.2f}{arrived}  ({note})")
     print(format_line(year, totals))
     print("Paste the contents of the file into the payload as AI_SPEND.")
     return 0

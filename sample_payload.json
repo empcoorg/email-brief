@@ -177,18 +177,18 @@
  "FIN_SUMMARY": [
   [
    "In from outside",
-   "$5,280.00",
-   "1 deposit"
+   "$5,280.00 USD",
+   "1 deposit — First Meridian Bank ···1234"
   ],
   [
    "Moved internally",
-   "$500.00",
-   "1 transfer between own accounts"
+   "$500.00 USD",
+   "1 transfer — First Meridian ···1234 → Lakeshore Invest ···5678"
   ],
   [
    "Outstanding",
-   "$1,294.65",
-   "card statement + utility bill"
+   "$1,294.65 USD",
+   "Sample Bank Visa ···1234 statement + utility bill"
   ]
  ],
  "FIN_MOVES": [
@@ -247,15 +247,18 @@
    [
     "Acme AI",
     120.0,
+    24.0,
     "71% of AI spend this year"
    ],
    [
     "Northwind AI",
     34.0,
+    0.0,
     "20% of AI spend this year"
    ],
    [
     "Cascade Speech",
+    15.0,
     15.0,
     "9% of AI spend this year"
    ]
@@ -319,7 +322,9 @@
     "to": "Chicago (ORD)",
     "arr": "11:42 AM CDT",
     "fa": "https://www.flightaware.com/live/flight/NWA412",
-    "stats": "71% on time · avg delay 18 min (last 30 days, FlightAware)"
+    "stats": "71% on time · avg delay 18 min (last 30 days, FlightAware)",
+    "conf": "SAMPLE7",
+    "term": "Terminal A, gate A12 → Terminal 2"
    },
    {
     "date": "Mon, Mar 23, 2026",
@@ -330,7 +335,9 @@
     "to": "Boston (BOS)",
     "arr": "4:28 PM EDT",
     "fa": "https://www.flightaware.com/live/flight/NWA987",
-    "stats": "84% on time · avg delay 9 min (last 30 days, FlightAware)"
+    "stats": "84% on time · avg delay 9 min (last 30 days, FlightAware)",
+    "conf": "SAMPLE7",
+    "term": "Terminal 2 → Terminal B"
    }
   ],
   "note": "All times are LOCAL TO EACH AIRPORT — departure in the origin's zone, arrival in the destination's. On-time rates and average delays are that flight number's recent history from FlightAware, not a prediction. No schedule changes since booking."
@@ -342,7 +349,8 @@
    "Fri Mar 6 → Sun Mar 8",
    "Springfield ST · 2 nights, king, breakfast included",
    "SAMPLE-HTL-4471",
-   "https://example.com/booking/SAMPLE-HTL-4471"
+   "https://example.com/booking/SAMPLE-HTL-4471",
+   "Booked direct with the property"
   ],
   [
    "Rail",
@@ -350,7 +358,8 @@
    "Fri Mar 6, 7:10 AM EST",
    "Seat 12A · reserved coach",
    "MOCK-RAIL-2210",
-   ""
+   "",
+   "Cascade Rail app"
   ],
   [
    "Concert",
@@ -358,7 +367,8 @@
    "Sat Mar 7, 8:00 PM EST",
    "Row H, seats 4-5 · doors 7:15 PM",
    "DEMO-TIX-90210",
-   "https://example.org/tickets/DEMO-TIX-90210"
+   "https://example.org/tickets/DEMO-TIX-90210",
+   "Bluepine Hall box office"
   ]
  ],
  "MKT_ROWS": [
