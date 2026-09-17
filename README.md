@@ -79,11 +79,11 @@ On Outlook or others: send yourself one three-way test (data:-URI image, inline 
 | File | Purpose |
 |---|---|
 | `ROUTINE_PROMPT.template.md` | The prompt template — placeholders + optional sections. Says what to gather and how to hand it over; carries no design spec. |
-| `brief/` | The renderer and the logic the run calls into. `theme.py` holds every color and font (the aesthetic pin) plus the escaping and link-safety helpers, `axes.py` the bar/axis arithmetic, `links.py` recovers real posting URLs from LinkedIn and Indeed tracking links and builds FlightAware idents, `postal.py` decides whether a printed mailpiece addressee is the owner, `significance.py` decides whether an extra send is warranted, `attachments.py` catches an attachment the send path would silently truncate, `evening.py` builds the evening update from what the morning email could not show, `spend.py` keeps each AI service's year-to-date billing total, `retention.py` decides which published brief pages are past their 30 days, `model.py` the payload contract and its validation, `render.py` the three outputs, `__main__.py` the CLI. Pure standard library. |
+| `brief/` | The renderer and the logic the run calls into. `theme.py` holds every color and font (the aesthetic pin) plus the escaping and link-safety helpers, `axes.py` the bar/axis arithmetic, `links.py` recovers real posting URLs from LinkedIn and Indeed tracking links and builds FlightAware idents, `postal.py` decides whether a printed mailpiece addressee is the owner, `significance.py` decides whether an extra send is warranted, `attachments.py` catches an attachment the send path would silently truncate, `evening.py` builds the evening update from what the morning email could not show, `spend.py` keeps each AI service's year-to-date billing total, `phones.py` rewrites phone numbers into a dialable form, `retention.py` decides which published brief pages are past their 30 days, `model.py` the payload contract and its validation, `render.py` the three outputs, `__main__.py` the CLI. Pure standard library. |
 | `sample_payload.json` | A complete worked example of the payload, with mock "Alex Sample" data. Doubles as the fixture for the tests and the README screenshots. |
 | `build_brief.py` | Thin wrapper that renders `sample_payload.json` — kept so `python3 build_brief.py` still works. |
 | `docs/render_screenshots.py` | Regenerates the README screenshots (run after design changes). Fails loudly if a selector goes stale. |
-| `tests/` | `test_privacy.py` — no personal data anywhere, and commit authorship is anonymous. `test_docs_current.py` — the README mentions every module, CLI command, test file and section that exists. `test_links_postal.py` — link recovery and addressee classification. `test_units.py` — axis arithmetic, payload validation, CLI. `test_render_units.py` — escaping and link safety (payload text is email content), direction coloring, empty sections, determinism, and the log-axis path the sample payload doesn't reach. `test_email_brief.py` — rendered output, the aesthetic pin, prompt invariants, privacy. `test_evening.py` — the full-page link, its privacy note, the email's scan links, the email's record of what it left out, and carrying those sections into the evening. `test_retention.py` — which published pages are deleted after 30 days, found from the artifact listing and from sent briefs, and that nothing else ever is. `test_spend.py` — AI billing carried forward between briefs, never double-counted, reset on 1 January. `test_rendering.py` — Chromium: layout, theming, bar geometry, axis alignment. |
+| `tests/` | `test_privacy.py` — no personal data anywhere, and commit authorship is anonymous. `test_docs_current.py` — the README mentions every module, CLI command, test file and section that exists. `test_links_postal.py` — link recovery and addressee classification. `test_units.py` — axis arithmetic, payload validation, CLI. `test_render_units.py` — escaping and link safety (payload text is email content), direction coloring, empty sections, determinism, and the log-axis path the sample payload doesn't reach. `test_email_brief.py` — rendered output, the aesthetic pin, prompt invariants, privacy. `test_evening.py` — the full-page link, its privacy note, the email's scan links, the email's record of what it left out, and carrying those sections into the evening. `test_retention.py` — which published pages are deleted after 30 days, found from the artifact listing and from sent briefs, and that nothing else ever is. `test_phones.py` — phone numbers become dialable, and tracking numbers, ZIP+4 and scan data never do. `test_spend.py` — AI billing carried forward between briefs, never double-counted, reset on 1 January. `test_rendering.py` — Chromium: layout, theming, bar geometry, axis alignment. |
 | Email budget | Gmail clips past ~102 KB, so the email body is budgeted at 85 KB. When the brief outgrows it the **email sheds whole research cards** in a fixed order — least actionable first — and says which ones and where to find them. The standalone file always carries everything; nothing is ever shortened or summarized, because a half-rendered table is worse than an absent one. |
 | `.github/workflows/tests.yml` | CI — full suite on every push to `main` and every PR. |
 | `LICENSE` | MIT. |
@@ -183,6 +183,22 @@ The clip threshold the record uses is the same one the "Gmail will clip" note
 uses, so the two never disagree. It is conservative on purpose: carrying a
 section the reader could in fact see costs a few lines; missing one costs the
 section.
+
+### Phone numbers are dialable
+
+A brief is read on a phone, so every phone number it prints carries its country
+code: `1 (555) 010-6200` is rendered `+1-555-010-6200`, which can be tapped or
+pasted into a dialler and works from anywhere. `phones.py` does this in one pass
+over the payload, before anything is rendered, so all three outputs agree.
+
+The rewrite is deliberately narrow, because a brief is full of digits that are
+not phone numbers. Only a North American number written with separators or
+parentheses (gaining `+1`) and a number already written with a leading `+`
+(whose spacing is regularised) are touched. A bare run of ten digits is left
+alone: an order number looks exactly like one. Tracking numbers, ZIP+4, masked
+account digits, amounts, seat and flight numbers, links and the base64 of a
+mailpiece scan are never rewritten. **VoIP is exempt** by the owner's choice:
+that section prints the numbers exactly as the provider wrote them.
 
 ### AI billing, year to date
 

@@ -100,6 +100,11 @@ def render_all(payload, email_budget=None, text_budget=None, full_url=None,
     # Optional keys must be reset, not merely updated: render_all binds the
     # payload into module globals, so an evening payload's CARRIED would
     # otherwise leak into the next render in the same process.
+    # Phone numbers are made dialable before anything is bound, so the page,
+    # the email and the text copy all print the same form. VoIP is left exactly
+    # as the provider wrote it - see brief/phones.py.
+    from .phones import normalize as _dialable_numbers
+    payload = _dialable_numbers(payload)
     globals()["CARRIED"] = payload.get("CARRIED") or {}
     # Optional keys are bound explicitly, so a payload written against an older
     # prompt renders with the section simply absent.
