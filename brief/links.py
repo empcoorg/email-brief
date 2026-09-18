@@ -34,6 +34,17 @@ ICAO = {
     "QF": "QFA", "TK": "THY", "VS": "VIR", "WS": "WJA",
 }
 
+# IATA -> the name an airline writes on its own confirmation email, so a
+# booking that lists several codes can be matched to the leg that flies it.
+AIRLINE_NAMES = {
+    "AA": "american", "AS": "alaska", "B6": "jetblue", "DL": "delta", "F9": "frontier",
+    "G4": "allegiant", "HA": "hawaiian", "NK": "spirit", "SY": "sun country",
+    "UA": "united", "WN": "southwest", "AC": "air canada", "AM": "aeromexico",
+    "AF": "air france", "BA": "british airways", "DY": "norwegian", "EK": "emirates",
+    "IB": "iberia", "KL": "klm", "LH": "lufthansa", "QF": "qantas",
+    "TK": "turkish", "VS": "virgin atlantic", "WS": "westjet",
+}
+
 FLIGHTAWARE = "https://www.flightaware.com/live/flight/{}"
 INDEED_JOB = "https://www.indeed.com/viewjob?jk={}"
 LINKEDIN_JOB = "https://www.linkedin.com/jobs/view/{}/"

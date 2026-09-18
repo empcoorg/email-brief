@@ -872,6 +872,47 @@ class TestFlightColumns(unittest.TestCase):
         self.assertIn("<th>Terminal</th>", f)
         self.assertIn("<th>Confirmation</th>", f)
 
+    def test_a_two_airline_booking_shows_each_leg_only_its_own_code(self):
+        """Every row carried every code, which left the reader to work out which was theirs."""
+        from brief.render import leg_conf
+        p = payload()
+        p["FLIGHTS"]["conf"] = "MOCKR1 / MOCKR2 (Delta) · FAKEA9 (Alaska)"
+        for leg in p["FLIGHTS"]["legs"]:
+            leg.pop("conf", None)
+        p["FLIGHTS"]["legs"][0]["flight"] = "DL 1234"
+        p["FLIGHTS"]["legs"][1]["flight"] = "AS 456"
+        render_all(p)
+        self.assertEqual(leg_conf(p["FLIGHTS"]["legs"][0]), "MOCKR1 / MOCKR2")
+        self.assertEqual(leg_conf(p["FLIGHTS"]["legs"][1]), "FAKEA9")
+        f, em, tx = render_all(p)
+        for out in (f, em):
+            rows = out.split("Upcoming travel")[1].split("</section>")[0].split("<table")[1]
+            self.assertEqual(rows.count("FAKEA9"), 1, "the Alaska code belongs to one row")
+            self.assertNotIn("(Delta) \u00b7", rows, "no row repeats the whole booking string")
+
+    def test_an_unlabelled_or_unmatched_booking_string_is_printed_whole(self):
+        """A wrong code at a desk is worse than a long one."""
+        from brief.render import leg_conf
+        p = payload()
+        p["FLIGHTS"]["conf"] = "MOCKR1 · FAKEA9"        # no airline labels
+        for leg in p["FLIGHTS"]["legs"]:
+            leg.pop("conf", None)
+        render_all(p)
+        self.assertEqual(leg_conf(p["FLIGHTS"]["legs"][0]), "MOCKR1 · FAKEA9")
+        p["FLIGHTS"]["conf"] = "MOCKR1 (Delta) · FAKEA9 (Alaska)"
+        p["FLIGHTS"]["legs"][0]["flight"] = "ZZ 999"    # a carrier nothing maps
+        render_all(p)
+        self.assertEqual(leg_conf(p["FLIGHTS"]["legs"][0]), "MOCKR1 (Delta) · FAKEA9 (Alaska)")
+
+    def test_a_leg_with_its_own_code_ignores_the_booking_entirely(self):
+        from brief.render import leg_conf
+        p = payload()
+        p["FLIGHTS"]["conf"] = "MOCKR1 (Delta) · FAKEA9 (Alaska)"
+        p["FLIGHTS"]["legs"][0]["conf"] = "OWNCODE"
+        p["FLIGHTS"]["legs"][0]["flight"] = "AS 456"
+        render_all(p)
+        self.assertEqual(leg_conf(p["FLIGHTS"]["legs"][0]), "OWNCODE")
+
     def test_a_leg_without_its_own_code_falls_back_to_the_bookings(self):
         from brief.render import leg_conf
         p = payload()

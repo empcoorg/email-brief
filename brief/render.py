@@ -15,6 +15,7 @@ import base64, hashlib, html as H, json, math, os
 from .axes import (fraction, money_axis as _money_axis_calc, money_labels, money_tick,
                    nice_step_top, pct_axis, pct_labels, pct_tick, steps_per_side,
                    tick_positions)
+from .links import AIRLINE_NAMES
 from .theme import (BODY_FS, D, F_B, F_H, F_M, GOOGLE_FONTS, L, attr, e,
                     space_ranges, url)
 
@@ -1080,9 +1081,41 @@ def ai_spend_caption():
     return f"{base} {note}".strip()
 
 
+_CONF_PART = _re.compile(r"\(([^)]+)\)\s*$")
+
+
 def leg_conf(leg):
-    """A leg's own confirmation code, or the booking's when it carries none."""
-    return str(leg.get("conf") or FLIGHTS.get("conf") or "").strip()
+    """The confirmation code for THIS leg, not every code on the booking.
+
+    A trip flown on two airlines arrives as one string - "MOCKR1 / MOCKR2
+    (Delta) \u00b7 FAKEA9 (Alaska)" - and printing it against every row makes the
+    reader work out which code belongs to the flight they are looking at. When
+    the booking labels its codes by airline, the leg's own carrier picks one.
+    A leg that carries its own "conf" always wins; an unlabelled or unmatched
+    string is printed whole rather than guessed at, because a wrong code at a
+    desk is worse than a long one.
+    """
+    own = str(leg.get("conf") or "").strip()
+    if own:
+        return own
+    booking = str(FLIGHTS.get("conf") or "").strip()
+    parts = [p.strip() for p in _re.split(r"\s*[\u00b7;]\s*", booking) if p.strip()]
+    if len(parts) < 2:
+        return booking
+    airline = _leg_airline(leg)
+    if not airline:
+        return booking
+    for part in parts:
+        m = _CONF_PART.search(part)
+        if m and airline in m.group(1).strip().lower():
+            return part[:m.start()].strip() or part
+    return booking
+
+
+def _leg_airline(leg):
+    """The airline name for a leg, from its flight number's IATA prefix."""
+    m = _re.match(r"\s*([A-Z0-9]{2})\s*\d", str(leg.get("flight") or "").upper())
+    return AIRLINE_NAMES.get(m.group(1)) if m else None
 
 
 def leg_terminals(leg):
