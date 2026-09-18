@@ -724,12 +724,18 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
                 lines = "<br>".join(e(t) for t in terminal_lines(g))
                 row += tdl("Terminal", lines or '<span class="muted">not stated</span>', "meta")
             row += tdl("Airline", e(leg_airline(g)) or '<span class="muted">not stated</span>')
-            row += tdl("Confirmation", f'<span class="mono">{e(leg_conf(g))}</span>' if leg_conf(g)
-                       else '<span class="muted">not stated</span>')
+            if conf_ambiguous(g):
+                cell = f'<span class="muted">{e(CONF_SEE_BOOKING)}</span>'
+            elif leg_conf(g):
+                cell = f'<span class="mono">{e(leg_conf(g))}</span>'
+            else:
+                cell = '<span class="muted">not stated</span>'
+            row += tdl("Confirmation", cell)
             if show_stats:
                 row += tdl("Recent on-time record", e(g.get("stats") or "not available"), "meta")
             o.append('<tr>' + row + '</tr>')
-        o.append(f'</tbody></table></div><div class="cap">{e(FLIGHTS["note"])}</div>')
+        note = FLIGHTS["note"] + (" " + CONF_NOTE if legs_need_conf() else "")
+        o.append(f'</tbody></table></div><div class="cap">{e(note)}</div>')
     if TRAVEL:
         o.append('<h3' + (' style="margin-top:0"' if not FLIGHTS["legs"] else "")
                  + '>Stays &amp; other bookings</h3><div class="tbl-wrap"><table><thead><tr>'
@@ -1098,12 +1104,19 @@ def leg_conf(leg):
     """The confirmation code for THIS leg, not every code on the booking.
 
     A trip flown on two airlines arrives as one string - "MOCKR1 / MOCKR2
-    (Delta) \u00b7 FAKEA9 (Alaska)" - and printing it against every row makes the
+    (American) \u00b7 FAKEA9 (American)" - and printing it against every row makes the
     reader work out which code belongs to the flight they are looking at. When
     the booking labels its codes by airline, the leg's own carrier picks one.
     A leg that carries its own "conf" always wins; an unlabelled or unmatched
     string is printed whole rather than guessed at, because a wrong code at a
     desk is worse than a long one.
+
+    ONE AIRLINE CAN HOLD TWO RECORDS - "MOCKR1 / MOCKR2 (American)" for three
+    legs of one airline - and nothing in the string says which flight each covers.
+    They are not even in itinerary order. So that case stays ambiguous here
+    (`conf_ambiguous` reports it, and the row points at the booking instead of
+    listing both); only the run, reading each confirmation email, can say which
+    code covers which leg, and it says so by giving the leg its own "conf".
     """
     own = str(leg.get("conf") or "").strip()
     if own:
@@ -1122,6 +1135,31 @@ def leg_conf(leg):
     return booking
 
 
+_CODE = _re.compile(r"[A-Z0-9]{5,8}")
+
+
+def conf_ambiguous(leg):
+    """True when the code shown for this leg is really several codes.
+
+    A row is meant to answer "which code do I give at the desk?" with one
+    answer. Two codes in one cell is not a smaller version of that answer; it
+    is the question again, printed three times down the column.
+    """
+    if str(leg.get("conf") or "").strip():
+        return False
+    return len(_CODE.findall(leg_conf(leg))) > 1
+
+
+CONF_SEE_BOOKING = "see booking"
+CONF_NOTE = ("A leg whose confirmation reads \u201csee booking\u201d did not state its own code, "
+             "and the booking holds more than one \u2014 the codes above the table are the whole set.")
+
+
+def legs_need_conf():
+    """Do any legs fall back to the booking because they state no code?"""
+    return any(conf_ambiguous(g) for g in FLIGHTS.get("legs") or [])
+
+
 def _leg_airline(leg):
     """The airline name for a leg, from its flight number's IATA prefix."""
     m = _re.match(r"\s*([A-Z0-9]{2})\s*\d", str(leg.get("flight") or "").upper())
@@ -1132,8 +1170,8 @@ def leg_airline(leg):
     """Who flies THIS leg, for the table's own column.
 
     A connection is often sold by one airline and flown by another, and the
-    booking headline names only the seller - so "DL 2200" and "B6 88" under
-    one Delta record are two different check-in desks. The leg's own "airline"
+    booking headline names only the seller - so "AA 1200" and "B6 88" under
+    one airline's record are two different check-in desks. The leg's own "airline"
     wins; otherwise the flight number's IATA prefix names the carrier. When
     neither does, the booking's airline stands in ONLY where the booking names
     a single airline: on a two-airline record it would be a coin toss, and a
@@ -1141,7 +1179,7 @@ def leg_airline(leg):
 
     >>> FLIGHTS.update({"airline": "Northwind Air"})
     >>> leg_airline({"flight": "B6 88"}), leg_airline({"flight": "ZZ 1"})
-    ('Alaska', 'Northwind Air')
+    ('JetBlue', 'Northwind Air')
     >>> leg_airline({"flight": "ZZ 1", "airline": "Cascade Air"})
     'Cascade Air'
     """
@@ -1872,8 +1910,12 @@ def email_html(budget=None):
                      f'<br>→ {e(g["to"])} <span style="font-family:{F_M}">{e(g["arr"])}</span>')
             for line in terminal_lines(g):
                 route += f'<br>{small(e(line))}'
-            conf = (f'<span style="font-family:{F_M}">{e(leg_conf(g))}</span>' if leg_conf(g)
-                    else muted("not stated"))
+            if conf_ambiguous(g):
+                conf = muted(e(CONF_SEE_BOOKING))
+            elif leg_conf(g):
+                conf = f'<span style="font-family:{F_M}">{e(leg_conf(g))}</span>'
+            else:
+                conf = muted("not stated")
             # The email is capped at three columns so a phone can read it, so
             # the carrier rides above the code rather than beside it.
             if leg_airline(g):
@@ -1887,7 +1929,7 @@ def email_html(budget=None):
                       ("Airline · confirmation" if show_airline else "Confirmation")
                       + (" · on-time" if show_stats else "")],
                      rws, ["26%", "44%", "30%"])
-        inner += cap(FLIGHTS["note"])
+        inner += cap(FLIGHTS["note"] + (" " + CONF_NOTE if legs_need_conf() else ""))
     if TRAVEL:
         inner += h3("Stays & other bookings")
         rws = []
@@ -2203,12 +2245,13 @@ def plain_text(budget=None):
         for g in FLIGHTS["legs"]:
             A(f"  - {g['date']}: {g['flight']} · {g['frm']} {g['dep']} -> {g['to']} {g['arr']}"
               + (f" · {leg_airline(g)}" if leg_airline(g) else "")
-              + (f" · confirmation {leg_conf(g)}" if leg_conf(g) else "")
+              + (f" · confirmation {CONF_SEE_BOOKING} above" if conf_ambiguous(g)
+                 else f" · confirmation {leg_conf(g)}" if leg_conf(g) else "")
               + "".join(f"\n    {t}" for t in terminal_lines(g)))
             if g.get("stats"):
                 A(f"    on-time: {g['stats']}")
             A(f"    {g['fa']}")
-        A(f"  {FLIGHTS['note']}")
+        A(f"  {FLIGHTS['note']}" + (" " + CONF_NOTE if legs_need_conf() else ""))
     if TRAVEL:
         A("Stays & other bookings:")
         for kind, what, when, where, conf, link, *rest in TRAVEL:

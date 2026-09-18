@@ -861,12 +861,62 @@ class TestMailpieceScanIsEmbedded(unittest.TestCase):
 
 
 class TestFlightColumns(unittest.TestCase):
+    def test_two_records_on_one_airline_are_not_guessed_between(self):
+        """"MOCKR1 / MOCKR2 (American)" over three American legs says nothing about
+        which flight each covers — and they are not in itinerary order — so the
+        row points at the booking instead of printing both and calling it an
+        answer."""
+        p = payload()
+        p["FLIGHTS"]["airline"] = "American / JetBlue"
+        p["FLIGHTS"]["conf"] = "MOCKR1 / MOCKR2 (American) · FAKEA9 (JetBlue)"
+        legs = p["FLIGHTS"]["legs"]
+        for leg in legs:
+            leg.pop("conf", None)
+        legs[0]["flight"] = "AA 1200"
+        legs[1]["flight"] = "B6 88"
+        f, em, tx = render_all(p)
+        travel = f.split("Upcoming travel")[1].split("</table>")[0]
+        rows = travel.split("<tbody>")[1].split("<tr>")[1:]
+        self.assertIn(">see booking<", rows[0], "the American leg cannot know which of two codes")
+        self.assertNotIn("MOCKR2", rows[0], "and must not print both")
+        self.assertIn("FAKEA9", rows[1], "the JetBlue leg has exactly one, so it shows it")
+        for doc in (f, em, tx):
+            self.assertIn("did not state its own code", doc,
+                          "the note says why a row reads 'see booking'")
+
+    def test_a_per_leg_code_is_what_makes_the_row_answer_the_question(self):
+        """The run reads each confirmation email and assigns the code itself."""
+        p = payload()
+        p["FLIGHTS"]["conf"] = "MOCKR1 / MOCKR2 (American) · FAKEA9 (JetBlue)"
+        legs = p["FLIGHTS"]["legs"]
+        legs[0].update({"flight": "AA 1200", "conf": "MOCKR2"})
+        legs[1].update({"flight": "AA 1330", "conf": "MOCKR1"})
+        f, em, tx = render_all(p)
+        travel = f.split("Upcoming travel")[1].split("</table>")[0]
+        rows = travel.split("<tbody>")[1].split("<tr>")[1:]
+        self.assertIn("MOCKR2", rows[0]); self.assertNotIn("MOCKR1", rows[0])
+        self.assertIn("MOCKR1", rows[1]); self.assertNotIn("MOCKR2", rows[1])
+        self.assertNotIn("see booking", travel)
+        self.assertNotIn("did not state its own code", f, "no note when no row needs it")
+
+    def test_one_code_for_the_whole_booking_still_shows_on_every_row(self):
+        """A single-record trip is not ambiguous; every leg flies under it."""
+        from brief.render import conf_ambiguous
+        p = payload()
+        p["FLIGHTS"]["conf"] = "SAMPLE7"
+        for leg in p["FLIGHTS"]["legs"]:
+            leg.pop("conf", None)
+        f, _em, _tx = render_all(p)
+        body = f.split("Upcoming travel")[1].split("</table>")[0].split("<tbody>")[1]
+        self.assertEqual(body.count("SAMPLE7"), 2, "one per leg")
+        self.assertFalse(conf_ambiguous(p["FLIGHTS"]["legs"][0]))
+
     def test_the_table_names_the_airline_for_each_leg(self):
         """A connection sold by one airline is often flown by another, and the
         headline names only the seller — so the row has to say whose desk."""
         p = payload()
-        p["FLIGHTS"]["airline"] = "Delta / Alaska"
-        p["FLIGHTS"]["legs"][0]["flight"] = "DL 2200"
+        p["FLIGHTS"]["airline"] = "American / JetBlue"
+        p["FLIGHTS"]["legs"][0]["flight"] = "AA 1200"
         p["FLIGHTS"]["legs"][1]["flight"] = "B6 88"
         f, em, tx = render_all(p)
         travel = f.split("Upcoming travel")[1].split("</table>")[0]
@@ -874,17 +924,17 @@ class TestFlightColumns(unittest.TestCase):
         self.assertIn("<th>Airline</th><th>Confirmation</th>", head,
                       "the airline column sits directly before the confirmation")
         rows = travel.split("<tbody>")[1].split("<tr>")[1:]
-        self.assertIn('data-l="Airline">Delta<', rows[0])
-        self.assertIn('data-l="Airline">Alaska<', rows[1])
+        self.assertIn('data-l="Airline">American<', rows[0])
+        self.assertIn('data-l="Airline">JetBlue<', rows[1])
         self.assertIn("Airline · confirmation", em, "the email folds it into that cell")
         for doc in (em, tx):
-            self.assertIn("Delta", doc)
-            self.assertIn("Alaska", doc)
+            self.assertIn("American", doc)
+            self.assertIn("JetBlue", doc)
 
     def test_a_leg_may_name_its_own_airline(self):
         p = payload()
         p["FLIGHTS"]["legs"][0]["airline"] = "Cascade Air"
-        p["FLIGHTS"]["legs"][0]["flight"] = "DL 2200"     # the code would say Delta
+        p["FLIGHTS"]["legs"][0]["flight"] = "AA 1200"     # the code would say American
         f, _em, _tx = render_all(p)
         self.assertIn('data-l="Airline">Cascade Air<', f)
 
@@ -896,13 +946,13 @@ class TestFlightColumns(unittest.TestCase):
         p["FLIGHTS"]["airline"] = "Northwind Air"
         render_all(p)                                     # binds the globals
         self.assertEqual(leg_airline({"flight": "NW 412"}), "Northwind Air")
-        p["FLIGHTS"]["airline"] = "Delta / Alaska"
+        p["FLIGHTS"]["airline"] = "American / JetBlue"
         render_all(p)
         self.assertEqual(leg_airline({"flight": "NW 412"}), "")
 
     def test_the_column_reads_not_stated_rather_than_going_missing(self):
         p = payload()
-        p["FLIGHTS"]["airline"] = "Delta / Alaska"
+        p["FLIGHTS"]["airline"] = "American / JetBlue"
         p["FLIGHTS"]["legs"][0]["flight"] = "NW 412"
         f, _em, _tx = render_all(p)
         travel = f.split("Upcoming travel")[1].split("</table>")[0]
@@ -923,19 +973,19 @@ class TestFlightColumns(unittest.TestCase):
         """Every row carried every code, which left the reader to work out which was theirs."""
         from brief.render import leg_conf
         p = payload()
-        p["FLIGHTS"]["conf"] = "MOCKR1 / MOCKR2 (Delta) · FAKEA9 (Alaska)"
+        p["FLIGHTS"]["conf"] = "MOCKR1 / MOCKR2 (American) · FAKEA9 (JetBlue)"
         for leg in p["FLIGHTS"]["legs"]:
             leg.pop("conf", None)
-        p["FLIGHTS"]["legs"][0]["flight"] = "DL 1234"
-        p["FLIGHTS"]["legs"][1]["flight"] = "AS 456"
+        p["FLIGHTS"]["legs"][0]["flight"] = "AA 1200"
+        p["FLIGHTS"]["legs"][1]["flight"] = "B6 88"
         render_all(p)
         self.assertEqual(leg_conf(p["FLIGHTS"]["legs"][0]), "MOCKR1 / MOCKR2")
         self.assertEqual(leg_conf(p["FLIGHTS"]["legs"][1]), "FAKEA9")
         f, em, tx = render_all(p)
         for out in (f, em):
             rows = out.split("Upcoming travel")[1].split("</section>")[0].split("<table")[1]
-            self.assertEqual(rows.count("FAKEA9"), 1, "the Alaska code belongs to one row")
-            self.assertNotIn("(Delta) \u00b7", rows, "no row repeats the whole booking string")
+            self.assertEqual(rows.count("FAKEA9"), 1, "the JetBlue code belongs to one row")
+            self.assertNotIn("(American) \u00b7", rows, "no row repeats the whole booking string")
 
     def test_an_unlabelled_or_unmatched_booking_string_is_printed_whole(self):
         """A wrong code at a desk is worse than a long one."""
@@ -946,17 +996,17 @@ class TestFlightColumns(unittest.TestCase):
             leg.pop("conf", None)
         render_all(p)
         self.assertEqual(leg_conf(p["FLIGHTS"]["legs"][0]), "MOCKR1 · FAKEA9")
-        p["FLIGHTS"]["conf"] = "MOCKR1 (Delta) · FAKEA9 (Alaska)"
+        p["FLIGHTS"]["conf"] = "MOCKR1 (American) · FAKEA9 (JetBlue)"
         p["FLIGHTS"]["legs"][0]["flight"] = "ZZ 999"    # a carrier nothing maps
         render_all(p)
-        self.assertEqual(leg_conf(p["FLIGHTS"]["legs"][0]), "MOCKR1 (Delta) · FAKEA9 (Alaska)")
+        self.assertEqual(leg_conf(p["FLIGHTS"]["legs"][0]), "MOCKR1 (American) · FAKEA9 (JetBlue)")
 
     def test_a_leg_with_its_own_code_ignores_the_booking_entirely(self):
         from brief.render import leg_conf
         p = payload()
-        p["FLIGHTS"]["conf"] = "MOCKR1 (Delta) · FAKEA9 (Alaska)"
+        p["FLIGHTS"]["conf"] = "MOCKR1 (American) · FAKEA9 (JetBlue)"
         p["FLIGHTS"]["legs"][0]["conf"] = "OWNCODE"
-        p["FLIGHTS"]["legs"][0]["flight"] = "AS 456"
+        p["FLIGHTS"]["legs"][0]["flight"] = "B6 88"
         render_all(p)
         self.assertEqual(leg_conf(p["FLIGHTS"]["legs"][0]), "OWNCODE")
 

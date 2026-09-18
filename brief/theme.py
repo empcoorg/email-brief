@@ -43,8 +43,8 @@ def space_ranges(text):
     'close \u2192 close'
     >>> space_ranges("DEN\u2192ORD")
     'DEN \u2192 ORD'
-    >>> space_ranges("NW 412 DEN\u2192ORD Wed Sep 23")
-    'NW 412 DEN \u2192 ORD Wed Sep 23'
+    >>> space_ranges("NW 412 DEN\u2192ORD Mon Mar 2")
+    'NW 412 DEN \u2192 ORD Mon Mar 2'
     """
     return _TIGHT_DASH.sub(r" \1 ", str(text))
 
