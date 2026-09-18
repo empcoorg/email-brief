@@ -826,10 +826,10 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
             research.append(f'</tbody></table></div>{axis_foot(MKT_24, "1D move, % of prior close")}{axis_foot(MKT_7D, "1W move, %")}{axis_foot(MKT_YTD, "YTD move, %")}<div class="cap">1D = close → close vs the prior session; 1W = trailing 5 sessions (one trading week); YTD = since the last close of the previous year. All in index points and %. {axis_note(MKT_24, "1D axis")}; {axis_note(MKT_7D, "1W axis")}; {axis_note(MKT_YTD, "YTD axis")}.</div>')
         if FUNDS:
             stamp = shared_asof([r[9] for r in FUNDS])
-            # The trailing "As of" column exists to date a NAV. Once every NAV
+            # The trailing date column exists to date a NAV. Once every NAV
             # carries the same date in the heading, the column is the same
             # string N more times, so it goes.
-            asof_th = "" if stamp else "<th>As of</th>"
+            asof_th = "" if stamp else "<th>Date</th>"
             research.append(f'<h3>Vanguard funds</h3><div class="tbl-wrap"><table><thead><tr><th>Fund</th><th style="text-align:right">{quote_head("NAV", stamp)}</th><th>1D{axis_div(FUND_1D)}</th><th>1W{axis_div(FUND_1W)}</th><th>YTD{axis_div(FUND_YTD)}</th>{asof_th}</tr></thead><tbody>')
             for tk, nm, nav, a1, v1, a7, v7, ay, vy, asof, note in FUNDS:
                 research.append('<tr>' + tdl("Fund", f'<span class="lead">{e(tk)}</span><br><span class="meta">{e(nm)}</span>', "mono")
@@ -837,7 +837,7 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
                                 + tdl("1D", horizon_cell_file(a1, v1, FUND_1D))
                                 + tdl("1W", horizon_cell_file(a7, v7, FUND_1W))
                                 + tdl("YTD", horizon_cell_file(ay, vy, FUND_YTD))
-                                + ("" if stamp else tdl("As of", f'<span class="meta">{e(with_year(asof))}</span>')) + '</tr>')
+                                + ("" if stamp else tdl("Date", f'<span class="meta">{e(with_year(asof))}</span>')) + '</tr>')
             research.append(f'</tbody></table></div>{axis_foot(FUND_1D, "1D NAV change, %")}{axis_foot(FUND_1W, "1W NAV change, %")}{axis_foot(FUND_YTD, "YTD NAV change, %")}<div class="cap">Change from the prior published NAV (1D), over one trading week (1W), and since the previous year-end (YTD) - each in $ and %. {axis_note(FUND_1D, "1D axis")}; {axis_note(FUND_1W, "1W axis")}; {axis_note(FUND_YTD, "YTD axis")}. ' + e(" ".join(f"{tk}: {note}" for tk, nm, nav, a1, v1, a7, v7, ay, vy, asof, note in FUNDS)) + '</div>')
         if STOCKS:
             stamp = shared_asof([r[8:] for r in STOCKS])
@@ -868,21 +868,21 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
     if MACRO_ROWS or JOBS_SECTORS:
         research.append('<div class="card wide"><h2>Fed &amp; labor market</h2>')
         if MACRO_ROWS:
-            research.append('<div class="tbl-wrap"><table><thead><tr><th>Indicator</th><th>Latest</th><th>Change · context</th><th>As of</th></tr></thead><tbody>')
+            research.append('<div class="tbl-wrap"><table><thead><tr><th>Indicator</th><th>Latest</th><th>Change · context</th><th>Date</th></tr></thead><tbody>')
             for name, latest, context, asof in MACRO_ROWS:
                 research.append('<tr>' + tdl("Indicator", f'<span class="lead">{e(name)}</span>')
                                 + tdl("Latest", macro_cell(latest, name, context))
                                 + tdl("Change · context", e(context))
-                                + tdl("As of", f'<span class="meta">{e(with_year(asof))}</span>') + '</tr>')
+                                + tdl("Date", f'<span class="meta">{e(with_year(asof))}</span>') + '</tr>')
             research.append('</tbody></table></div>')
         if JOBS_SECTORS:
-            research.append('<h3>Jobs by sector</h3><div class="tbl-wrap"><table><thead><tr><th>Sector</th><th style="text-align:right">Payrolls</th><th>Context</th><th>As of</th></tr></thead><tbody>')
+            research.append('<h3>Jobs by sector</h3><div class="tbl-wrap"><table><thead><tr><th>Sector</th><th style="text-align:right">Payrolls</th><th>Context</th><th>Date</th></tr></thead><tbody>')
             for sector, change, context, asof in JOBS_SECTORS:
                 cls = "dir-pos" if not str(change).lstrip().startswith(("\u2212", "-")) else "dir-neg"
                 research.append('<tr>' + tdl("Sector", e(sector))
                                 + tdl("Payrolls", f'<span class="{cls} mono">{e(change)}</span>', "num")
                                 + tdl("Context", e(context))
-                                + tdl("As of", f'<span class="meta">{e(with_year(asof))}</span>') + '</tr>')
+                                + tdl("Date", f'<span class="meta">{e(with_year(asof))}</span>') + '</tr>')
             research.append('</tbody></table></div>')
         research.append(f'<div class="cap">{e(MACRO_NOTE)}</div></div>')
     if AI_ITEMS:

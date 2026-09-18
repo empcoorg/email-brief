@@ -1482,11 +1482,11 @@ class TestQuoteAsOfHeadings(unittest.TestCase):
         p = payload()
         f, _em, _tx = render_all(p)
         funds = self.table(f, "Vanguard funds")
-        self.assertNotIn("As of", funds, "the column is redundant once the heading dates the NAV")
+        self.assertNotIn(">Date</th>", funds, "the column is redundant once the heading dates the NAV")
         p["FUNDS"][0][9] = "Fri Feb 27, 5:48 PM ET"      # priced on different days
         f, _em, _tx = render_all(p)
         funds = self.table(f, "Vanguard funds")
-        self.assertIn(">As of</th>", funds, "differing dates need the column back")
+        self.assertIn(">Date</th>", funds, "differing dates need the column back")
         self.assertIn("Fri Feb 27, 5:48 PM ET", funds)
         self.assertIn(">NAV</th>", funds, "and the heading goes back to the plain word")
 
