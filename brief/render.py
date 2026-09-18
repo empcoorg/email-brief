@@ -712,7 +712,7 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
         hdr = '<th>Date · flight</th><th>Departs (airport local)</th><th>Arrives (airport local)</th>'
         if show_terms:
             hdr += '<th>Terminal</th>'
-        hdr += '<th>Confirmation</th>'
+        hdr += '<th>Airline</th><th>Confirmation</th>'
         if show_stats:
             hdr += '<th>Recent on-time record</th>'
         o.append(f'<div class="tbl-wrap"><table><thead><tr>{hdr}</tr></thead><tbody>')
@@ -723,6 +723,7 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
             if show_terms:
                 lines = "<br>".join(e(t) for t in terminal_lines(g))
                 row += tdl("Terminal", lines or '<span class="muted">not stated</span>', "meta")
+            row += tdl("Airline", e(leg_airline(g)) or '<span class="muted">not stated</span>')
             row += tdl("Confirmation", f'<span class="mono">{e(leg_conf(g))}</span>' if leg_conf(g)
                        else '<span class="muted">not stated</span>')
             if show_stats:
@@ -1116,7 +1117,7 @@ def leg_conf(leg):
         return booking
     for part in parts:
         m = _CONF_PART.search(part)
-        if m and airline in m.group(1).strip().lower():
+        if m and airline.lower() in m.group(1).strip().lower():
             return part[:m.start()].strip() or part
     return booking
 
@@ -1125,6 +1126,33 @@ def _leg_airline(leg):
     """The airline name for a leg, from its flight number's IATA prefix."""
     m = _re.match(r"\s*([A-Z0-9]{2})\s*\d", str(leg.get("flight") or "").upper())
     return AIRLINE_NAMES.get(m.group(1)) if m else None
+
+
+def leg_airline(leg):
+    """Who flies THIS leg, for the table's own column.
+
+    A connection is often sold by one airline and flown by another, and the
+    booking headline names only the seller - so "DL 2200" and "B6 88" under
+    one Delta record are two different check-in desks. The leg's own "airline"
+    wins; otherwise the flight number's IATA prefix names the carrier. When
+    neither does, the booking's airline stands in ONLY where the booking names
+    a single airline: on a two-airline record it would be a coin toss, and a
+    reader sent to the wrong desk is worse served than one sent to none.
+
+    >>> FLIGHTS.update({"airline": "Northwind Air"})
+    >>> leg_airline({"flight": "B6 88"}), leg_airline({"flight": "ZZ 1"})
+    ('Alaska', 'Northwind Air')
+    >>> leg_airline({"flight": "ZZ 1", "airline": "Cascade Air"})
+    'Cascade Air'
+    """
+    own = str(leg.get("airline") or "").strip()
+    if own:
+        return own
+    named = _leg_airline(leg)
+    if named:
+        return named
+    booking = str(FLIGHTS.get("airline") or "").strip()
+    return "" if _re.search(r"[/&\u00b7]| and ", booking) else booking
 
 
 def leg_terminals(leg):
@@ -1841,12 +1869,18 @@ def email_html(budget=None):
                 route += f'<br>{small(e(line))}'
             conf = (f'<span style="font-family:{F_M}">{e(leg_conf(g))}</span>' if leg_conf(g)
                     else muted("not stated"))
+            # The email is capped at three columns so a phone can read it, so
+            # the carrier rides above the code rather than beside it.
+            if leg_airline(g):
+                conf = e(leg_airline(g)) + "<br>" + conf
             if show_stats:
                 conf += f'<br>{small(e(g.get("stats") or "not available"))}'
             rws.append([td(f'{e(g["date"])}<br><a href="{url(g["fa"])}" style="color:{L["accent"]};font-family:{F_M};font-weight:600">{e(g["flight"])}</a>'),
                         td(route), td(conf)])
+        show_airline = any(leg_airline(g) for g in FLIGHTS["legs"])
         inner += tbl(["Date · flight", "Route (airport local times)",
-                      "Confirmation" + (" · on-time" if show_stats else "")],
+                      ("Airline · confirmation" if show_airline else "Confirmation")
+                      + (" · on-time" if show_stats else "")],
                      rws, ["26%", "44%", "30%"])
         inner += cap(FLIGHTS["note"])
     if TRAVEL:
@@ -2163,6 +2197,7 @@ def plain_text(budget=None):
         A(f"  {FLIGHTS['booked']}")
         for g in FLIGHTS["legs"]:
             A(f"  - {g['date']}: {g['flight']} · {g['frm']} {g['dep']} -> {g['to']} {g['arr']}"
+              + (f" · {leg_airline(g)}" if leg_airline(g) else "")
               + (f" · confirmation {leg_conf(g)}" if leg_conf(g) else "")
               + "".join(f"\n    {t}" for t in terminal_lines(g)))
             if g.get("stats"):

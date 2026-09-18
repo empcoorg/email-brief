@@ -861,6 +861,53 @@ class TestMailpieceScanIsEmbedded(unittest.TestCase):
 
 
 class TestFlightColumns(unittest.TestCase):
+    def test_the_table_names_the_airline_for_each_leg(self):
+        """A connection sold by one airline is often flown by another, and the
+        headline names only the seller — so the row has to say whose desk."""
+        p = payload()
+        p["FLIGHTS"]["airline"] = "Delta / Alaska"
+        p["FLIGHTS"]["legs"][0]["flight"] = "DL 2200"
+        p["FLIGHTS"]["legs"][1]["flight"] = "B6 88"
+        f, em, tx = render_all(p)
+        travel = f.split("Upcoming travel")[1].split("</table>")[0]
+        head = travel.split("<tbody>")[0]
+        self.assertIn("<th>Airline</th><th>Confirmation</th>", head,
+                      "the airline column sits directly before the confirmation")
+        rows = travel.split("<tbody>")[1].split("<tr>")[1:]
+        self.assertIn('data-l="Airline">Delta<', rows[0])
+        self.assertIn('data-l="Airline">Alaska<', rows[1])
+        self.assertIn("Airline · confirmation", em, "the email folds it into that cell")
+        for doc in (em, tx):
+            self.assertIn("Delta", doc)
+            self.assertIn("Alaska", doc)
+
+    def test_a_leg_may_name_its_own_airline(self):
+        p = payload()
+        p["FLIGHTS"]["legs"][0]["airline"] = "Cascade Air"
+        p["FLIGHTS"]["legs"][0]["flight"] = "DL 2200"     # the code would say Delta
+        f, _em, _tx = render_all(p)
+        self.assertIn('data-l="Airline">Cascade Air<', f)
+
+    def test_an_unreadable_code_borrows_the_booking_only_when_it_is_unambiguous(self):
+        """On a two-airline record, naming one of them would be a coin toss,
+        and a reader sent to the wrong desk is worse served than one sent to none."""
+        from brief.render import leg_airline
+        p = payload()
+        p["FLIGHTS"]["airline"] = "Northwind Air"
+        render_all(p)                                     # binds the globals
+        self.assertEqual(leg_airline({"flight": "NW 412"}), "Northwind Air")
+        p["FLIGHTS"]["airline"] = "Delta / Alaska"
+        render_all(p)
+        self.assertEqual(leg_airline({"flight": "NW 412"}), "")
+
+    def test_the_column_reads_not_stated_rather_than_going_missing(self):
+        p = payload()
+        p["FLIGHTS"]["airline"] = "Delta / Alaska"
+        p["FLIGHTS"]["legs"][0]["flight"] = "NW 412"
+        f, _em, _tx = render_all(p)
+        travel = f.split("Upcoming travel")[1].split("</table>")[0]
+        self.assertIn('data-l="Airline"><span class="muted">not stated</span>', travel)
+
     def test_each_leg_shows_its_confirmation_and_terminal(self):
         p = payload()
         p["FLIGHTS"]["legs"][0]["conf"] = "SAMPLE7"

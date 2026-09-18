@@ -87,7 +87,11 @@ MAX_DETAIL_LINES = 3
 FLIGHT_LEG_KEYS = ("date", "flight", "ident", "frm", "dep", "to", "arr", "fa")
 # "stats" (the flight's recent on-time record) is OPTIONAL: when the source is
 # unreachable the run omits the field, and the renderer drops the whole column
-# rather than printing an apology in every row.
+# rather than printing an apology in every row. "conf", "term" and "airline"
+# are optional the same way: a leg's own confirmation code, its terminals, and
+# who actually flies it when the flight number's prefix would mislead (a
+# codeshare, a regional operator). The airline column is otherwise read from
+# that prefix, so most runs need not state it.
 
 
 class PayloadError(ValueError):

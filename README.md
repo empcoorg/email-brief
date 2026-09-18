@@ -24,7 +24,7 @@ Section 3, Deposits & finances — summary tiles, and the money-movements table:
 
 ![Mock brief — deposits and finances section](docs/mock-brief-sections.png)
 
-Section 4, Upcoming travel — flights with their airport-local times, per-leg confirmation codes, terminals and each flight's recent on-time record, then stays and other bookings: dates first with the check-in or door times under them, and where each was booked. Every booking is carried forward until its own date passes, whether or not new mail about it arrived:
+Section 4, Upcoming travel — flights with their airport-local times, the airline flying each leg, per-leg confirmation codes, terminals and each flight's recent on-time record, then stays and other bookings: dates first with the check-in or door times under them, and where each was booked. Every booking is carried forward until its own date passes, whether or not new mail about it arrived:
 
 ![Mock brief — upcoming travel: flights, hotel, rail and event bookings](docs/mock-brief-travel.png)
 
