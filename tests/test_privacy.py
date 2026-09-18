@@ -49,6 +49,13 @@ def read(path):
         return fh.read()
 
 
+# A code the owner chose for the mock data, invented and confirmed as such.
+# It carries no fiction marker, so it is named here rather than weakening the
+# rule for every other code: the exception is one line long and auditable, and
+# anything NOT on this list still has to say MOCK, SAMPLE, FAKE or the rest.
+INVENTED_CODES = {"XGGF4"}
+
+
 class TestNoRealIdentifiers(unittest.TestCase):
     def test_confirmation_codes_are_obviously_fictional(self):
         """A booking reference plus a surname is enough to open someone's
@@ -63,6 +70,8 @@ class TestNoRealIdentifiers(unittest.TestCase):
             for code in pat.findall(read(f)):
                 if not (any(c.isdigit() for c in code) and any(c.isalpha() for c in code)):
                     continue                      # not the shape of a PNR
+                if code in INVENTED_CODES:
+                    continue
                 if not any(m in code for m in FICTION_MARKERS):
                     hits.append(f"{f}: {code}")
         self.assertEqual(hits, [], "confirmation code that does not look invented "
@@ -90,7 +99,8 @@ class TestNoRealIdentifiers(unittest.TestCase):
         for f in tracked_text_files():
             text = hex_colour.sub("#", read(f))
             for code in shaped.findall(text):
-                if not_a_pnr.match(code) or any(m in code for m in FICTION_MARKERS):
+                if (not_a_pnr.match(code) or code in INVENTED_CODES
+                        or any(m in code for m in FICTION_MARKERS)):
                     continue
                 hits.append(f"{f}: {code}")
         self.assertEqual(hits, [], "PNR-shaped token with no fiction marker — a real "

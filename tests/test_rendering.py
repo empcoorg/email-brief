@@ -503,3 +503,40 @@ class TestBarGeometry(_BrowserCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class TestHeadingSitsOnItsZero(_BrowserCase):
+    """The money column's name describes the zero, so it sits over the zero.
+
+    Reported twice as still off. It is now positioned absolutely at the same
+    50% line the ruler puts its 0 on, rather than centred inside a box whose
+    width need not match the ruler's, and the trailing letter-space of the
+    uppercase label is given back with text-indent.
+    """
+
+    def test_every_labelled_money_column_centres_on_its_zero(self):
+        for width in (1840, 1280, 1000, 820):
+            pg = self._page(width)
+            rows = pg.evaluate("""() => {
+              const out = [];
+              for (const th of document.querySelectorAll('th')) {
+                const lbl = th.querySelector('.dlabel');
+                if (!lbl) continue;
+                const head = th.querySelector('.dhead .c');
+                const axis = [...th.querySelectorAll('.daxis span')]
+                               .find(s => s.textContent.trim() === '0');
+                if (!head || !axis) continue;
+                const c = el => { const r = el.getBoundingClientRect();
+                                  return r.left + r.width / 2; };
+                out.push({name: lbl.textContent.trim(),
+                          dLabel: c(lbl) - c(axis), dHead: c(head) - c(axis)});
+              }
+              return out;
+            }""")
+            self.assertTrue(rows, f"no labelled money column at {width}px")
+            for r in rows:
+                self.assertLessEqual(abs(r["dLabel"]), 1.0,
+                                     f"{r['name']!r} is {r['dLabel']:.1f}px off its zero @{width}px")
+                self.assertLessEqual(abs(r["dHead"]), 1.0,
+                                     f"the head's own 0 is {r['dHead']:.1f}px off @{width}px")
+            pg.close()
