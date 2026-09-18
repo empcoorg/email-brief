@@ -276,6 +276,37 @@ class TestRendering(_BrowserCase):
                                      f"email axis 0 is {p_['dz']:.1f}px off the track center @{width}px")
             pg.close()
 
+    def test_email_axis_heading_is_centred_on_its_zero(self):
+        """"Direction · amount" left-aligned began at the far end of a diverging
+        track and read as a heading for the negative half. The name describes
+        the zero, so it sits over the zero."""
+        for width in (860, 390):
+            pg = self._page(width, content=self.email_html)
+            heads = pg.evaluate("""() => {
+                const out = [];
+                for (const th of document.querySelectorAll('th')) {
+                    const cells = th.querySelectorAll('td');
+                    if (cells.length !== 3) continue;
+                    const zero = cells[1];
+                    if (zero.textContent.trim() !== '0') continue;
+                    const name = th.querySelector('div');
+                    if (!name) continue;
+                    // the text's own box, not the full-width div it sits in
+                    const r = document.createRange();
+                    r.selectNodeContents(name);
+                    const n = r.getBoundingClientRect(), z = zero.getBoundingClientRect();
+                    out.push({name: name.textContent.trim(),
+                              d: (n.left + n.width / 2) - (z.left + z.width / 2)});
+                }
+                return out;
+            }""")
+            self.assertGreaterEqual(len(heads), 4,
+                                    f"expected axis headings @{width}px, saw {len(heads)}")
+            for h in heads:
+                self.assertLessEqual(abs(h["d"]), 2.0,
+                                     f"{h['name']!r} is {h['d']:.1f}px off its zero @{width}px")
+            pg.close()
+
     def test_severity_chips_never_wrap_in_the_email(self):
         """Mobile mail broke "CHECK" into "CHEC / K" when the chip had its own
         ~70px column. It now shares the title's column; this measures that the

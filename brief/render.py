@@ -1384,11 +1384,16 @@ def th_axis(name, labels):
     land, which misreads the chart beneath it — the label must agree with the
     geometry it describes. The email cannot position elements, but equal-width
     table cells with align= give the same result, and both survive the sanitizer.
+
+    THE NAME IS CENTRED FOR THE SAME REASON. Left-aligned, "Direction · amount"
+    began at the far end of a diverging track and read as a heading for the
+    negative half; the zero it describes is at the middle cell, i.e. the middle
+    of the column, so the name sits there too.
     """
     lo, mid, hi = labels
     cell = f"font:400 10px {F_M};text-transform:none;letter-spacing:0;color:{L['ink3']};padding:0"
     return Raw(
-        f'{e(name)}'
+        f'<div align="center" style="text-align:center">{e(name)}</div>'
         f'<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:1px">'
         f'<tr><td width="33%" align="left" style="{cell}">{e(lo)}</td>'
         f'<td width="34%" align="center" style="{cell}">{e(mid)}</td>'
