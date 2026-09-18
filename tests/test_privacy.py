@@ -67,6 +67,34 @@ class TestNoRealIdentifiers(unittest.TestCase):
         self.assertEqual(hits, [], "confirmation code that does not look invented "
                                    f"(must contain one of {FICTION_MARKERS}): {hits}")
 
+    def test_no_pnr_shaped_token_anywhere_even_without_a_label(self):
+        """The labelled check missed the leak it exists to catch.
+
+        A real booking reference reached a docstring as prose - quoted mid
+        sentence as an example string - with no "confirmation" label within
+        twelve characters of it, so nothing fired. A PNR is recognisable by
+        SHAPE alone: five to eight characters, uppercase, letters and digits
+        mixed. So every such token in tracked text must carry a fiction
+        marker, label or no label.
+
+        The shapes that are not PNRs are excluded rather than tolerated: hex
+        colours, ICAO idents and flight numbers (a carrier prefix followed by
+        digits) and ISO timestamp fragments.
+        """
+        shaped = re.compile(r"\b(?=[A-Z0-9]{5,8}\b)(?=[A-Z0-9]*[A-Z])(?=[A-Z0-9]*[0-9])"
+                            r"[A-Z0-9]{5,8}\b")
+        not_a_pnr = re.compile(r"^(?:[A-Z]{1,3}\d+|\d+T\d+)$")   # DAL2200, NW412, 01T17
+        hex_colour = re.compile(r"#[0-9A-Fa-f]{6}\b")
+        hits = []
+        for f in tracked_text_files():
+            text = hex_colour.sub("#", read(f))
+            for code in shaped.findall(text):
+                if not_a_pnr.match(code) or any(m in code for m in FICTION_MARKERS):
+                    continue
+                hits.append(f"{f}: {code}")
+        self.assertEqual(hits, [], "PNR-shaped token with no fiction marker — a real "
+                                   f"booking reference is a live credential: {hits}")
+
     def test_masked_account_digits_are_placeholders(self):
         """Mock data may show a masked account, but only with placeholder digits."""
         pat = re.compile(r"(?:[·.…]{2,}|x{3,}|\*{3,}|ending in\s*)(\d{4})\b", re.I)
