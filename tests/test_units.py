@@ -489,6 +489,48 @@ class TestAttachmentCeiling(unittest.TestCase):
         self.assertIn("TRUNCATED", msg)
         self.assertIn("Do not resend", msg, "the one-send rule still stands")
 
+    def test_verify_names_the_right_failure_for_each_shape(self):
+        """The advice differs per shape, so the diagnosis has to.
+
+        A read-back that came back LONGER was reported as "same length,
+        different bytes — mistyped, not cut", which sends a run to retype a
+        draft whose problem was a re-encode.
+        """
+        import subprocess, sys, tempfile, os
+        d = tempfile.mkdtemp()
+        src = os.path.join(d, "email.html")
+        with open(src, "wb") as fh:
+            fh.write(b"a" * 5_000)
+
+        def verdict(data):
+            back = os.path.join(d, "readback.html")
+            with open(back, "wb") as fh:
+                fh.write(data)
+            r = subprocess.run([sys.executable, "-m", "brief", "verify", src, back],
+                               cwd=ROOT, capture_output=True, text=True)
+            return r.returncode, (r.stdout + r.stderr)
+
+        code, out = verdict(b"a" * 5_000)
+        self.assertEqual(code, 0); self.assertIn("byte identical", out)
+
+        code, out = verdict(b"a" * 4_000)                 # cut clean
+        self.assertEqual(code, 5); self.assertIn("TRUNCATED", out)
+        self.assertIn("ran out of room", out)
+
+        code, out = verdict(b"a" * 4_999 + b"b")          # one byte mistyped
+        self.assertEqual(code, 5); self.assertIn("CORRUPTED", out)
+        self.assertIn("Same length", out)
+
+        code, out = verdict(b"a" * 5_000 + b"b")          # came back longer
+        self.assertEqual(code, 5); self.assertIn("CORRUPTED", out)
+        self.assertIn("1 B longer", out)
+        self.assertIn("re-encoded or re-wrapped", out)
+        self.assertNotIn("Same length", out, "it is not the same length")
+
+        code, out = verdict(b"b" + b"a" * 3_000)          # shorter AND altered
+        self.assertEqual(code, 5); self.assertIn("CORRUPTED", out)
+        self.assertIn("1,999 B shorter", out)
+
     def test_cli_reports_and_exits(self):
         import subprocess, sys, tempfile
         small = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)

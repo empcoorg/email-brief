@@ -181,15 +181,30 @@ def _verify(source, readback):
               f"{hashlib.sha256(a_).hexdigest()[:16]} — byte identical.")
         return 0
     where = next((i for i, (x, y) in enumerate(zip(a_, b_)) if x != y), min(len(a_), len(b_)))
-    kind = ("TRUNCATED" if len(b_) < len(a_) and a_[:len(b_)] == b_
-            else "CORRUPTED")
+    # Three different failures, three different things to do about them. The
+    # advice used to read "same length, different bytes" whatever came back,
+    # so a read-back that was LONGER - a re-encode, a re-wrap, a doubled
+    # chunk - was diagnosed as a typo, which is the one case where retyping
+    # the same draft does not help.
+    if len(b_) < len(a_) and a_[:len(b_)] == b_:
+        kind, advice = "TRUNCATED", (
+            "The read-back is a clean prefix — the call ran out of room. Make "
+            "the message smaller.")
+    elif len(a_) == len(b_):
+        kind, advice = "CORRUPTED", (
+            "Same length, different bytes — the base64 was mistyped, not cut. "
+            "Rewrite the draft with the attachment re-transcribed; do NOT make "
+            "it smaller, and do NOT send this draft.")
+    else:
+        grew = len(b_) - len(a_)
+        kind, advice = "CORRUPTED", (
+            f"The read-back is {abs(grew):,} B {'longer' if grew > 0 else 'shorter'} "
+            "AND diverges before its end, so it was re-encoded or re-wrapped "
+            "rather than simply cut. Rebuild the draft from the source file — "
+            "do not retype the read-back — and do NOT send this draft.")
     print(f"{kind}: {os.path.basename(source)} is {len(a_):,} B, read back "
-          f"{len(b_):,} B, first difference at offset {where:,}.\n"
-          + ("The read-back is a clean prefix — the call ran out of room. Make "
-             "the message smaller.\n" if kind == "TRUNCATED" else
-             "Same length, different bytes — the base64 was mistyped, not cut. "
-             "Rewrite the draft with the attachment re-transcribed; do NOT make "
-             "it smaller, and do NOT send this draft.\n"), file=sys.stderr)
+          f"{len(b_):,} B, first difference at offset {where:,}.\n" + advice + "\n",
+          file=sys.stderr)
     return 5
 
 
