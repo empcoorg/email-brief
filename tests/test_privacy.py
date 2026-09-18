@@ -21,6 +21,7 @@ naming them here would itself be the leak - so they work two ways:
 import os
 import re
 import subprocess
+import sys
 import unittest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -222,3 +223,40 @@ class TestPrivateDenylist(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class TestPrecommitHook(unittest.TestCase):
+    """A test that runs after the fact cannot un-publish anything.
+
+    Every leak this repo has had was committed first and noticed later, so the
+    denylist is also enforced as a pre-commit hook. These check the hook can do
+    its job, not that it is installed - a checkout cannot know that.
+    """
+
+    TOOL = os.path.join(ROOT, "tools", "privacy_precommit.py")
+    INSTALL = os.path.join(ROOT, "tools", "install-privacy-hook.sh")
+
+    def test_the_hook_and_its_installer_exist(self):
+        self.assertTrue(os.path.exists(self.TOOL), "the hook script is part of the template")
+        self.assertTrue(os.path.exists(self.INSTALL))
+        self.assertIn("private_denylist.txt", read("tools/install-privacy-hook.sh"),
+                      "the installer must say where the denylist goes")
+
+    def test_it_derives_the_shapes_that_identify_a_person(self):
+        """A word from the prompt would match everything; these shapes do not."""
+        sys.path.insert(0, os.path.join(ROOT, "tools"))
+        import privacy_precommit as hook
+        probe = ("you@example.com 555-010-0001 MOCKR1 1,234.56 ···1234 "
+                 "Gmail daily brief")
+        found = set()
+        for shape in hook.DERIVED:
+            found.update(re.findall(shape, probe))
+        for value in ("you@example.com", "555-010-0001", "MOCKR1", "1,234.56"):
+            self.assertIn(value, found, f"{value} should be derived from a prompt")
+        self.assertNotIn("Gmail", found, "a bare word would match the whole repo")
+        self.assertNotIn("daily", found)
+
+    def test_the_commit_identity_is_not_treated_as_private(self):
+        sys.path.insert(0, os.path.join(ROOT, "tools"))
+        import privacy_precommit as hook
+        self.assertIn("empcoorg@users.noreply.github.com", hook.ALLOW)

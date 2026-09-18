@@ -69,6 +69,12 @@ because `actions/checkout` is shallow by default. To make it run there, add to
   owner's own identifiers. The strongest protection available, because it knows
   what the structural checks cannot. Create it; never commit it; never echo its
   contents anywhere.
+- `tools/privacy_precommit.py`, installed with `sh tools/install-privacy-hook.sh`
+  — the same denylist, enforced BEFORE the commit exists rather than by a test
+  someone runs afterwards. Point `$BRIEF_PRIVATE_DIR` at the filled-in Routine
+  prompts and it also derives the shapes that identify a person (addresses,
+  phone numbers, booking references, amounts, masked digits) from them, so the
+  values live in one private place instead of two.
 - The README screenshots are rendered from `sample_payload.json` alone, so a
   clean payload is what keeps the images clean.
 
