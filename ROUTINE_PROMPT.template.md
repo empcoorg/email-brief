@@ -203,6 +203,7 @@ STEP 2 — write ONE payload file, /tmp/eb/payload.json, holding everything you 
   * EVERY money movement carries its USD equivalent as well as its own currency. All money bars share ONE axis, and that axis is in USD, so a 10,200.00 MXN charge must arrive as amount 10200.00, currency "MXN", usd 551.35 — convert at a rate you looked up this run and state it in the detail text. Sending the raw foreign figure as the USD value would draw a ~$550 charge as though it were $10,200; the renderer rejects a non-USD row whose usd equals its raw amount. The brief still SHOWS the original currency and adds the converted figure beside it.
   * Omit a section by giving it an empty list; do not fabricate filler rows.
   * Every row must have exactly the field count the SPEC states.
+  * A QUOTE ROW (index, fund, stock, coin) may end with the time it was read — "Mon Mar 2, 4:00 PM EST", "Tue Mar 3, 9:55 AM EST". Give EVERY row in one table the SAME string when they were read at the same moment, which is the normal case: the renderer then states it once over the column instead of under every figure. Differ them only when the quotes really were taken at different times, and the renderer puts the times back on the rows.
   * Put text, not markup, in payload fields — the renderer escapes and styles it.
 
   * VOIP carries "messages" (rows of when, from, to, type, text) and "notes"; RETAIL carries "items" (rows of store, offer, dates/caveats) alongside its rewards line. Both render as tables, so give them rows rather than prose paragraphs.
