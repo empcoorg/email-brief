@@ -552,24 +552,31 @@ class TestNoHollowSections(unittest.TestCase):
         return [re.sub(r"<[^>]+>", "", h).strip() for h in found]
 
     RESEARCH = {  # key emptied -> heading that must vanish from page and email, text heading
-        "STOCKS": ("Large caps", "LARGE CAPS"),
+        "STOCKS": ("Large caps", "Large caps"),
         "JOBS_SECTORS": ("Jobs by sector", "Jobs by sector:"),
         "JOURNAL_ITEMS": ("Research &amp; publications", "RESEARCH & PUBLICATIONS"),
         "AI_ITEMS": ("AI &amp; programming", "AI & PROGRAMMING"),
         "FUNDS": ("Vanguard funds", "Vanguard funds:"),
     }
 
+    @staticmethod
+    def _carries(headings, heading):
+        """A numbered section heading is "11. AI & programming", so match the
+        name inside the heading rather than the whole string."""
+        return any(heading in h for h in headings)
+
     def test_each_empty_research_table_takes_its_heading_with_it(self):
         for key, (heading, text_heading) in self.RESEARCH.items():
             with self.subTest(key=key):
                 f, em, tx = render_all(payload(**{key: []}))
-                self.assertNotIn(heading, self.headings(f))
-                self.assertNotIn(heading, self.headings(em))
-                self.assertNotIn(text_heading, [l.strip() for l in tx.splitlines()])
+                self.assertFalse(self._carries(self.headings(f), heading))
+                self.assertFalse(self._carries(self.headings(em), heading))
+                self.assertFalse(any(text_heading in l for l in tx.splitlines()))
                 full_f, full_em, full_tx = render_all(payload())
-                self.assertIn(heading, self.headings(full_f), "the sample must carry it for this test to mean anything")
-                self.assertIn(heading, self.headings(full_em))
-                self.assertTrue(any(l.strip().startswith(text_heading) for l in full_tx.splitlines()))
+                self.assertTrue(self._carries(self.headings(full_f), heading),
+                                "the sample must carry it for this test to mean anything")
+                self.assertTrue(self._carries(self.headings(full_em), heading))
+                self.assertTrue(any(text_heading in l for l in full_tx.splitlines()))
 
     def test_no_output_draws_an_empty_table_on_an_all_empty_day(self):
         f, em, tx = render_all(_all_empty())
@@ -625,7 +632,10 @@ class TestNoHollowSections(unittest.TestCase):
         f, em, tx = render_all(p)
         self.assertNotIn("Upcoming travel", f + em)
         self.assertNotIn("UPCOMING TRAVEL", tx)
-        self.assertEqual(re.findall(r'<span class="num">(\d)\.', f), list("1234567"))
+        nums = re.findall(r'<span class="num">(\d+)\.', f)
+        self.assertEqual(nums, [str(i) for i in range(1, len(nums) + 1)],
+                         "numbering must close the gap the omitted section left")
+        self.assertNotIn("Upcoming travel", f)
 
     def test_the_fed_card_keeps_its_caption_when_only_the_jobs_table_goes(self):
         p = payload(JOBS_SECTORS=[])
@@ -645,16 +655,16 @@ class TestNoHollowSections(unittest.TestCase):
 
     def test_large_caps_alone_still_gets_a_card(self):
         f, em, tx = render_all(payload(MKT_ROWS=[], FUNDS=[], MKT_BULLETS=[]))
-        self.assertIn("Large caps", f)
+        self.assertIn("Large caps", f, "the market card carries the large-cap table")
         self.assertIn("Large caps", em)
-        self.assertIn("LARGE CAPS", tx)
+        self.assertIn("Large caps:", tx)
         self.assertNotIn("Vanguard funds", f + em)
 
     def test_a_card_that_was_never_drawn_is_never_shed(self):
         _, em, _ = render_all(payload(STOCKS=[], JOURNAL_ITEMS=[]), 30_000)
         from brief.render import LAST_EMAIL_REPORT
         self.assertTrue(LAST_EMAIL_REPORT["shed"], "the budget should have forced shedding")
-        for never in ("Large caps", "Research & publications"):
+        for never in ("Research & publications",):
             self.assertNotIn(never, LAST_EMAIL_REPORT["shed"])
 
 
@@ -1187,8 +1197,10 @@ class TestSectionOrderAndOmission(unittest.TestCase):
     def test_numbering_closes_the_gap_when_a_section_is_omitted(self):
         full, _, _ = render_all(payload())
         nopkg, _, _ = render_all(payload(PKG=[]))
-        self.assertEqual(re.findall(r'<span class="num">(\d)\.', full), list("12345678"))
-        self.assertEqual(re.findall(r'<span class="num">(\d)\.', nopkg), list("1234567"),
+        full_nums = re.findall(r'<span class="num">(\d+)\.', full)
+        nopkg_nums = re.findall(r'<span class="num">(\d+)\.', nopkg)
+        self.assertEqual(full_nums, [str(i) for i in range(1, len(full_nums) + 1)])
+        self.assertEqual(nopkg_nums, [str(i) for i in range(1, len(full_nums))],
                          "omitting a section must renumber, not leave a hole")
 
     def test_package_section_dropped_when_empty_kept_when_not(self):
@@ -1344,7 +1356,7 @@ class TestThreeHorizons(unittest.TestCase):
 
     def test_email_states_ytd_in_the_first_column(self):
         _, em, _ = render_all(payload())
-        for header in ("Index · Mon Mar 2, 4:00 PM EST close · YTD",
+        for header in ("Index · Mon Mar 2, 4:00 PM EST open · YTD",
                        "Fund · Mon Mar 2, 5:48 PM ET NAV · YTD",
                        "Asset · Tue Mar 3, 9:55 AM EST price · YTD"):
             self.assertIn(header, em, f"email missing {header!r}")
@@ -1382,7 +1394,8 @@ class TestEmailBudgetShedding(unittest.TestCase):
     them. The standalone file always carries everything.
     """
 
-    PROBES = {"US market": "Russell 2000", "Large caps": "AAPL",
+    # Large caps rides inside the market card, so shedding that card sheds it
+    PROBES = {"US market": "Russell 2000",
               "Fed & labor market": "Nonfarm payrolls", "Cryptocurrency": "DOGE",
               "AI & programming": "Cascade-2", "Research & publications": "diatom",
               "Retail sales": "Northwind rewards"}
@@ -1497,7 +1510,7 @@ class TestQuoteAsOfHeadings(unittest.TestCase):
     back into the rows when they disagree, which is the case where it is news.
     """
 
-    HEADS = (("US market", "Mon Mar 2, 4:00 PM EST close"),
+    HEADS = (("US market", "Mon Mar 2, 4:00 PM EST open"),
              ("Vanguard funds", "Mon Mar 2, 5:48 PM ET NAV"),
              ("Large caps", "Mon Mar 2, 4:00 PM EST price"),
              ("Cryptocurrency", "Tue Mar 3, 9:55 AM EST price"))
@@ -1522,7 +1535,7 @@ class TestQuoteAsOfHeadings(unittest.TestCase):
 
     def test_the_text_copy_says_it_over_the_table(self):
         _, _, tx = render_all(payload())
-        self.assertIn("All closes as of Mon Mar 2, 4:00 PM EST.", tx)
+        self.assertIn("All opens as of Mon Mar 2, 4:00 PM EST.", tx)
         self.assertIn("(all NAVs as of Mon Mar 2, 5:48 PM ET)", tx)
         self.assertIn("All prices as of Tue Mar 3, 9:55 AM EST.", tx)
         self.assertNotIn("(as of Mon Mar 2, 4:00 PM EST)", tx, "not on the rows as well")
@@ -1545,7 +1558,7 @@ class TestQuoteAsOfHeadings(unittest.TestCase):
         p["MKT_ROWS"][0][8] = "Tue Mar 3, 9:41 AM EST, mid-session"
         f, em, tx = render_all(p)
         market = self.table(f, "US market")
-        self.assertIn(">Close</th>", market, "a mixed table keeps the plain heading")
+        self.assertIn(">Open</th>", market, "a mixed table keeps the plain heading")
         self.assertIn("Tue Mar 3, 9:41 AM EST, mid-session", market)
         self.assertIn("(as of Tue Mar 3, 9:41 AM EST, mid-session)", tx)
 
@@ -1554,9 +1567,9 @@ class TestQuoteAsOfHeadings(unittest.TestCase):
         for key in ("MKT_ROWS", "STOCKS", "CRYPTO_ROWS"):
             p[key] = [list(r)[:8] for r in p[key]]
         f, em, _tx = render_all(p)
-        self.assertIn(">Close</th>", self.table(f, "US market"))
+        self.assertIn(">Open</th>", self.table(f, "US market"))
         self.assertIn(">Price</th>", self.table(f, "Large caps"))
-        self.assertIn("Index · close · YTD", em)
+        self.assertIn("Index · open · YTD", em)
 
     def test_a_stamp_that_already_names_the_quote_does_not_say_it_twice(self):
         from brief.render import quote_head_text
@@ -1572,3 +1585,177 @@ class TestQuoteAsOfHeadings(unittest.TestCase):
         f, _em, _tx = render_all(payload())
         css = f.split("<style>")[1].split("</style>")[0]
         self.assertIn("th .qh,td.stamp[data-l]::before{text-transform:none", css)
+
+
+class TestEverySectionIsNumbered(unittest.TestCase):
+    """A reader who sees 7, then three unnumbered cards, then 8, goes looking
+    for the section that is not missing."""
+
+    def test_the_numbers_run_unbroken_through_the_research_cards(self):
+        f, em, tx = render_all(payload())
+        page = re.findall(r'<span class="num">(\d+)\.</span>', f)
+        self.assertEqual(page, [str(i) for i in range(1, len(page) + 1)])
+        self.assertGreaterEqual(len(page), 13, "the sample carries every section")
+        email = re.findall(r'font-weight:600;">(\d+)\.</span>', em)
+        self.assertEqual(email, page, "the email numbers the same sections the page does")
+        text = [l.split(".")[0] for l in tx.splitlines() if re.match(r"^\d+\. [A-Z]", l)]
+        self.assertEqual(text, page, "and so does the text copy")
+
+    def test_the_research_cards_carry_their_numbers(self):
+        f, _em, _tx = render_all(payload())
+        for name in ("US market", "Cryptocurrency", "Fed &amp; labor market",
+                     "AI &amp; programming", "Research &amp; publications"):
+            self.assertRegex(f, r'<span class="num">\d+\.</span> ' + name)
+
+    def test_cryptocurrency_follows_the_market_directly(self):
+        f, em, tx = render_all(payload())
+        for doc, market, crypto, macro in (
+                (f, "US market", "Cryptocurrency", "Fed &amp; labor market"),
+                (em, "US market", "Cryptocurrency", "Fed &amp; labor market"),
+                (tx, "US MARKET", "CRYPTOCURRENCY", "FED & LABOR MARKET")):
+            self.assertLess(doc.index(market), doc.index(crypto))
+            self.assertLess(doc.index(crypto), doc.index(macro),
+                            "crypto sits between the market and the macro card")
+
+    def test_large_caps_rides_inside_the_market_section(self):
+        """It is split into its own table only because the email caps a table
+        at three columns; a number should mean one section everywhere."""
+        f, em, tx = render_all(payload())
+        self.assertNotRegex(f, r'<span class="num">\d+\.</span> Large caps')
+        self.assertIn("Large caps", f)
+        self.assertLess(em.index("Large caps"), em.index("Cryptocurrency"))
+
+
+class TestTheIndexColumnFollowsTheHour(unittest.TestCase):
+    """A morning brief goes out hours after the bell: the last close is
+    yesterday's news, the open is today's. By the evening the session has
+    ended and the close is the figure that matters."""
+
+    def evening(self, p):
+        p["MAST"]["title"] = "Evening Update"
+        return p
+
+    def test_the_morning_heads_the_column_open(self):
+        f, em, tx = render_all(payload())
+        self.assertRegex(f.replace("\n", " "), r'US market.*?EST open')
+        self.assertIn("· Mon Mar 2, 4:00 PM EST open ·", em)
+        self.assertIn("All opens as of", tx)
+
+    def test_the_evening_heads_it_close(self):
+        f, em, tx = render_all(self.evening(payload()))
+        self.assertRegex(f.replace("\n", " "), r'US market.*?EST close')
+        self.assertIn("· Mon Mar 2, 4:00 PM EST close ·", em)
+        self.assertIn("All closes as of", tx)
+
+    def test_only_the_index_column_changes(self):
+        """A NAV is a NAV and a share price is a price at any hour."""
+        f, _em, _tx = render_all(self.evening(payload()))
+        self.assertIn("NAV", f.split("Vanguard funds")[1][:400])
+        self.assertIn("price", f.split("Large caps")[1][:400])
+
+
+class TestSparklines(unittest.TestCase):
+    """A row of figures says what changed; the shape says how it got there."""
+
+    def series(self, name):
+        return payload()["SPARKS"][name]["series"]
+
+    def test_each_quote_table_draws_a_trend_column_before_1d(self):
+        f, _em, _tx = render_all(payload())
+        for after in ("US market", "Vanguard funds", "Large caps", "Cryptocurrency"):
+            head = f.split(after)[1].split("</thead>")[0]
+            self.assertIn("Trend", head, f"{after} has no trend column")
+            self.assertLess(head.index("Trend"), head.index(">1D"),
+                            f"{after}: the trend sits before the 1D bars")
+
+    def test_the_line_is_coloured_by_where_the_series_ended(self):
+        from brief.render import spark_tone
+        self.assertEqual(spark_tone([10, 9, 11]), "pos")
+        self.assertEqual(spark_tone([10, 11, 9]), "neg")
+        self.assertEqual(spark_tone([10, 11, 10]), "neu")
+        f, _em, _tx = render_all(payload())
+        self.assertIn("spark sp-pos", f)
+        self.assertIn("spark sp-neg", f)
+
+    def test_the_drawing_is_transparent_and_scaled_to_its_own_row(self):
+        f, _em, _tx = render_all(payload())
+        css = f.split("<style>")[1].split("</style>")[0]
+        self.assertIn("background:transparent", css)
+        self.assertIn(".spark .sp-base", css, "a dashed rule marks where the series began")
+        cell = f.split('data-l="Trend"')[1][:1400]
+        self.assertIn("sp-hi", cell); self.assertIn("sp-lo", cell)
+        self.assertIn("sp-when", cell, "the cell says what window it covers")
+
+    def test_a_series_too_short_to_be_a_trend_is_not_drawn(self):
+        from brief.render import spark_svg, spark_points
+        self.assertEqual(spark_points([1, 2]), [])
+        self.assertEqual(spark_svg([1, 2]), "")
+        p = payload()
+        p["SPARKS"] = {}
+        f, _em, _tx = render_all(p)
+        self.assertNotIn("<svg", f.split("US market")[1].split("</table>")[0])
+        self.assertIn("—", f.split('data-l="Trend"')[1][:200], "an em dash, not an empty cell")
+
+    def test_the_email_and_text_carry_the_shape_as_characters(self):
+        """The mail path strips every image and every <svg>, so a drawn
+        sparkline would simply vanish there."""
+        from brief.render import spark_text
+        self.assertEqual(spark_text([1, 2, 3]), "▁▄█")
+        _f, em, tx = render_all(payload())
+        self.assertNotIn("<svg", em, "an svg in the email is stripped on the way")
+        for doc in (em, tx):
+            self.assertRegex(doc, r"[▁-█]{3,}")
+
+    def test_the_scale_keeps_the_digits_that_move(self):
+        from brief.render import spark_fmt
+        self.assertEqual(spark_fmt(0.1423), "0.1423")
+        self.assertEqual(spark_fmt(6412.3), "6,412.30")
+        f, _em, _tx = render_all(payload())
+        doge = f.split("DOGE")[1][:2400]
+        hi = re.search(r'class="sp-hi"><span>([^<]+)', doge).group(1)
+        lo = re.search(r'class="sp-lo">([^<]+)', doge).group(1)
+        self.assertNotEqual(hi, lo, "a scale whose ends print the same is no scale")
+
+
+class TestSourcesAreNamed(unittest.TestCase):
+    def test_the_ai_column_names_the_source_instead_of_saying_open(self):
+        f, em, tx = render_all(payload())
+        ai = f.split("AI &amp; programming")[1].split("</table>")[0]
+        self.assertNotIn(">open</a>", ai, "a column of 'open' names nothing")
+        for name in ("arXiv", "The Register", "GitHub"):
+            self.assertIn(name, ai)
+            self.assertIn(name, em)
+        self.assertIn("arXiv: https://arxiv.org", tx)
+
+    def test_an_unknown_host_falls_back_to_its_domain(self):
+        from brief.links import source_label
+        self.assertEqual(source_label("https://blog.example.com/x"), "example.com")
+        self.assertEqual(source_label("not a url"), "open")
+
+
+class TestJournalByline(unittest.TestCase):
+    """"not captured (et al.)" is a row's worth of space spent saying nothing."""
+
+    def test_the_institution_follows_the_authors(self):
+        f, em, tx = render_all(payload())
+        for doc in (f, em, tx):
+            self.assertIn("Cascade Institute of Marine Science", doc)
+        self.assertIn("Okafor et al. · Cascade Institute of Marine Science", f)
+
+    def test_an_unreadable_author_list_leaves_the_institution_alone(self):
+        f, _em, tx = render_all(payload())
+        self.assertNotIn("not captured", f + tx)
+        self.assertIn("Northwind Institute of Technology", f)
+
+    def test_neither_means_no_byline_at_all(self):
+        from brief.render import journal_byline
+        self.assertEqual(journal_byline("not captured (et al.)", ""), "")
+        p = payload()
+        for row in p["JOURNAL_ITEMS"]:
+            row[2] = "not captured (et al.)"
+            if len(row) > 6:
+                row[6] = ""
+        f, _em, _tx = render_all(p)
+        papers = f.split("Research &amp; publications")[1].split("</table>")[0]
+        self.assertNotIn("not captured", papers)
+        self.assertNotIn('<span class="meta"></span>', papers, "no empty byline line")

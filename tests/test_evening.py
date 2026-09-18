@@ -206,7 +206,7 @@ class TestPayloadEmbedding(unittest.TestCase):
 class TestEveningMerge(unittest.TestCase):
     def test_a_section_with_nothing_new_is_the_morning_section_verbatim(self):
         morning, evening = payload(), quiet_evening()
-        merged, _ = merge(morning, evening, ["Large caps", "Fed & labor market"], "10:12 AM PDT")
+        merged, _ = merge(morning, evening, ["US market", "Fed & labor market"], "10:12 AM PDT")
         for k in ("STOCKS", "MACRO_ROWS", "JOBS_SECTORS", "MACRO_NOTE"):
             self.assertEqual(merged[k], morning[k], f"{k} must carry unchanged")
         self.assertEqual(merged["CARRIED"]["merged"], [])
@@ -220,7 +220,7 @@ class TestEveningMerge(unittest.TestCase):
 
     def test_carrying_does_not_touch_other_sections(self):
         morning, evening = payload(), quiet_evening()
-        merged, _ = merge(morning, evening, ["Large caps"], "x")
+        merged, _ = merge(morning, evening, ["US market"], "x")
         self.assertEqual(merged["CRYPTO_ROWS"], evening["CRYPTO_ROWS"])
 
     def test_an_unknown_section_name_is_an_error(self):
@@ -229,7 +229,7 @@ class TestEveningMerge(unittest.TestCase):
 
     def test_carried_sections_are_labelled_and_the_label_does_not_leak(self):
         morning, evening = payload(), quiet_evening()
-        merged, _ = merge(morning, evening, ["Large caps"], "Sun Sep 13, 10:12 AM PDT")
+        merged, _ = merge(morning, evening, ["US market"], "Sun Sep 13, 10:12 AM PDT")
         fh, em, tx = R.render_all(merged)
         label = "Carried from this morning's brief (Sun Sep 13, 10:12 AM PDT)"
         for name, doc in (("email", em), ("page", fh), ("text", tx)):
@@ -241,7 +241,7 @@ class TestEveningMerge(unittest.TestCase):
     def test_decision(self):
         quiet = quiet_evening()
         self.assertEqual(decide(quiet, [])[0], False)
-        self.assertEqual(decide(quiet, ["Large caps"])[0], True)
+        self.assertEqual(decide(quiet, ["US market"])[0], True)
 
 
 class TestEveningCli(unittest.TestCase):

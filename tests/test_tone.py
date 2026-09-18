@@ -86,8 +86,8 @@ class TestColouredIntoTheBrief(unittest.TestCase):
         market = f.split("US market")[1].split("Cryptocurrency")[0]
         # The label carries the shared as-of when the rows agree on one, so the
         # column is matched by the word it ends with rather than the word alone.
-        self.assertRegex(market, r'data-l="[^"]*close"><span class="dir-pos"', "a day up reads green")
-        self.assertRegex(market, r'data-l="[^"]*close"><span class="dir-neg"', "a day down reads red")
+        self.assertRegex(market, r'data-l="[^"]*open"><span class="dir-pos"', "a day up reads green")
+        self.assertRegex(market, r'data-l="[^"]*open"><span class="dir-neg"', "a day down reads red")
         self.assertRegex(market, r'data-l="[^"]*NAV"><span class="dir-(pos|neg)"')
         crypto = f.split("Cryptocurrency")[1][:4000]
         self.assertRegex(crypto, r'data-l="[^"]*price"><span class="dir-(pos|neg)"')
@@ -99,14 +99,14 @@ class TestColouredIntoTheBrief(unittest.TestCase):
         f, em, tx = render_all(p)
         indexes = f.split("US market")[1].split("</table>")[0]
         head, body = indexes.split("<tbody>")
-        self.assertIn("9:41 AM EST, mid-session close", head, "stated over the column")
+        self.assertIn("9:41 AM EST, mid-session open", head, "stated over the column")
         # The rows keep it only as the hidden data-l label, which is what the
         # phone layout prints in place of the heading it hides.
         cells = re.sub(r'\sdata-l="[^"]*"', "", body)
         self.assertNotIn("9:41 AM EST", cells, "no row repeats it beside the figure")
         self.assertEqual(em.count("9:41 AM EST, mid-session"), 1,
                          "the email states the shared time once, in the heading")
-        self.assertIn("All closes as of 9:41 AM EST, mid-session.", tx)
+        self.assertIn("All opens as of 9:41 AM EST, mid-session.", tx)
 
     def test_quotes_taken_at_different_times_each_keep_their_own(self):
         """Then the time is news, and belongs beside the figure it dates."""
@@ -121,17 +121,17 @@ class TestColouredIntoTheBrief(unittest.TestCase):
             self.assertIn("9:41 AM EST, mid-session", doc)
             self.assertIn("Mon Mar 2, 4:00 PM EST close", doc)
         self.assertIn("(as of 9:41 AM EST, mid-session)", tx)
-        self.assertNotIn("All closes as of", tx)
+        self.assertNotIn("All opens as of", tx)
 
     def test_a_row_without_a_time_renders_exactly_as_before(self):
         """A run written against the old eight-field row loses nothing."""
         p = payload()
         p["MKT_ROWS"] = [list(r)[:8] for r in p["MKT_ROWS"]]
         f, _em, tx = render_all(p)
-        market = tx.split("US MARKET")[1].split("LARGE CAPS")[0]
+        market = tx.split("US MARKET")[1].split("Large caps:")[0]
         self.assertNotIn("(as of ", market, "no time stated, nothing added")
-        self.assertIn("S&P 500: 6,412.30 |", market)
-        self.assertRegex(f.split("US market")[1][:3000], r'data-l="Close"><span class="dir-pos">6,412.30</span>')
+        self.assertRegex(market, r"S&P 500: 6,412\.30 ")   # its sparkline may follow
+        self.assertRegex(f.split("US market")[1][:3000], r'data-l="Open"><span class="dir-pos">6,412.30</span>')
 
 
 class TestAsOfCarriesItsYear(unittest.TestCase):

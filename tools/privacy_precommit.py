@@ -93,12 +93,32 @@ def denylist_patterns():
                 if l.strip() and not l.lstrip().startswith("#")]
 
 
+def already_public():
+    """Text from the files the template publishes by design.
+
+    A filled-in prompt is the template plus the owner's answers, so deriving
+    from it also derives the TEMPLATE'S OWN examples - "$2,450.00", the USPS
+    sender address - and those are already in this repo. Flagging them blocks
+    every documentation commit, which is how a hook gets uninstalled. A value
+    that is already published is not what this hook is for; the denylist
+    covers anything that got in by mistake.
+    """
+    out = []
+    for path in ("ROUTINE_PROMPT.template.md", "sample_payload.json", "README.md",
+                 "CLAUDE.md"):
+        r = subprocess.run(["git", "show", f"HEAD:{path}"], cwd=ROOT, capture_output=True)
+        if r.returncode == 0:
+            out.append(r.stdout.decode("utf-8", "ignore"))
+    return "\n".join(out)
+
+
 def derived_patterns():
     """Literal values lifted out of the owner's own filled-in prompts."""
     private = os.environ.get("BRIEF_PRIVATE_DIR", "")
     if not private or not os.path.isdir(os.path.expanduser(private)):
         return []
     values = set()
+    public = already_public()
     for name in sorted(os.listdir(os.path.expanduser(private))):
         path = os.path.join(os.path.expanduser(private), name)
         if not os.path.isfile(path):
@@ -109,7 +129,8 @@ def derived_patterns():
             continue
         for shape in DERIVED:
             for hit in re.findall(shape, text):
-                if hit not in ALLOW and len(hit) > 5 and identifying(hit):
+                if (hit not in ALLOW and len(hit) > 5 and identifying(hit)
+                        and hit not in public):
                     values.add(hit)
     return [re.escape(v) for v in sorted(values)]
 

@@ -139,3 +139,53 @@ def flightaware_url(flight_number):
     """
     ident = flight_ident(flight_number)
     return FLIGHTAWARE.format(ident) if ident else None
+
+
+# The word a reader recognises, for a link that would otherwise say "open".
+# A link's value is its source: "arXiv" and "Reuters" are read differently,
+# and "open" three times in a column tells a reader nothing about either.
+SOURCE_NAMES = {
+    "arxiv.org": "arXiv", "github.com": "GitHub", "news.ycombinator.com": "HN",
+    "reuters.com": "Reuters", "apnews.com": "AP", "bloomberg.com": "Bloomberg",
+    "wsj.com": "WSJ", "ft.com": "FT", "nytimes.com": "NYT", "bbc.co.uk": "BBC",
+    "bbc.com": "BBC", "cnbc.com": "CNBC", "theverge.com": "The Verge",
+    "arstechnica.com": "Ars Technica", "techcrunch.com": "TechCrunch",
+    "wired.com": "Wired", "zdnet.com": "ZDNet", "theregister.com": "The Register",
+    "openai.com": "OpenAI", "anthropic.com": "Anthropic", "deepmind.google": "DeepMind",
+    "ai.googleblog.com": "Google AI", "blog.google": "Google", "microsoft.com": "Microsoft",
+    "apple.com": "Apple", "meta.com": "Meta", "ai.meta.com": "Meta AI",
+    "huggingface.co": "Hugging Face", "nvidia.com": "NVIDIA", "python.org": "Python",
+    "djangoproject.com": "Django", "kernel.org": "kernel.org", "mozilla.org": "Mozilla",
+    "nature.com": "Nature", "science.org": "Science", "cell.com": "Cell",
+    "nih.gov": "NIH", "nist.gov": "NIST", "cisa.gov": "CISA", "bls.gov": "BLS",
+    "federalreserve.gov": "the Fed", "sec.gov": "SEC", "coindesk.com": "CoinDesk",
+    "coingecko.com": "CoinGecko", "stackoverflow.blog": "Stack Overflow",
+}
+_WWW = re.compile(r"^(?:www|m|amp|blog|news|about|developer|developers|docs)\.")
+
+
+def source_label(link, fallback="open"):
+    """One or two words naming where a link goes.
+
+    >>> source_label("https://arxiv.org/abs/2601.00001")
+    'arXiv'
+    >>> source_label("https://www.theverge.com/2026/3/2/thing")
+    'The Verge'
+    >>> source_label("https://blog.example.com/post"), source_label("")
+    ('example.com', 'open')
+    """
+    host = re.sub(r"^https?://", "", str(link or "").strip()).split("/")[0].lower()
+    host = host.split("@")[-1].split(":")[0]
+    if "." not in host:
+        return fallback                     # not an address, so name nothing
+    for candidate in (host, _WWW.sub("", host)):
+        if candidate in SOURCE_NAMES:
+            return SOURCE_NAMES[candidate]
+    bare = _WWW.sub("", host)
+    # a registrable-looking pair: "example.co.uk" keeps three labels
+    parts = bare.split(".")
+    if len(parts) > 2 and parts[-2] in ("co", "com", "ac", "org", "gov", "net"):
+        bare = ".".join(parts[-3:])
+    elif len(parts) > 2:
+        bare = ".".join(parts[-2:])
+    return bare or fallback

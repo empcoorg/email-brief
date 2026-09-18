@@ -15,7 +15,7 @@ import base64, hashlib, html as H, json, math, os
 from .axes import (fraction, money_axis as _money_axis_calc, money_labels, money_tick,
                    nice_step_top, pct_axis, pct_labels, pct_tick, steps_per_side,
                    tick_positions)
-from .links import AIRLINE_NAMES
+from .links import AIRLINE_NAMES, source_label
 from .theme import (BODY_FS, D, F_B, F_H, F_M, GOOGLE_FONTS, L, attr, e,
                     space_ranges, url)
 
@@ -114,6 +114,7 @@ def render_all(payload, email_budget=None, text_budget=None, full_url=None,
     # prompt renders with the section simply absent.
     globals()["AI_SPEND"] = payload.get("AI_SPEND") or {}
     globals()["TRAVEL"] = payload.get("TRAVEL") or []
+    globals()["SPARKS"] = payload.get("SPARKS") or {}
     if full_url and url(full_url) == "#":
         # A refused link would still print its text, so refuse the address
         # outright and let the run see why, instead of shipping a dead link.
@@ -526,6 +527,21 @@ tr.hp.ok>td:first-child{{border-left-color:var(--positive)}}
 table{{border-collapse:collapse;width:100%;min-width:640px;font-size:14px}}
 th{{text-align:left;font-family:Archivo,sans-serif;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);font-weight:600;padding:10px 12px;border-bottom:1px solid var(--line-strong);background:var(--surface-2)}}
 th .qh,td.stamp[data-l]::before{{text-transform:none;letter-spacing:.01em;font-size:10px}}
+.spark{{display:block;width:100%;min-width:96px}}
+.spark svg{{display:block;width:100%;height:34px;background:transparent;overflow:visible}}
+.spark .sp-line{{fill:none;stroke-width:1.6;vector-effect:non-scaling-stroke;stroke-linejoin:round;stroke-linecap:round}}
+.spark .sp-area{{stroke:none;opacity:.18}}
+.sp-pos .sp-line,.sp-pos .sp-dot{{stroke:var(--positive);fill:var(--positive)}} .sp-pos .sp-area{{fill:var(--positive)}}
+.sp-neg .sp-line,.sp-neg .sp-dot{{stroke:var(--negative);fill:var(--negative)}} .sp-neg .sp-area{{fill:var(--negative)}}
+.sp-neu .sp-line,.sp-neu .sp-dot{{stroke:var(--ink-3);fill:var(--ink-3)}} .sp-neu .sp-area{{fill:var(--ink-3)}}
+.spark .sp-dot{{stroke-width:0}}
+/* the scale: high at the top, low at the bottom, hugging the line's own box */
+.spark .sp-hi,.spark .sp-foot{{display:flex;justify-content:space-between;gap:6px;font:500 8.5px 'JetBrains Mono',monospace;color:var(--ink-3);line-height:1.3}}
+.spark .sp-foot{{font-family:"Source Sans 3",sans-serif;font-size:9.5px}}
+.spark .sp-foot .sp-when{{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
+.spark .sp-base{{stroke:var(--ink-3);stroke-width:1;stroke-dasharray:2 3;opacity:.55;vector-effect:non-scaling-stroke}}
+th.sp-head{{text-align:left}}
+td.spark-cell{{min-width:110px}}
 td{{padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}} tr:last-child td{{border-bottom:0}}
 td.num{{text-align:right;white-space:nowrap}}
 .dir-pos,.c-pos{{color:var(--positive);font-weight:600}} .dir-neg,.c-neg{{color:var(--negative);font-weight:600}} .dir-neu{{color:var(--ink-2);font-weight:600}} .c-accent{{color:var(--accent);font-weight:600}} .c-warn{{color:var(--warning);font-weight:600}} .muted{{color:var(--ink-3)}}
@@ -818,14 +834,15 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
     # always looked, because the swallowed cards inherited the market card's
     # width, and a one-third column squeezes the AI and journal tables unreadably.
     research = []
-    if MKT_ROWS or FUNDS or STOCKS:
-        research.append('<div class="card wide"><h2>US market</h2>')
+    if has_market():
+        research.append(f'<div class="card wide"><h2><span class="num">{num()}.</span> US market</h2>')
         if MKT_ROWS:
             stamp = shared_asof([r[8:] for r in MKT_ROWS])
-            research.append('<div class="tbl-wrap"><table><thead><tr><th>Index</th><th style="text-align:right">{3}</th><th>1D{0}</th><th>1W{1}</th><th>YTD{2}</th></tr></thead><tbody>'.format(axis_div(MKT_24), axis_div(MKT_7D), axis_div(MKT_YTD), quote_head("Close", stamp)))
+            research.append('<div class="tbl-wrap"><table><thead><tr><th>Index</th><th style="text-align:right">{3}</th><th class="sp-head">{4}</th><th>1D{0}</th><th>1W{1}</th><th>YTD{2}</th></tr></thead><tbody>'.format(axis_div(MKT_24), axis_div(MKT_7D), axis_div(MKT_YTD), quote_head(quote_word(), stamp), spark_head()))
             for n, c, p1, v1, p7, v7, py, vy, *asof in MKT_ROWS:
                 research.append('<tr>' + tdl("Index", e(n), "mono")
-                                + tdl(quote_head_text("Close", stamp), quote_cell_file(c, v1, [] if stamp else asof), "num mono stamp")
+                                + tdl(quote_head_text(quote_word(), stamp), quote_cell_file(c, v1, [] if stamp else asof), "num mono stamp")
+                                + tdl(spark_head(), spark_cell_file(n), "spark-cell")
                                 + tdl("1D", horizon_cell_file(p1, v1, MKT_24, "pts"))
                                 + tdl("1W", horizon_cell_file(p7, v7, MKT_7D, "pts"))
                                 + tdl("YTD", horizon_cell_file(py, vy, MKT_YTD, "pts")) + '</tr>')
@@ -836,10 +853,11 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
             # carries the same date in the heading, the column is the same
             # string N more times, so it goes.
             asof_th = "" if stamp else "<th>Date</th>"
-            research.append(f'<h3>Vanguard funds</h3><div class="tbl-wrap"><table><thead><tr><th>Fund</th><th style="text-align:right">{quote_head("NAV", stamp)}</th><th>1D{axis_div(FUND_1D)}</th><th>1W{axis_div(FUND_1W)}</th><th>YTD{axis_div(FUND_YTD)}</th>{asof_th}</tr></thead><tbody>')
+            research.append(f'<h3>Vanguard funds</h3><div class="tbl-wrap"><table><thead><tr><th>Fund</th><th style="text-align:right">{quote_head("NAV", stamp)}</th><th class="sp-head">{spark_head()}</th><th>1D{axis_div(FUND_1D)}</th><th>1W{axis_div(FUND_1W)}</th><th>YTD{axis_div(FUND_YTD)}</th>{asof_th}</tr></thead><tbody>')
             for tk, nm, nav, a1, v1, a7, v7, ay, vy, asof, note in FUNDS:
                 research.append('<tr>' + tdl("Fund", f'<span class="lead">{e(tk)}</span><br><span class="meta">{e(nm)}</span>', "mono")
                                 + tdl(quote_head_text("NAV", stamp), quote_cell_file(nav, v1, [] if stamp else asof), "num mono stamp")
+                                + tdl(spark_head(), spark_cell_file(tk), "spark-cell")
                                 + tdl("1D", horizon_cell_file(a1, v1, FUND_1D))
                                 + tdl("1W", horizon_cell_file(a7, v7, FUND_1W))
                                 + tdl("YTD", horizon_cell_file(ay, vy, FUND_YTD))
@@ -847,23 +865,27 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
             research.append(f'</tbody></table></div>{axis_foot(FUND_1D, "1D NAV change, %")}{axis_foot(FUND_1W, "1W NAV change, %")}{axis_foot(FUND_YTD, "YTD NAV change, %")}<div class="cap">Change from the prior published NAV (1D), over one trading week (1W), and since the previous year-end (YTD) - each in $ and %. {axis_note(FUND_1D, "1D axis")}; {axis_note(FUND_1W, "1W axis")}; {axis_note(FUND_YTD, "YTD axis")}. ' + e(" ".join(f"{tk}: {note}" for tk, nm, nav, a1, v1, a7, v7, ay, vy, asof, note in FUNDS)) + '</div>')
         if STOCKS:
             stamp = shared_asof([r[8:] for r in STOCKS])
-            research.append(f'<h3>Large caps</h3><div class="tbl-wrap"><table><thead><tr><th>Ticker</th><th style="text-align:right">{quote_head("Price", stamp)}</th><th>1D{axis_div(STK_1D)}</th><th>1W{axis_div(STK_1W)}</th><th>YTD{axis_div(STK_YTD)}</th></tr></thead><tbody>')
+            research.append(f'<h3>Large caps</h3><div class="tbl-wrap"><table><thead><tr><th>Ticker</th><th style="text-align:right">{quote_head("Price", stamp)}</th><th class="sp-head">{spark_head()}</th><th>1D{axis_div(STK_1D)}</th><th>1W{axis_div(STK_1W)}</th><th>YTD{axis_div(STK_YTD)}</th></tr></thead><tbody>')
             for tk, pr, a1, v1, a7, v7, ay, vy, *asof in STOCKS:
                 research.append('<tr>' + tdl("Ticker", f'<span class="lead">{e(tk)}</span>', "mono")
                                 + tdl(quote_head_text("Price", stamp), quote_cell_file(pr, v1, [] if stamp else asof), "num mono stamp")
+                                + tdl(spark_head(), spark_cell_file(tk), "spark-cell")
                                 + tdl("1D", horizon_cell_file(a1, v1, STK_1D))
                                 + tdl("1W", horizon_cell_file(a7, v7, STK_1W))
                                 + tdl("YTD", horizon_cell_file(ay, vy, STK_YTD)) + '</tr>')
             research.append(f'</tbody></table></div>{axis_foot(STK_1D, "1D move, %")}{axis_foot(STK_1W, "1W move, %")}{axis_foot(STK_YTD, "YTD move, %")}<div class="cap">Same horizons as the indexes, each in $ per share and %. {axis_note(STK_1D, "1D axis")}; {axis_note(STK_1W, "1W axis")}; {axis_note(STK_YTD, "YTD axis")}.</div>')
+        if MKT_BULLETS:
+            research.append('<ul>' + "".join(li_lead(b) for b in MKT_BULLETS) + '</ul>')
         research.append('</div>')
-    if CRYPTO_ROWS or CRYPTO_BULLETS:
-        research.append('<div class="card wide"><h2>Cryptocurrency</h2>')
+    if has_crypto():
+        research.append(f'<div class="card wide"><h2><span class="num">{num()}.</span> Cryptocurrency</h2>')
         if CRYPTO_ROWS:
             stamp = shared_asof([r[8:] for r in CRYPTO_ROWS])
-            research.append(f'<div class="tbl-wrap"><table><thead><tr><th>Asset</th><th style="text-align:right">{quote_head("Price", stamp)}</th><th>1D{axis_div(CRY_24)}</th><th>1W{axis_div(CRY_7D)}</th><th>YTD{axis_div(CRY_YTD)}</th></tr></thead><tbody>')
+            research.append(f'<div class="tbl-wrap"><table><thead><tr><th>Asset</th><th style="text-align:right">{quote_head("Price", stamp)}</th><th class="sp-head">{spark_head()}</th><th>1D{axis_div(CRY_24)}</th><th>1W{axis_div(CRY_7D)}</th><th>YTD{axis_div(CRY_YTD)}</th></tr></thead><tbody>')
             for n, pr, v1, a1, v7, a7, vy, ay, *asof in CRYPTO_ROWS:
                 research.append('<tr>' + tdl("Asset", f'<span class="lead">{e(n)}</span>', "mono")
                                 + tdl(quote_head_text("Price", stamp), quote_cell_file(pr, v1, [] if stamp else asof), "num mono stamp")
+                                + tdl(spark_head(), spark_cell_file(n), "spark-cell")
                                 + tdl("1D", horizon_cell_file(a1, v1, CRY_24, reverse=True))
                                 + tdl("1W", horizon_cell_file(a7, v7, CRY_7D, reverse=True))
                                 + tdl("YTD", horizon_cell_file(ay, vy, CRY_YTD, reverse=True)) + '</tr>')
@@ -871,8 +893,8 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
         if CRYPTO_BULLETS:
             research.append('<ul>' + "".join(li_lead(b) for b in CRYPTO_BULLETS) + '</ul>')
         research.append('</div>')
-    if MACRO_ROWS or JOBS_SECTORS:
-        research.append('<div class="card wide"><h2>Fed &amp; labor market</h2>')
+    if has_macro():
+        research.append(f'<div class="card wide"><h2><span class="num">{num()}.</span> Fed &amp; labor market</h2>')
         if MACRO_ROWS:
             research.append('<div class="tbl-wrap"><table><thead><tr><th>Indicator</th><th>Latest</th><th>Change · context</th><th>Date</th></tr></thead><tbody>')
             for name, latest, context, asof in MACRO_ROWS:
@@ -892,18 +914,20 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
             research.append('</tbody></table></div>')
         research.append(f'<div class="cap">{e(MACRO_NOTE)}</div></div>')
     if AI_ITEMS:
-        research.append('<div class="card wide"><h2>AI &amp; programming</h2><div class="tbl-wrap"><table><thead><tr><th>Item</th><th>What it means</th><th>Source</th></tr></thead><tbody>')
+        research.append(f'<div class="card wide"><h2><span class="num">{num()}.</span> AI &amp; programming</h2><div class="tbl-wrap"><table><thead><tr><th>Item</th><th>What it means</th><th>Source</th></tr></thead><tbody>')
         for t, d, link in AI_ITEMS:
             research.append('<tr>' + tdl("Item", f'<span class="lead">{e(t)}</span>')
                             + tdl("What it means", e(d))
-                            + tdl("Source", f'<a href="{url(link)}">open</a>') + '</tr>')
+                            + tdl("Source", f'<a href="{url(link)}">{e(source_label(link))}</a>') + '</tr>')
         research.append('</tbody></table></div></div>')
     # No papers means no card - it used to print "Journals scanned: ;".
     if JOURNAL_ITEMS:
-        research.append('<div class="card wide"><h2>Research &amp; publications</h2><div class="tbl-wrap"><table><thead><tr><th>Journal \u00b7 date</th><th>Paper</th><th>Takeaway</th></tr></thead><tbody>')
-        for j, t, au, d, tk, link in JOURNAL_ITEMS:
+        research.append(f'<div class="card wide"><h2><span class="num">{num()}.</span> Research &amp; publications</h2><div class="tbl-wrap"><table><thead><tr><th>Journal \u00b7 date</th><th>Paper</th><th>Takeaway</th></tr></thead><tbody>')
+        for j, t, au, d, tk, link, *rest in JOURNAL_ITEMS:
+            by = journal_byline(au, rest[0] if rest else "")
             research.append('<tr>' + tdl("Journal \u00b7 date", f'<span class="lead">{e(j)}</span><br><span class="meta">{e(d)}</span>')
-                            + tdl("Paper", f'<a href="{url(link)}"><b>{e(t)}</b></a><br><span class="meta">{e(au)}</span>')
+                            + tdl("Paper", f'<a href="{url(link)}"><b>{e(t)}</b></a>'
+                                           + (f'<br><span class="meta">{e(by)}</span>' if by else ""))
                             + tdl("Takeaway", e(tk)) + '</tr>')
         research.append(f'</tbody></table></div><div class="cap">Journals scanned: {e(JOURNALS)}; items newly published since the previous run.</div></div>')
     if research:
@@ -1265,6 +1289,247 @@ def with_year(text):
     return text[:m.end()] + sep + year + text[m.end():]
 
 
+DOT = "\u00b7"
+
+
+def large_caps_email():
+    """The Large caps table for the email, as a fragment of the market card."""
+    rws = []
+    stamp = shared_asof([r[8:] for r in STOCKS])
+    for tk, pr, a1, v1, a7, v7, ay, vy, *asof in STOCKS:
+        ky = L["pos"] if vy >= 0 else L["neg"]
+        rws.append([td(f'{lead(tk)}<br>{quote_cell_email(pr, v1, [] if stamp else asof)}<br>{sp(f"YTD {pct_str(vy)} {arrow(vy)}", ky)}{spark_row_email(tk)}', mono=True),
+                    td(f'<div style="text-align:center">{sp(f"{e(a1)} {DOT} {pct_str(v1)} {arrow(v1)}", L["pos"] if v1 >= 0 else L["neg"])}</div>{em_bar_div(v1, STK_1D)}', mono=True),
+                    td(f'<div style="text-align:center">{sp(f"{e(a7)} {DOT} {pct_str(v7)} {arrow(v7)}", L["pos"] if v7 >= 0 else L["neg"])}</div>{em_bar_div(v7, STK_1W)}', mono=True)])
+    return h3("Large caps") + tbl([f'Ticker {DOT} {quote_head_text("price", stamp)} {DOT} YTD',
+                                   th_axis("1D", pct_labels(STK_1D)), th_axis("1W", pct_labels(STK_1W))],
+                                  rws, ["30%", "35%", "35%"])
+
+
+SPARK_W, SPARK_H = 132, 34          # the column is narrow; the shape is the point
+SPARK_PAD = 3
+
+
+def spark_text_suffix(name):
+    """" \u2581\u2584\u2588 (9:30 AM \u2192 1:14 PM ET)" for the text copy, or nothing."""
+    series, window = spark_for(name)
+    shape = spark_text(series)
+    if not shape:
+        return ""
+    return f" {shape}" + (f" ({window})" if window else "")
+
+
+def spark_row_email(name):
+    """The row's sparkline for the email, on its own line under the figure."""
+    series, window = spark_for(name)
+    cell = spark_cell_email(series, window)
+    return f"<br>{cell}" if cell else ""
+
+
+def spark_cell_file(name, fmt=None):
+    """The drawn sparkline for a row, or a quiet dash when the run had no series."""
+    series, window = spark_for(name)
+    svg = spark_svg(series, window, fmt)
+    return svg or '<span class="muted">\u2014</span>'
+
+
+def spark_for(name):
+    """(series, window) for a row, from the payload's SPARKS, or ([], "")."""
+    entry = (SPARKS or {}).get(str(name).strip()) or {}
+    return entry.get("series") or [], str(entry.get("window") or "").strip()
+
+
+def spark_head():
+    """The trend column's heading. It says nothing about scale, because each
+    row is scaled to itself - the labels that matter are in the cell."""
+    return "Trend"
+
+
+def spark_points(series):
+    """The numbers a sparkline draws, or [] when there is nothing to draw.
+
+    A run gives a plain list of prices in time order. One point is not a line
+    and a flat line is not news, so both come back empty rather than drawn as
+    a misleading horizontal rule at an arbitrary height.
+    """
+    out = []
+    for v in series or []:
+        try:
+            out.append(float(v))
+        except (TypeError, ValueError):
+            return []
+    return out if len(out) >= 3 else []
+
+
+def spark_path(series, w=SPARK_W, h=SPARK_H, pad=SPARK_PAD):
+    """(path, area, last_xy, low, high) in SVG user units, or None.
+
+    The first point is the baseline the colour is judged against - the open
+    for an index, 24 hours ago for a coin - so the line is green when the
+    series ends above where it started and red when it ends below.
+    """
+    pts = spark_points(series)
+    if not pts:
+        return None
+    lo, hi = min(pts), max(pts)
+    span = (hi - lo) or (abs(hi) or 1) * 0.001
+    inner_h = h - 2 * pad
+    step = (w - 2 * pad) / (len(pts) - 1)
+    xy = [(pad + i * step, pad + inner_h - (v - lo) / span * inner_h)
+          for i, v in enumerate(pts)]
+    path = "M" + " L".join(f"{x:.1f},{y:.1f}" for x, y in xy)
+    area = path + f" L{xy[-1][0]:.1f},{h - pad:.1f} L{xy[0][0]:.1f},{h - pad:.1f} Z"
+    return path, area, xy[-1], lo, hi
+
+
+def spark_tone(series):
+    """"pos", "neg" or "neu" from where the series ended against its start."""
+    pts = spark_points(series)
+    if not pts:
+        return "neu"
+    return "pos" if pts[-1] > pts[0] else "neg" if pts[-1] < pts[0] else "neu"
+
+
+def spark_fmt(v):
+    """A scale label that keeps the digits that move.
+
+    A coin at $0.142 rounded to two places prints its high and its low as the
+    same number, which is a scale that says nothing.
+
+    >>> spark_fmt(6412.3), spark_fmt(0.1423), spark_fmt(36.02)
+    ('6,412.30', '0.1423', '36.02')
+    """
+    a = abs(v)
+    if a < 1:
+        return f"{v:,.4f}"
+    if a < 10:
+        return f"{v:,.3f}"
+    return f"{v:,.2f}"
+
+
+def spark_svg(series, label="", fmt=None):
+    """An inline SVG sparkline: transparent, coloured by direction, with the
+    smallest scale that still answers "over what, and between what".
+
+    Inline SVG rather than an image because the page is one self-contained
+    file and every image in the email is stripped anyway; the email gets the
+    text sparkline instead (see spark_text).
+    """
+    drawn = spark_path(series)
+    if not drawn:
+        return ""
+    path, area, (lx, ly), lo, hi = drawn
+    pts = spark_points(series)
+    span = (hi - lo) or 1
+    base_y = SPARK_PAD + (SPARK_H - 2 * SPARK_PAD) * (1 - (pts[0] - lo) / span)
+    tone = spark_tone(series)
+    cls = {"pos": "sp-pos", "neg": "sp-neg", "neu": "sp-neu"}[tone]
+    fmt = fmt or spark_fmt
+    return (f'<span class="spark {cls}" role="img" aria-label="'
+            f'{attr(label or "trend")}: {attr(fmt(lo))} to {attr(fmt(hi))}">'
+            f'<span class="sp-hi"><span>{e(fmt(hi))}</span></span>'
+            f'<svg viewBox="0 0 {SPARK_W} {SPARK_H}" preserveAspectRatio="none" '
+            f'width="100%" height="{SPARK_H}" aria-hidden="true">'
+            f'<path class="sp-area" d="{area}"/>'
+            f'<line class="sp-base" x1="0" y1="{base_y:.1f}" x2="{SPARK_W}" y2="{base_y:.1f}"/>'
+            f'<path class="sp-line" d="{path}"/>'
+            f'<circle class="sp-dot" cx="{lx:.1f}" cy="{ly:.1f}" r="2.2"/>'
+            f'</svg>'
+            f'<span class="sp-foot"><span class="sp-lo">{e(fmt(lo))}</span>'
+            f'<span class="sp-when">{e(label)}</span></span></span>')
+
+
+_BLOCKS = "\u2581\u2582\u2583\u2584\u2585\u2586\u2587\u2588"
+
+
+def spark_text(series):
+    """The same shape as characters, for the email and the text copy.
+
+    The mail path strips every image and every <svg>, so a drawn sparkline
+    would simply vanish there. Block characters are text: they survive, they
+    need no image loading, and they carry the shape if not the precision.
+
+    >>> spark_text([1, 2, 3])
+    '\u2581\u2584\u2588'
+    >>> spark_text([5]), spark_text([])
+    ('', '')
+    """
+    pts = spark_points(series)
+    if not pts:
+        return ""
+    lo, hi = min(pts), max(pts)
+    span = (hi - lo) or 1
+    return "".join(_BLOCKS[min(len(_BLOCKS) - 1, int((v - lo) / span * (len(_BLOCKS) - 1)))]
+                   for v in pts)
+
+
+def spark_cell_email(series, label=""):
+    """The text sparkline, coloured by direction, with its window under it."""
+    shape = spark_text(series)
+    if not shape:
+        return ""
+    col = {"pos": L["pos"], "neg": L["neg"], "neu": L["ink3"]}[spark_tone(series)]
+    out = f'<span style="font-family:{F_M};letter-spacing:-1px;color:{col}">{shape}</span>'
+    return out + (f'<br>{small(e(label))}' if label else "")
+
+
+def is_evening():
+    """Is this the evening update rather than the morning brief?
+
+    The masthead title is the only thing that knows, and both renderers and
+    the text copy need the answer, so it is read once here.
+    """
+    return str(MAST.get("title") or "").strip().lower().startswith("evening")
+
+
+def quote_word():
+    """What the index column holds: the day's OPEN in the morning, its CLOSE
+    in the evening.
+
+    A morning brief goes out hours after the bell, so the last close is
+    yesterday's news while the open is today's. By the evening the session has
+    ended and the close is the figure that matters. Same column, different
+    hour, so the heading says which.
+    """
+    return "Close" if is_evening() else "Open"
+
+
+def has_market():
+    return bool(MKT_ROWS or FUNDS or STOCKS or MKT_BULLETS)
+
+
+def has_crypto():
+    return bool(CRYPTO_ROWS or CRYPTO_BULLETS)
+
+
+def has_macro():
+    return bool(MACRO_ROWS or JOBS_SECTORS)
+
+
+def journal_byline(authors, institution=""):
+    """"Okafor et al. \u00b7 Scripps", or whichever half exists.
+
+    A run that cannot read the author list used to print "not captured (et
+    al.)", which is a row's worth of space spent saying nothing. The lab is
+    what a reader recognises anyway, so: authors and institution when both are
+    known, either alone when one is, and nothing at all when neither is.
+
+    >>> journal_byline("Okafor et al.", "Scripps Institution of Oceanography")
+    'Okafor et al. \u00b7 Scripps Institution of Oceanography'
+    >>> journal_byline("not captured (et al.)", "Lakeshore University")
+    'Lakeshore University'
+    >>> journal_byline("not captured (et al.)", ""), journal_byline("", "")
+    ('', '')
+    """
+    au = str(authors or "").strip()
+    inst = str(institution or "").strip()
+    if not au or "not captured" in au.lower() or au.lower() in ("unknown", "n/a"):
+        au = ""
+    if au and inst:
+        return f"{au} \u00b7 {inst}"
+    return au or inst
+
+
 def asof_str(asof):
     """The as-of a quote row states, as a string - "" when it states none.
 
@@ -1544,7 +1809,7 @@ def layout_note():
 # already close to it.
 EMAIL_BUDGET_BYTES = int(os.environ.get("BRIEF_EMAIL_BUDGET_BYTES", 85 * 1024))
 SHED_ORDER = ("Retail sales", "Research & publications", "AI & programming",
-              "Fed & labor market", "Large caps", "Cryptocurrency", "US market")
+              "Fed & labor market", "Cryptocurrency", "US market")
 
 # HOW IT REACHES THE INBOX. A Routine holds an email CONNECTOR, not credentials,
 # and a connector's send tool takes the body only as an inline string - there is
@@ -1609,8 +1874,11 @@ SECTION_KEYS = {
     "VoIP voicemails & texts": ("VOIP",),
     "USPS Informed Delivery": ("USPS", "USPS_SCANS"),
     "Package tracking": ("PKG", "PKG_NOTE"),
-    "US market": ("MKT_ROWS", "FUNDS", "MKT_BULLETS"),
-    "Large caps": ("STOCKS",),
+    # Large caps is part of the market section, not a section of its own: the
+    # email splits it into its own table only because a table there is capped
+    # at three columns, and a number should mean the same thing in all three
+    # renderings.
+    "US market": ("MKT_ROWS", "FUNDS", "STOCKS", "MKT_BULLETS"),
     "Fed & labor market": ("MACRO_ROWS", "JOBS_SECTORS", "MACRO_NOTE"),
     "Cryptocurrency": ("CRYPTO_ROWS", "CRYPTO_NOTE", "CRYPTO_BULLETS"),
     "AI & programming": ("AI_ITEMS",),
@@ -1993,46 +2261,49 @@ def email_html(budget=None):
     # and within it a table only when that table has rows. A card that is not
     # appended is not marked either, so the shed order never names a card that
     # was never emitted.
-    if MKT_ROWS or FUNDS or MKT_BULLETS:
-        inner = h2("US market")
+    if has_market():
+        inner = h2(f'{sp(f"{num()}.", L["accent"])} US market')
         if MKT_ROWS:
             rws = []
             stamp = shared_asof([r[8:] for r in MKT_ROWS])
             for n, c, p1, v1, p7, v7, py, vy, *asof in MKT_ROWS:
                 ky = L["pos"] if vy >= 0 else L["neg"]
-                rws.append([td(f'{lead(n)}<br>{quote_cell_email(c, v1, [] if stamp else asof)}<br>{sp(f"YTD {pct_str(vy)} {arrow(vy)}", ky)}', mono=True),
+                rws.append([td(f'{lead(n)}<br>{quote_cell_email(c, v1, [] if stamp else asof)}<br>{sp(f"YTD {pct_str(vy)} {arrow(vy)}", ky)}{spark_row_email(n)}', mono=True),
                             td(f'<div style="text-align:center">{sp(f"{e(p1)} pts · {pct_str(v1)} {arrow(v1)}", L["pos"] if v1 >= 0 else L["neg"])}</div>{em_bar_div(v1, MKT_24)}', mono=True),
                             td(f'<div style="text-align:center">{sp(f"{e(p7)} pts · {pct_str(v7)} {arrow(v7)}", L["pos"] if v7 >= 0 else L["neg"])}</div>{em_bar_div(v7, MKT_7D)}', mono=True)])
-            inner += tbl([f'Index · {quote_head_text("close", stamp)} · YTD', th_axis("1D", pct_labels(MKT_24)), th_axis("1W", pct_labels(MKT_7D))], rws, ["30%", "35%", "35%"]) + cap(f"1D = close → close vs the prior session; 1W = trailing 5 sessions; YTD = since the previous year-end, shown as a figure because the email is capped at three columns. {axis_note(MKT_24, '1D axis')}; {axis_note(MKT_7D, '1W axis')}.")
+            inner += tbl([f'Index · {quote_head_text(quote_word().lower(), stamp)} · YTD', th_axis("1D", pct_labels(MKT_24)), th_axis("1W", pct_labels(MKT_7D))], rws, ["30%", "35%", "35%"]) + cap(f"1D = close → close vs the prior session; 1W = trailing 5 sessions; YTD = since the previous year-end, shown as a figure because the email is capped at three columns. {axis_note(MKT_24, '1D axis')}; {axis_note(MKT_7D, '1W axis')}.")
         if FUNDS:
             rws = []
             stamp = shared_asof([r[9] for r in FUNDS])
             for tk, nm, nav, a1, v1, a7, v7, ay, vy, asof, note in FUNDS:
                 ky = L["pos"] if vy >= 0 else L["neg"]
-                rws.append([td(f'{lead(tk)}<br>{quote_cell_email(nav, v1, [] if stamp else asof)}<br>{sp(f"YTD {pct_str(vy)} {arrow(vy)}", ky)}', mono=True),
+                rws.append([td(f'{lead(tk)}<br>{quote_cell_email(nav, v1, [] if stamp else asof)}<br>{sp(f"YTD {pct_str(vy)} {arrow(vy)}", ky)}{spark_row_email(tk)}', mono=True),
                             td(f'<div style="text-align:center">{sp(f"{e(a1)} · {pct_str(v1)} {arrow(v1)}", L["pos"] if v1 >= 0 else L["neg"])}</div>{em_bar_div(v1, FUND_1D)}', mono=True),
                             td(f'<div style="text-align:center">{sp(f"{e(a7)} · {pct_str(v7)} {arrow(v7)}", L["pos"] if v7 >= 0 else L["neg"])}</div>{em_bar_div(v7, FUND_1W)}', mono=True)])
             inner += h3("Vanguard funds") + tbl([f'Fund · {quote_head_text("NAV", stamp)} · YTD', th_axis("1D", pct_labels(FUND_1D)), th_axis("1W", pct_labels(FUND_1W))], rws, ["30%", "35%", "35%"]) + cap("Change from the prior published NAV (1D), over one trading week (1W), and since the previous year-end (YTD). " + " ".join(f"{tk}: {note}" for tk, nm, nav, a1, v1, a7, v7, ay, vy, asof, note in FUNDS))
+        if STOCKS:
+            inner += large_caps_email()
         if MKT_BULLETS:
             inner += '<ul style="margin:8px 0 0;padding-left:20px">' + "".join(em_li(b) for b in MKT_BULLETS) + "</ul>"
         o.append(card(inner))
         mark("US market")
-    # large caps — its own card; appending to `inner` here re-emitted the whole
-    # market card, silently doubling ~25 KB of the email
-    if STOCKS:
-        inner = h2("Large caps")
-        rws = []
-        stamp = shared_asof([r[8:] for r in STOCKS])
-        for tk, pr, a1, v1, a7, v7, ay, vy, *asof in STOCKS:
-            ky = L["pos"] if vy >= 0 else L["neg"]
-            rws.append([td(f'{lead(tk)}<br>{quote_cell_email(pr, v1, [] if stamp else asof)}<br>{sp(f"YTD {pct_str(vy)} {arrow(vy)}", ky)}', mono=True),
-                        td(f'<div style="text-align:center">{sp(f"{e(a1)} · {pct_str(v1)} {arrow(v1)}", L["pos"] if v1 >= 0 else L["neg"])}</div>{em_bar_div(v1, STK_1D)}', mono=True),
-                        td(f'<div style="text-align:center">{sp(f"{e(a7)} · {pct_str(v7)} {arrow(v7)}", L["pos"] if v7 >= 0 else L["neg"])}</div>{em_bar_div(v7, STK_1W)}', mono=True)])
-        inner += tbl([f'Ticker · {quote_head_text("price", stamp)} · YTD', th_axis("1D", pct_labels(STK_1D)), th_axis("1W", pct_labels(STK_1W))], rws, ["30%", "35%", "35%"])
+    if has_crypto():
+        inner = h2(f'{sp(f"{num()}.", L["accent"])} Cryptocurrency')
+        if CRYPTO_ROWS:
+            rws = []
+            stamp = shared_asof([r[8:] for r in CRYPTO_ROWS])
+            for n, pr, v1, a1, v7, a7, vy, ay, *asof in CRYPTO_ROWS:
+                ky = L["pos"] if vy >= 0 else L["neg"]
+                rws.append([td(f'{lead(n)}<br>{quote_cell_email(pr, v1, [] if stamp else asof)}<br>{sp(f"YTD {pct_str(vy)} {arrow(vy)}", ky)}{spark_row_email(n)}', mono=True),
+                            td(f'<div style="text-align:center">{sp(f"{pct_str(v1)} {arrow(v1)} · {e(a1)}", L["pos"] if v1 >= 0 else L["neg"])}</div>{em_bar_div(v1, CRY_24)}', mono=True),
+                            td(f'<div style="text-align:center">{sp(f"{pct_str(v7)} {arrow(v7)} · {e(a7)}", L["pos"] if v7 >= 0 else L["neg"])}</div>{em_bar_div(v7, CRY_7D)}', mono=True)])
+            inner += tbl([f'Asset · {quote_head_text("price", stamp)} · YTD', th_axis("1D", pct_labels(CRY_24)), th_axis("1W", pct_labels(CRY_7D))], rws, ["30%", "35%", "35%"]) + cap(f"1D = rolling 24 h; 1W = rolling 7 days; YTD = since the previous year-end — crypto trades continuously, so every window runs back from the quote time. {axis_note(CRY_24, '1D axis')}; {axis_note(CRY_7D, '1W axis')}. {CRYPTO_NOTE}")
+        if CRYPTO_BULLETS:
+            inner += '<ul style="margin:8px 0 0;padding-left:20px">' + "".join(em_li(b) for b in CRYPTO_BULLETS) + "</ul>"
         o.append(card(inner))
-        mark("Large caps")
-    if MACRO_ROWS or JOBS_SECTORS:
-        inner = h2("Fed &amp; labor market")
+        mark("Cryptocurrency")
+    if has_macro():
+        inner = h2(f'{sp(f"{num()}.", L["accent"])} Fed &amp; labor market')
         if MACRO_ROWS:
             inner += tbl(["Indicator", "Latest", "Change · context"],
                          [[td(lead(n)),
@@ -2049,37 +2320,24 @@ def email_html(budget=None):
         inner += cap(MACRO_NOTE)
         o.append(card(inner))
         mark("Fed & labor market")
-    if CRYPTO_ROWS or CRYPTO_BULLETS:
-        inner = h2("Cryptocurrency")
-        if CRYPTO_ROWS:
-            rws = []
-            stamp = shared_asof([r[8:] for r in CRYPTO_ROWS])
-            for n, pr, v1, a1, v7, a7, vy, ay, *asof in CRYPTO_ROWS:
-                ky = L["pos"] if vy >= 0 else L["neg"]
-                rws.append([td(f'{lead(n)}<br>{quote_cell_email(pr, v1, [] if stamp else asof)}<br>{sp(f"YTD {pct_str(vy)} {arrow(vy)}", ky)}', mono=True),
-                            td(f'<div style="text-align:center">{sp(f"{pct_str(v1)} {arrow(v1)} · {e(a1)}", L["pos"] if v1 >= 0 else L["neg"])}</div>{em_bar_div(v1, CRY_24)}', mono=True),
-                            td(f'<div style="text-align:center">{sp(f"{pct_str(v7)} {arrow(v7)} · {e(a7)}", L["pos"] if v7 >= 0 else L["neg"])}</div>{em_bar_div(v7, CRY_7D)}', mono=True)])
-            inner += tbl([f'Asset · {quote_head_text("price", stamp)} · YTD', th_axis("1D", pct_labels(CRY_24)), th_axis("1W", pct_labels(CRY_7D))], rws, ["30%", "35%", "35%"]) + cap(f"1D = rolling 24 h; 1W = rolling 7 days; YTD = since the previous year-end — crypto trades continuously, so every window runs back from the quote time. {axis_note(CRY_24, '1D axis')}; {axis_note(CRY_7D, '1W axis')}. {CRYPTO_NOTE}")
-        if CRYPTO_BULLETS:
-            inner += '<ul style="margin:8px 0 0;padding-left:20px">' + "".join(em_li(b) for b in CRYPTO_BULLETS) + "</ul>"
-        o.append(card(inner))
-        mark("Cryptocurrency")
     if AI_ITEMS:
-        inner = h2("AI &amp; programming") + tbl(
+        inner = h2(f'{sp(f"{num()}.", L["accent"])} AI &amp; programming') + tbl(
             ["Item", "What it means", "Source"],
             [[td(lead(t_)), td(e(d)),
-              td(f'<a href="{url(l)}" style="color:{L["accent"]};font-weight:600">open</a>')]
-             for t_, d, l in AI_ITEMS], ["30%", "56%", "14%"])
+              td(f'<a href="{url(l)}" style="color:{L["accent"]};font-weight:600">{e(source_label(l))}</a>')]
+             for t_, d, l in AI_ITEMS], ["30%", "54%", "16%"])
         o.append(card(inner))
         mark("AI & programming")
     # No papers -> no card; it used to render "Journals scanned: ;".
     if JOURNAL_ITEMS:
-        inner = h2("Research &amp; publications") + tbl(
+        inner = h2(f'{sp(f"{num()}.", L["accent"])} Research &amp; publications') + tbl(
             ["Journal · date", "Paper", "Takeaway"],
             [[td(f'{lead(j)}<br>{small(e(d))}'),
-              td(f'<a href="{url(l)}" style="color:{L["accent"]};font-weight:600">{e(t_)}</a><br>{small(e(au))}'),
+              td(f'<a href="{url(l)}" style="color:{L["accent"]};font-weight:600">{e(t_)}</a>'
+                 + (f'<br>{small(e(journal_byline(au, rest[0] if rest else "")))}'
+                    if journal_byline(au, rest[0] if rest else "") else "")),
               td(e(tk))]
-             for j, t_, au, d, tk, l in JOURNAL_ITEMS], ["20%", "40%", "40%"]) + cap(
+             for j, t_, au, d, tk, l, *rest in JOURNAL_ITEMS], ["20%", "40%", "40%"]) + cap(
             f"Journals scanned: {JOURNALS}; items newly published since the previous run.")
         o.append(card(inner))
         mark("Research & publications")
@@ -2291,14 +2549,14 @@ def plain_text(budget=None):
         for car, trk, item, rcpt, st, eta in PKG: A(f"  - {car} · {trk} · {item} · to {rcpt} · {st} · ETA {eta}")
         A("  " + PKG_NOTE)
     # Research sections mirror the HTML: omitted when empty, never a bare heading.
-    if MKT_ROWS or FUNDS or MKT_BULLETS:
-        A(""); A("US MARKET")
+    if has_market():
+        A(""); A(f"{tnum()}. US MARKET")
         if MKT_ROWS:
             # Said once over the table when every row agrees, as in the HTML.
             stamp = shared_asof([r[8:] for r in MKT_ROWS])
-            if stamp: A(f"  All closes as of {stamp}.")
+            if stamp: A(f"  All {quote_word().lower()}s as of {stamp}.")
             for n, c, p1, v1, p7, v7, py, vy, *asof in MKT_ROWS:
-                A(f"  {n}: {c}{'' if stamp else _asof_text(asof)} | 1D {p1} pts, {pct_str(v1)} {'Up' if v1>=0 else 'Down'}"
+                A(f"  {n}: {c}{spark_text_suffix(n)}{'' if stamp else _asof_text(asof)} | 1D {p1} pts, {pct_str(v1)} {'Up' if v1>=0 else 'Down'}"
                   f" | 1W {p7} pts, {pct_str(v7)} {'Up' if v7>=0 else 'Down'}"
                   f" | YTD {py} pts, {pct_str(vy)} {'Up' if vy>=0 else 'Down'}")
             A("  " + "1D = close → close vs the prior session; 1W = trailing 5 sessions (one trading week). Both in index points and %.")
@@ -2312,13 +2570,25 @@ def plain_text(budget=None):
             A(f"    (1D axis ±{FUND_1D[1]:g}%, step {FUND_1D[0]:g}%.)")
         for b in MKT_BULLETS: A(f"  - {b}")
     if STOCKS:
-        A(""); A("LARGE CAPS")
+        A(""); A("  Large caps:")
         stamp = shared_asof([r[8:] for r in STOCKS])
         if stamp: A(f"  All prices as of {stamp}.")
         for tk, pr, a1, v1, a7, v7, ay, vy, *asof in STOCKS:
-            A(f"  {tk}: {pr}{'' if stamp else _asof_text(asof)} | 1D {a1}, {pct_str(v1)} | 1W {a7}, {pct_str(v7)} | YTD {ay}, {pct_str(vy)}")
-    if MACRO_ROWS or JOBS_SECTORS:
-        A(""); A("FED & LABOR MARKET")
+            A(f"  {tk}: {pr}{spark_text_suffix(tk)}{'' if stamp else _asof_text(asof)} | 1D {a1}, {pct_str(v1)} | 1W {a7}, {pct_str(v7)} | YTD {ay}, {pct_str(vy)}")
+    if has_crypto():
+        A(""); A(f"{tnum()}. CRYPTOCURRENCY")
+        if CRYPTO_ROWS:
+            stamp = shared_asof([r[8:] for r in CRYPTO_ROWS])
+            if stamp: A(f"  All prices as of {stamp}.")
+            for n, pr, v1, a1, v7, a7, vy, ay, *asof in CRYPTO_ROWS:
+                A(f"  {n}: {pr}{spark_text_suffix(n)}{'' if stamp else _asof_text(asof)} | 1D {pct_str(v1)} ({a1}) | 1W {pct_str(v7)} ({a7})"
+                  f" | YTD {pct_str(vy)} ({ay})")
+            A("  " + "1D = rolling 24 h; 1W = rolling 7 days — crypto trades continuously, so there is no daily close and both windows are measured back from the quote time.")
+            A(f"  (1D axis ±{CRY_24[1]:g}%, step {CRY_24[0]:g}%; 1W axis ±{CRY_7D[1]:g}%, step {CRY_7D[0]:g}%.)")
+            A("  " + CRYPTO_NOTE)
+        for b in CRYPTO_BULLETS: A(f"  - {b}")
+    if has_macro():
+        A(""); A(f"{tnum()}. FED & LABOR MARKET")
         for n, v, c, a in MACRO_ROWS:
             A(f"  {n}: {v} — {c} ({with_year(a)})")
         if JOBS_SECTORS:
@@ -2326,24 +2596,15 @@ def plain_text(budget=None):
             for sec, ch, ctx, a in JOBS_SECTORS:
                 A(f"    {sec}: {ch} — {ctx} ({with_year(a)})")
         A("  " + MACRO_NOTE)
-    if CRYPTO_ROWS or CRYPTO_BULLETS:
-        A(""); A("CRYPTOCURRENCY")
-        if CRYPTO_ROWS:
-            stamp = shared_asof([r[8:] for r in CRYPTO_ROWS])
-            if stamp: A(f"  All prices as of {stamp}.")
-            for n, pr, v1, a1, v7, a7, vy, ay, *asof in CRYPTO_ROWS:
-                A(f"  {n}: {pr}{'' if stamp else _asof_text(asof)} | 1D {pct_str(v1)} ({a1}) | 1W {pct_str(v7)} ({a7})"
-                  f" | YTD {pct_str(vy)} ({ay})")
-            A("  " + "1D = rolling 24 h; 1W = rolling 7 days — crypto trades continuously, so there is no daily close and both windows are measured back from the quote time.")
-            A(f"  (1D axis ±{CRY_24[1]:g}%, step {CRY_24[0]:g}%; 1W axis ±{CRY_7D[1]:g}%, step {CRY_7D[0]:g}%.)")
-            A("  " + CRYPTO_NOTE)
-        for b in CRYPTO_BULLETS: A(f"  - {b}")
     if AI_ITEMS:
-        A(""); A("AI & PROGRAMMING")
-        for t, d, l in AI_ITEMS: A(f"  - {t} — {d}\n    {l}")
+        A(""); A(f"{tnum()}. AI & PROGRAMMING")
+        for t, d, l in AI_ITEMS: A(f"  - {t} — {d}\n    {source_label(l)}: {l}")
     if JOURNAL_ITEMS:
-        A(""); A("RESEARCH & PUBLICATIONS (" + JOURNALS + ")")
-        for j, t, au, d, tk, l in JOURNAL_ITEMS: A(f"  - {j}: {t} ({au}, {d}) — {tk}\n    {l}")
+        A(""); A(f"{tnum()}. RESEARCH & PUBLICATIONS (" + JOURNALS + ")")
+        for j, t, au, d, tk, l, *rest in JOURNAL_ITEMS:
+            by = journal_byline(au, rest[0] if rest else "")
+            who = f"{by}, {d}" if by else d
+            A(f"  - {j}: {t} ({who}) — {tk}\n    {l}")
     A(""); A(f"{tnum()}. RETAIL SALES (lowest priority — configured retailers)")
     if retail_empty():
         A("  " + nothing_new())

@@ -56,7 +56,8 @@ SPEC = {
     "CRYPTO_BULLETS": ("list", None, "crypto bullets"),
     "AI_ITEMS":   ("rows", 3, "AI items: (title, detail, link)"),
     "JOURNALS":   ("str", None, "journals scanned"),
-    "JOURNAL_ITEMS": ("rows", 6, "papers: (journal, title, authors, date, takeaway, link)"),
+    "JOURNAL_ITEMS": ("rows", (6, 7), "papers: (journal, title, authors, date, takeaway, link"
+                     ", and optionally the first author's institution)"),
     "ALLOWLIST":  ("map", None, "domain allowlist block"),
     "SOURCES":    ("mapl", None, "sources, grouped"),
 }
@@ -71,6 +72,12 @@ OPTIONAL_SPEC = {
     "TRAVEL": ("rows", (6, 7), "non-flight reservations, kept until the date passes: "
                                "(kind, what, when, where, confirmation, link) and an "
                                "optional 7th field naming where it was booked"),
+    # Keyed by the row's own first field - the index name, the fund or stock
+    # ticker, the coin - so a series can be added to any table without widening
+    # four different row shapes, and a row with no series simply has none.
+    "SPARKS": ("obj", (), "intraday series for the quote tables, keyed by the row's "
+                          "name: {\"S&P 500\": {\"series\": [6410.2, ...], "
+                          "\"window\": \"9:30 AM \u2192 1:14 PM ET\"}}"),
 }
 
 FIT_TIERS = ("strong", "related", "")
@@ -156,6 +163,21 @@ def validate(payload):
             if not all(isinstance(x, str) for x in row):
                 _fail("TRAVEL", f"row {n}: every field must be a string")
 
+    sparks = payload.get("SPARKS")
+    if sparks is not None:
+        if not isinstance(sparks, dict):
+            _fail("SPARKS", f"expected an object ({OPTIONAL_SPEC['SPARKS'][2]})")
+        for name, spark in sparks.items():
+            if not isinstance(spark, dict):
+                _fail("SPARKS", f"{name}: expected an object with \"series\" and an "
+                                "optional \"window\"")
+            series = spark.get("series")
+            if not isinstance(series, (list, tuple)) or len(series) < 3:
+                _fail("SPARKS", f"{name}: \"series\" needs at least 3 numbers in time "
+                                "order - two points are a line segment, not a trend")
+            for v in series:
+                if not isinstance(v, (int, float)) or isinstance(v, bool):
+                    _fail("SPARKS", f"{name}: series values must be numbers, got {v!r}")
     ai = payload.get("AI_SPEND")
     if ai is not None:
         kind, needed, desc = OPTIONAL_SPEC["AI_SPEND"]

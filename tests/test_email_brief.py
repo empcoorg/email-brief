@@ -63,9 +63,11 @@ class TestGeneratorOutputs(unittest.TestCase):
         cls.r = render_once()
 
     def test_sections_numbered_in_order_in_file(self):
-        nums = re.findall(r'<span class="num">(\d)\.</span>', self.r["page"])
-        self.assertEqual(nums, [str(i) for i in range(1, 9)],
-                         "file sections must be numbered 1..8 in order")
+        """Every section carries a number, research cards included: a reader
+        who sees 7 then an unnumbered card then 8 is looking for the gap."""
+        nums = re.findall(r'<span class="num">(\d+)\.</span>', self.r["page"])
+        self.assertEqual(nums, [str(i) for i in range(1, 14)],
+                         "file sections must be numbered 1..13 in order")
 
     def test_sections_in_email_and_text(self):
         # the numbered standing sections are never shed — only research cards are
@@ -73,7 +75,7 @@ class TestGeneratorOutputs(unittest.TestCase):
             self.assertIn(f">{i}.</span>", self.r["email"], f"email missing section {i}")
         for line in ("1. HIGH PRIORITY", "2. RELEVANT JOB POSTS",
                      "4. UPCOMING TRAVEL", "6. USPS INFORMED DELIVERY",
-                     "PACKAGE TRACKING", "8. RETAIL SALES"):
+                     "PACKAGE TRACKING", "13. RETAIL SALES"):
             self.assertIn(line, self.r["text"])
 
     # (heading in the file, heading in the email, heading in the plain text)
@@ -277,7 +279,7 @@ class TestGeneratorOutputs(unittest.TestCase):
         page, tx = self.r["page"], self.r["text"]
         self.assertLess(page.index("US market"), page.index("Retail sales"))
         self.assertLess(page.index("Research &amp; publications"), page.index("Retail sales"))
-        self.assertLess(tx.index("US MARKET"), tx.index("8. RETAIL SALES"))
+        self.assertLess(tx.index("US MARKET"), tx.index("13. RETAIL SALES"))
 
     def test_every_ranked_lead_carries_a_fit_tier(self):
         """A row with no badge is the symptom of the renderer guessing fit from
