@@ -525,6 +525,7 @@ tr.hp.ok>td:first-child{{border-left-color:var(--positive)}}
 .tbl-wrap{{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface)}}
 table{{border-collapse:collapse;width:100%;min-width:640px;font-size:14px}}
 th{{text-align:left;font-family:Archivo,sans-serif;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);font-weight:600;padding:10px 12px;border-bottom:1px solid var(--line-strong);background:var(--surface-2)}}
+th .qh,td.stamp[data-l]::before{{text-transform:none;letter-spacing:.01em;font-size:10px}}
 td{{padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}} tr:last-child td{{border-bottom:0}}
 td.num{{text-align:right;white-space:nowrap}}
 .dir-pos,.c-pos{{color:var(--positive);font-weight:600}} .dir-neg,.c-neg{{color:var(--negative);font-weight:600}} .dir-neu{{color:var(--ink-2);font-weight:600}} .c-accent{{color:var(--accent);font-weight:600}} .c-warn{{color:var(--warning);font-weight:600}} .muted{{color:var(--ink-3)}}
@@ -813,29 +814,36 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
     if MKT_ROWS or FUNDS or STOCKS:
         research.append('<div class="card wide"><h2>US market</h2>')
         if MKT_ROWS:
-            research.append('<div class="tbl-wrap"><table><thead><tr><th>Index</th><th style="text-align:right">Close</th><th>1D{0}</th><th>1W{1}</th><th>YTD{2}</th></tr></thead><tbody>'.format(axis_div(MKT_24), axis_div(MKT_7D), axis_div(MKT_YTD)))
+            stamp = shared_asof([r[8:] for r in MKT_ROWS])
+            research.append('<div class="tbl-wrap"><table><thead><tr><th>Index</th><th style="text-align:right">{3}</th><th>1D{0}</th><th>1W{1}</th><th>YTD{2}</th></tr></thead><tbody>'.format(axis_div(MKT_24), axis_div(MKT_7D), axis_div(MKT_YTD), quote_head("Close", stamp)))
             for n, c, p1, v1, p7, v7, py, vy, *asof in MKT_ROWS:
                 research.append('<tr>' + tdl("Index", e(n), "mono")
-                                + tdl("Close", quote_cell_file(c, v1, asof), "num mono")
+                                + tdl(quote_head_text("Close", stamp), quote_cell_file(c, v1, [] if stamp else asof), "num mono stamp")
                                 + tdl("1D", horizon_cell_file(p1, v1, MKT_24, "pts"))
                                 + tdl("1W", horizon_cell_file(p7, v7, MKT_7D, "pts"))
                                 + tdl("YTD", horizon_cell_file(py, vy, MKT_YTD, "pts")) + '</tr>')
             research.append(f'</tbody></table></div>{axis_foot(MKT_24, "1D move, % of prior close")}{axis_foot(MKT_7D, "1W move, %")}{axis_foot(MKT_YTD, "YTD move, %")}<div class="cap">1D = close → close vs the prior session; 1W = trailing 5 sessions (one trading week); YTD = since the last close of the previous year. All in index points and %. {axis_note(MKT_24, "1D axis")}; {axis_note(MKT_7D, "1W axis")}; {axis_note(MKT_YTD, "YTD axis")}.</div>')
         if FUNDS:
-            research.append(f'<h3>Vanguard funds</h3><div class="tbl-wrap"><table><thead><tr><th>Fund</th><th style="text-align:right">NAV</th><th>1D{axis_div(FUND_1D)}</th><th>1W{axis_div(FUND_1W)}</th><th>YTD{axis_div(FUND_YTD)}</th><th>As of</th></tr></thead><tbody>')
+            stamp = shared_asof([r[9] for r in FUNDS])
+            # The trailing "As of" column exists to date a NAV. Once every NAV
+            # carries the same date in the heading, the column is the same
+            # string N more times, so it goes.
+            asof_th = "" if stamp else "<th>As of</th>"
+            research.append(f'<h3>Vanguard funds</h3><div class="tbl-wrap"><table><thead><tr><th>Fund</th><th style="text-align:right">{quote_head("NAV", stamp)}</th><th>1D{axis_div(FUND_1D)}</th><th>1W{axis_div(FUND_1W)}</th><th>YTD{axis_div(FUND_YTD)}</th>{asof_th}</tr></thead><tbody>')
             for tk, nm, nav, a1, v1, a7, v7, ay, vy, asof, note in FUNDS:
                 research.append('<tr>' + tdl("Fund", f'<span class="lead">{e(tk)}</span><br><span class="meta">{e(nm)}</span>', "mono")
-                                + tdl("NAV", quote_cell_file(nav, v1, asof), "num mono")
+                                + tdl(quote_head_text("NAV", stamp), quote_cell_file(nav, v1, [] if stamp else asof), "num mono stamp")
                                 + tdl("1D", horizon_cell_file(a1, v1, FUND_1D))
                                 + tdl("1W", horizon_cell_file(a7, v7, FUND_1W))
                                 + tdl("YTD", horizon_cell_file(ay, vy, FUND_YTD))
-                                + tdl("As of", f'<span class="meta">{e(with_year(asof))}</span>') + '</tr>')
+                                + ("" if stamp else tdl("As of", f'<span class="meta">{e(with_year(asof))}</span>')) + '</tr>')
             research.append(f'</tbody></table></div>{axis_foot(FUND_1D, "1D NAV change, %")}{axis_foot(FUND_1W, "1W NAV change, %")}{axis_foot(FUND_YTD, "YTD NAV change, %")}<div class="cap">Change from the prior published NAV (1D), over one trading week (1W), and since the previous year-end (YTD) - each in $ and %. {axis_note(FUND_1D, "1D axis")}; {axis_note(FUND_1W, "1W axis")}; {axis_note(FUND_YTD, "YTD axis")}. ' + e(" ".join(f"{tk}: {note}" for tk, nm, nav, a1, v1, a7, v7, ay, vy, asof, note in FUNDS)) + '</div>')
         if STOCKS:
-            research.append(f'<h3>Large caps</h3><div class="tbl-wrap"><table><thead><tr><th>Ticker</th><th style="text-align:right">Price</th><th>1D{axis_div(STK_1D)}</th><th>1W{axis_div(STK_1W)}</th><th>YTD{axis_div(STK_YTD)}</th></tr></thead><tbody>')
+            stamp = shared_asof([r[8:] for r in STOCKS])
+            research.append(f'<h3>Large caps</h3><div class="tbl-wrap"><table><thead><tr><th>Ticker</th><th style="text-align:right">{quote_head("Price", stamp)}</th><th>1D{axis_div(STK_1D)}</th><th>1W{axis_div(STK_1W)}</th><th>YTD{axis_div(STK_YTD)}</th></tr></thead><tbody>')
             for tk, pr, a1, v1, a7, v7, ay, vy, *asof in STOCKS:
                 research.append('<tr>' + tdl("Ticker", f'<span class="lead">{e(tk)}</span>', "mono")
-                                + tdl("Price", quote_cell_file(pr, v1, asof), "num mono")
+                                + tdl(quote_head_text("Price", stamp), quote_cell_file(pr, v1, [] if stamp else asof), "num mono stamp")
                                 + tdl("1D", horizon_cell_file(a1, v1, STK_1D))
                                 + tdl("1W", horizon_cell_file(a7, v7, STK_1W))
                                 + tdl("YTD", horizon_cell_file(ay, vy, STK_YTD)) + '</tr>')
@@ -844,10 +852,11 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
     if CRYPTO_ROWS or CRYPTO_BULLETS:
         research.append('<div class="card wide"><h2>Cryptocurrency</h2>')
         if CRYPTO_ROWS:
-            research.append(f'<div class="tbl-wrap"><table><thead><tr><th>Asset</th><th style="text-align:right">Price</th><th>1D{axis_div(CRY_24)}</th><th>1W{axis_div(CRY_7D)}</th><th>YTD{axis_div(CRY_YTD)}</th></tr></thead><tbody>')
+            stamp = shared_asof([r[8:] for r in CRYPTO_ROWS])
+            research.append(f'<div class="tbl-wrap"><table><thead><tr><th>Asset</th><th style="text-align:right">{quote_head("Price", stamp)}</th><th>1D{axis_div(CRY_24)}</th><th>1W{axis_div(CRY_7D)}</th><th>YTD{axis_div(CRY_YTD)}</th></tr></thead><tbody>')
             for n, pr, v1, a1, v7, a7, vy, ay, *asof in CRYPTO_ROWS:
                 research.append('<tr>' + tdl("Asset", f'<span class="lead">{e(n)}</span>', "mono")
-                                + tdl("Price", quote_cell_file(pr, v1, asof), "num mono")
+                                + tdl(quote_head_text("Price", stamp), quote_cell_file(pr, v1, [] if stamp else asof), "num mono stamp")
                                 + tdl("1D", horizon_cell_file(a1, v1, CRY_24, reverse=True))
                                 + tdl("1W", horizon_cell_file(a7, v7, CRY_7D, reverse=True))
                                 + tdl("YTD", horizon_cell_file(ay, vy, CRY_YTD, reverse=True)) + '</tr>')
@@ -1190,9 +1199,64 @@ def with_year(text):
     return text[:m.end()] + sep + year + text[m.end():]
 
 
+def asof_str(asof):
+    """The as-of a quote row states, as a string - "" when it states none.
+
+    Rows carry it either as the tail of a starred unpack (a list) or as a
+    plain field, so both shapes arrive here.
+    """
+    if isinstance(asof, (list, tuple)):
+        asof = asof[0] if asof else ""
+    return str(asof or "").strip()
+
+
+def shared_asof(values):
+    """The one as-of that EVERY row states, or "" when they differ.
+
+    A quote table is read at one moment, so its rows normally carry the same
+    stamp - and printed down the column it repeated "Mon Mar 2, 4:00 PM EST
+    close" against every index, wrapping onto three lines and tripling the
+    height of the table to say nothing new. When they agree it moves into the
+    column heading; when they do not (a fund priced last night beside one
+    priced this morning) each row keeps its own, because then it is news.
+    """
+    stamps = {asof_str(v) for v in values}
+    return next(iter(stamps)) if len(stamps) == 1 and all(stamps) else ""
+
+
+def quote_head_text(word, stamp):
+    """A quote column's heading: "Mon Mar 2, 4:00 PM EST close", or just the word.
+
+    The word goes last so the column still reads as a close, a NAV or a price.
+    A stamp that already names a quote - "Mon Mar 2 close (5:48 PM ET)" - is
+    left alone rather than made to read "close ... NAV".
+
+    >>> quote_head_text("Close", "Mon Mar 2, 4:00 PM EST")
+    'Mon Mar 2, 4:00 PM EST close'
+    >>> quote_head_text("NAV", "Mon Mar 2, 5:48 PM ET")
+    'Mon Mar 2, 5:48 PM ET NAV'
+    >>> quote_head_text("NAV", "Mon Mar 2 close (5:48 PM ET)"), quote_head_text("Price", "")
+    ('Mon Mar 2 close (5:48 PM ET)', 'Price')
+    """
+    if not stamp:
+        return word
+    if _re.search(r"\b(close|nav|price)\b", stamp, _re.I):
+        return stamp
+    return f"{stamp} {word if word.isupper() else word.lower()}"   # NAV is an acronym
+
+
+def quote_head(word, stamp):
+    """That heading for the page. A stamped heading keeps its own casing and
+    tighter tracking: the column's uppercase letter-spacing on a whole date
+    would push the money columns off their axes."""
+    if not stamp:
+        return e(word)
+    return f'<span class="qh">{e(quote_head_text(word, stamp))}</span>'
+
+
 def _asof_text(asof):
     """" (as of 4:00 PM EST)" when the row states a time, else nothing."""
-    when = (asof[0] if asof else "").strip() if isinstance(asof, list) else str(asof or "").strip()
+    when = asof_str(asof)
     return f" (as of {when})" if when else ""
 
 
@@ -1201,14 +1265,14 @@ def quote_cell_file(value, pct, asof, cls="mono"):
     time it was taken under it when the run states one."""
     tone = {"pos": "dir-pos", "neg": "dir-neg", "neu": ""}[move_tone(pct)]
     inner = f'<span class="{tone}">{e(value)}</span>'
-    when = (asof[0] if asof else "").strip() if isinstance(asof, list) else str(asof or "").strip()
+    when = asof_str(asof)
     return inner + (f'<br><span class="meta">{e(when)}</span>' if when else "")
 
 
 def quote_cell_email(value, pct, asof):
     """The same, for the email: inline colour, and the time beneath."""
     col = {"pos": L["pos"], "neg": L["neg"], "neu": L["ink"]}[move_tone(pct)]
-    when = (asof[0] if asof else "").strip() if isinstance(asof, list) else str(asof or "").strip()
+    when = asof_str(asof)
     return sp(e(value), col) + (f'<br>{small(e(when))}' if when else "")
 
 
@@ -1852,20 +1916,22 @@ def email_html(budget=None):
         inner = h2("US market")
         if MKT_ROWS:
             rws = []
+            stamp = shared_asof([r[8:] for r in MKT_ROWS])
             for n, c, p1, v1, p7, v7, py, vy, *asof in MKT_ROWS:
                 ky = L["pos"] if vy >= 0 else L["neg"]
-                rws.append([td(f'{lead(n)}<br>{quote_cell_email(c, v1, asof)}<br>{sp(f"YTD {pct_str(vy)} {arrow(vy)}", ky)}', mono=True),
+                rws.append([td(f'{lead(n)}<br>{quote_cell_email(c, v1, [] if stamp else asof)}<br>{sp(f"YTD {pct_str(vy)} {arrow(vy)}", ky)}', mono=True),
                             td(f'<div style="text-align:center">{sp(f"{e(p1)} pts · {pct_str(v1)} {arrow(v1)}", L["pos"] if v1 >= 0 else L["neg"])}</div>{em_bar_div(v1, MKT_24)}', mono=True),
                             td(f'<div style="text-align:center">{sp(f"{e(p7)} pts · {pct_str(v7)} {arrow(v7)}", L["pos"] if v7 >= 0 else L["neg"])}</div>{em_bar_div(v7, MKT_7D)}', mono=True)])
-            inner += tbl(["Index · close · YTD", th_axis("1D", pct_labels(MKT_24)), th_axis("1W", pct_labels(MKT_7D))], rws, ["30%", "35%", "35%"]) + cap(f"1D = close → close vs the prior session; 1W = trailing 5 sessions; YTD = since the previous year-end, shown as a figure because the email is capped at three columns. {axis_note(MKT_24, '1D axis')}; {axis_note(MKT_7D, '1W axis')}.")
+            inner += tbl([f'Index · {quote_head_text("close", stamp)} · YTD', th_axis("1D", pct_labels(MKT_24)), th_axis("1W", pct_labels(MKT_7D))], rws, ["30%", "35%", "35%"]) + cap(f"1D = close → close vs the prior session; 1W = trailing 5 sessions; YTD = since the previous year-end, shown as a figure because the email is capped at three columns. {axis_note(MKT_24, '1D axis')}; {axis_note(MKT_7D, '1W axis')}.")
         if FUNDS:
             rws = []
+            stamp = shared_asof([r[9] for r in FUNDS])
             for tk, nm, nav, a1, v1, a7, v7, ay, vy, asof, note in FUNDS:
                 ky = L["pos"] if vy >= 0 else L["neg"]
-                rws.append([td(f'{lead(tk)}<br>{quote_cell_email(nav, v1, asof)}<br>{sp(f"YTD {pct_str(vy)} {arrow(vy)}", ky)}', mono=True),
+                rws.append([td(f'{lead(tk)}<br>{quote_cell_email(nav, v1, [] if stamp else asof)}<br>{sp(f"YTD {pct_str(vy)} {arrow(vy)}", ky)}', mono=True),
                             td(f'<div style="text-align:center">{sp(f"{e(a1)} · {pct_str(v1)} {arrow(v1)}", L["pos"] if v1 >= 0 else L["neg"])}</div>{em_bar_div(v1, FUND_1D)}', mono=True),
                             td(f'<div style="text-align:center">{sp(f"{e(a7)} · {pct_str(v7)} {arrow(v7)}", L["pos"] if v7 >= 0 else L["neg"])}</div>{em_bar_div(v7, FUND_1W)}', mono=True)])
-            inner += h3("Vanguard funds") + tbl(["Fund · NAV · YTD", th_axis("1D", pct_labels(FUND_1D)), th_axis("1W", pct_labels(FUND_1W))], rws, ["30%", "35%", "35%"]) + cap("Change from the prior published NAV (1D), over one trading week (1W), and since the previous year-end (YTD). " + " ".join(f"{tk}: {note}" for tk, nm, nav, a1, v1, a7, v7, ay, vy, asof, note in FUNDS))
+            inner += h3("Vanguard funds") + tbl([f'Fund · {quote_head_text("NAV", stamp)} · YTD', th_axis("1D", pct_labels(FUND_1D)), th_axis("1W", pct_labels(FUND_1W))], rws, ["30%", "35%", "35%"]) + cap("Change from the prior published NAV (1D), over one trading week (1W), and since the previous year-end (YTD). " + " ".join(f"{tk}: {note}" for tk, nm, nav, a1, v1, a7, v7, ay, vy, asof, note in FUNDS))
         if MKT_BULLETS:
             inner += '<ul style="margin:8px 0 0;padding-left:20px">' + "".join(em_li(b) for b in MKT_BULLETS) + "</ul>"
         o.append(card(inner))
@@ -1875,12 +1941,13 @@ def email_html(budget=None):
     if STOCKS:
         inner = h2("Large caps")
         rws = []
+        stamp = shared_asof([r[8:] for r in STOCKS])
         for tk, pr, a1, v1, a7, v7, ay, vy, *asof in STOCKS:
             ky = L["pos"] if vy >= 0 else L["neg"]
-            rws.append([td(f'{lead(tk)}<br>{quote_cell_email(pr, v1, asof)}<br>{sp(f"YTD {pct_str(vy)} {arrow(vy)}", ky)}', mono=True),
+            rws.append([td(f'{lead(tk)}<br>{quote_cell_email(pr, v1, [] if stamp else asof)}<br>{sp(f"YTD {pct_str(vy)} {arrow(vy)}", ky)}', mono=True),
                         td(f'<div style="text-align:center">{sp(f"{e(a1)} · {pct_str(v1)} {arrow(v1)}", L["pos"] if v1 >= 0 else L["neg"])}</div>{em_bar_div(v1, STK_1D)}', mono=True),
                         td(f'<div style="text-align:center">{sp(f"{e(a7)} · {pct_str(v7)} {arrow(v7)}", L["pos"] if v7 >= 0 else L["neg"])}</div>{em_bar_div(v7, STK_1W)}', mono=True)])
-        inner += tbl(["Ticker · price · YTD", th_axis("1D", pct_labels(STK_1D)), th_axis("1W", pct_labels(STK_1W))], rws, ["30%", "35%", "35%"])
+        inner += tbl([f'Ticker · {quote_head_text("price", stamp)} · YTD', th_axis("1D", pct_labels(STK_1D)), th_axis("1W", pct_labels(STK_1W))], rws, ["30%", "35%", "35%"])
         o.append(card(inner))
         mark("Large caps")
     if MACRO_ROWS or JOBS_SECTORS:
@@ -1905,12 +1972,13 @@ def email_html(budget=None):
         inner = h2("Cryptocurrency")
         if CRYPTO_ROWS:
             rws = []
+            stamp = shared_asof([r[8:] for r in CRYPTO_ROWS])
             for n, pr, v1, a1, v7, a7, vy, ay, *asof in CRYPTO_ROWS:
                 ky = L["pos"] if vy >= 0 else L["neg"]
-                rws.append([td(f'{lead(n)}<br>{quote_cell_email(pr, v1, asof)}<br>{sp(f"YTD {pct_str(vy)} {arrow(vy)}", ky)}', mono=True),
+                rws.append([td(f'{lead(n)}<br>{quote_cell_email(pr, v1, [] if stamp else asof)}<br>{sp(f"YTD {pct_str(vy)} {arrow(vy)}", ky)}', mono=True),
                             td(f'<div style="text-align:center">{sp(f"{pct_str(v1)} {arrow(v1)} · {e(a1)}", L["pos"] if v1 >= 0 else L["neg"])}</div>{em_bar_div(v1, CRY_24)}', mono=True),
                             td(f'<div style="text-align:center">{sp(f"{pct_str(v7)} {arrow(v7)} · {e(a7)}", L["pos"] if v7 >= 0 else L["neg"])}</div>{em_bar_div(v7, CRY_7D)}', mono=True)])
-            inner += tbl(["Asset · price · YTD", th_axis("1D", pct_labels(CRY_24)), th_axis("1W", pct_labels(CRY_7D))], rws, ["30%", "35%", "35%"]) + cap(f"1D = rolling 24 h; 1W = rolling 7 days; YTD = since the previous year-end — crypto trades continuously, so every window runs back from the quote time. {axis_note(CRY_24, '1D axis')}; {axis_note(CRY_7D, '1W axis')}. {CRYPTO_NOTE}")
+            inner += tbl([f'Asset · {quote_head_text("price", stamp)} · YTD', th_axis("1D", pct_labels(CRY_24)), th_axis("1W", pct_labels(CRY_7D))], rws, ["30%", "35%", "35%"]) + cap(f"1D = rolling 24 h; 1W = rolling 7 days; YTD = since the previous year-end — crypto trades continuously, so every window runs back from the quote time. {axis_note(CRY_24, '1D axis')}; {axis_note(CRY_7D, '1W axis')}. {CRYPTO_NOTE}")
         if CRYPTO_BULLETS:
             inner += '<ul style="margin:8px 0 0;padding-left:20px">' + "".join(em_li(b) for b in CRYPTO_BULLETS) + "</ul>"
         o.append(card(inner))
@@ -2143,23 +2211,29 @@ def plain_text(budget=None):
     if MKT_ROWS or FUNDS or MKT_BULLETS:
         A(""); A("US MARKET")
         if MKT_ROWS:
+            # Said once over the table when every row agrees, as in the HTML.
+            stamp = shared_asof([r[8:] for r in MKT_ROWS])
+            if stamp: A(f"  All closes as of {stamp}.")
             for n, c, p1, v1, p7, v7, py, vy, *asof in MKT_ROWS:
-                A(f"  {n}: {c}{_asof_text(asof)} | 1D {p1} pts, {pct_str(v1)} {'Up' if v1>=0 else 'Down'}"
+                A(f"  {n}: {c}{'' if stamp else _asof_text(asof)} | 1D {p1} pts, {pct_str(v1)} {'Up' if v1>=0 else 'Down'}"
                   f" | 1W {p7} pts, {pct_str(v7)} {'Up' if v7>=0 else 'Down'}"
                   f" | YTD {py} pts, {pct_str(vy)} {'Up' if vy>=0 else 'Down'}")
             A("  " + "1D = close → close vs the prior session; 1W = trailing 5 sessions (one trading week). Both in index points and %.")
             A(f"  (1D axis ±{MKT_24[1]:g}%, step {MKT_24[0]:g}%; 1W axis ±{MKT_7D[1]:g}%, step {MKT_7D[0]:g}%.)")
         if FUNDS:
-            A("  Vanguard funds:")
+            fstamp = shared_asof([r[9] for r in FUNDS])
+            A("  Vanguard funds:" + (f" (all NAVs as of {fstamp})" if fstamp else ""))
             for tk, nm, nav, a1, v1, a7, v7, ay, vy, asof, note in FUNDS:
                 A(f"    {tk} ({nm}): NAV {nav} | 1D {a1}, {pct_str(v1)} | 1W {a7}, {pct_str(v7)}"
-                  f" | YTD {ay}, {pct_str(vy)} | as of {asof}. {note}")
+                  f" | YTD {ay}, {pct_str(vy)}" + ("" if fstamp else f" | as of {asof}") + f". {note}")
             A(f"    (1D axis ±{FUND_1D[1]:g}%, step {FUND_1D[0]:g}%.)")
         for b in MKT_BULLETS: A(f"  - {b}")
     if STOCKS:
         A(""); A("LARGE CAPS")
+        stamp = shared_asof([r[8:] for r in STOCKS])
+        if stamp: A(f"  All prices as of {stamp}.")
         for tk, pr, a1, v1, a7, v7, ay, vy, *asof in STOCKS:
-            A(f"  {tk}: {pr}{_asof_text(asof)} | 1D {a1}, {pct_str(v1)} | 1W {a7}, {pct_str(v7)} | YTD {ay}, {pct_str(vy)}")
+            A(f"  {tk}: {pr}{'' if stamp else _asof_text(asof)} | 1D {a1}, {pct_str(v1)} | 1W {a7}, {pct_str(v7)} | YTD {ay}, {pct_str(vy)}")
     if MACRO_ROWS or JOBS_SECTORS:
         A(""); A("FED & LABOR MARKET")
         for n, v, c, a in MACRO_ROWS:
@@ -2172,8 +2246,10 @@ def plain_text(budget=None):
     if CRYPTO_ROWS or CRYPTO_BULLETS:
         A(""); A("CRYPTOCURRENCY")
         if CRYPTO_ROWS:
+            stamp = shared_asof([r[8:] for r in CRYPTO_ROWS])
+            if stamp: A(f"  All prices as of {stamp}.")
             for n, pr, v1, a1, v7, a7, vy, ay, *asof in CRYPTO_ROWS:
-                A(f"  {n}: {pr}{_asof_text(asof)} | 1D {pct_str(v1)} ({a1}) | 1W {pct_str(v7)} ({a7})"
+                A(f"  {n}: {pr}{'' if stamp else _asof_text(asof)} | 1D {pct_str(v1)} ({a1}) | 1W {pct_str(v7)} ({a7})"
                   f" | YTD {pct_str(vy)} ({ay})")
             A("  " + "1D = rolling 24 h; 1W = rolling 7 days — crypto trades continuously, so there is no daily close and both windows are measured back from the quote time.")
             A(f"  (1D axis ±{CRY_24[1]:g}%, step {CRY_24[0]:g}%; 1W axis ±{CRY_7D[1]:g}%, step {CRY_7D[0]:g}%.)")

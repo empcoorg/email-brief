@@ -1247,7 +1247,9 @@ class TestThreeHorizons(unittest.TestCase):
 
     def test_email_states_ytd_in_the_first_column(self):
         _, em, _ = render_all(payload())
-        for header in ("Index · close · YTD", "Fund · NAV · YTD", "Asset · price · YTD"):
+        for header in ("Index · Mon Mar 2, 4:00 PM EST close · YTD",
+                       "Fund · Mon Mar 2, 5:48 PM ET NAV · YTD",
+                       "Asset · Tue Mar 3, 9:55 AM EST price · YTD"):
             self.assertIn(header, em, f"email missing {header!r}")
         self.assertGreaterEqual(em.count("YTD "), 10, "every row needs its YTD figure")
 
@@ -1387,3 +1389,89 @@ class TestRangeDashSpacing(unittest.TestCase):
     def test_arrows_are_not_touched(self):
         from brief.theme import space_ranges
         self.assertEqual(space_ranges("close → close"), "close → close")
+
+
+class TestQuoteAsOfHeadings(unittest.TestCase):
+    """The time a table was read is a property of the TABLE, not of each row.
+
+    Printed down the column it repeated "Mon Mar 2, 4:00 PM EST close" against
+    every index — wrapping onto three lines under a one-line figure and saying
+    nothing the row above had not. It now heads the column, and only splits
+    back into the rows when they disagree, which is the case where it is news.
+    """
+
+    HEADS = (("US market", "Mon Mar 2, 4:00 PM EST close"),
+             ("Vanguard funds", "Mon Mar 2, 5:48 PM ET NAV"),
+             ("Large caps", "Mon Mar 2, 4:00 PM EST price"),
+             ("Cryptocurrency", "Tue Mar 3, 9:55 AM EST price"))
+
+    def table(self, page, after):
+        return page.split(after)[1].split("</table>")[0]
+
+    def test_each_quote_column_is_headed_by_the_time_it_was_read(self):
+        f, em, tx = render_all(payload())
+        for after, head in self.HEADS:
+            tbl = self.table(f, after)
+            self.assertIn(f'<span class="qh">{head}</span>', tbl,
+                          f"{after} should head its quote column with {head!r}")
+            body = re.sub(r'\sdata-l="[^"]*"', "", tbl.split("<tbody>")[1])
+            self.assertNotIn(head.rsplit(" ", 1)[0], body,
+                             f"{after} repeats the stamp in its rows")
+
+    def test_the_email_states_it_once_too(self):
+        _, em, _ = render_all(payload())
+        for _after, head in self.HEADS:
+            self.assertEqual(em.count(head), 1, f"{head!r} belongs in the heading, once")
+
+    def test_the_text_copy_says_it_over_the_table(self):
+        _, _, tx = render_all(payload())
+        self.assertIn("All closes as of Mon Mar 2, 4:00 PM EST.", tx)
+        self.assertIn("(all NAVs as of Mon Mar 2, 5:48 PM ET)", tx)
+        self.assertIn("All prices as of Tue Mar 3, 9:55 AM EST.", tx)
+        self.assertNotIn("(as of Mon Mar 2, 4:00 PM EST)", tx, "not on the rows as well")
+
+    def test_the_funds_as_of_column_goes_when_the_heading_carries_it(self):
+        """A column that prints one string N times is N-1 wasted columns."""
+        p = payload()
+        f, _em, _tx = render_all(p)
+        funds = self.table(f, "Vanguard funds")
+        self.assertNotIn("As of", funds, "the column is redundant once the heading dates the NAV")
+        p["FUNDS"][0][9] = "Fri Feb 27, 5:48 PM ET"      # priced on different days
+        f, _em, _tx = render_all(p)
+        funds = self.table(f, "Vanguard funds")
+        self.assertIn(">As of</th>", funds, "differing dates need the column back")
+        self.assertIn("Fri Feb 27, 5:48 PM ET", funds)
+        self.assertIn(">NAV</th>", funds, "and the heading goes back to the plain word")
+
+    def test_rows_read_at_different_times_each_keep_their_own(self):
+        p = payload()
+        p["MKT_ROWS"][0][8] = "Tue Mar 3, 9:41 AM EST, mid-session"
+        f, em, tx = render_all(p)
+        market = self.table(f, "US market")
+        self.assertIn(">Close</th>", market, "a mixed table keeps the plain heading")
+        self.assertIn("Tue Mar 3, 9:41 AM EST, mid-session", market)
+        self.assertIn("(as of Tue Mar 3, 9:41 AM EST, mid-session)", tx)
+
+    def test_a_table_with_no_times_at_all_is_unchanged(self):
+        p = payload()
+        for key in ("MKT_ROWS", "STOCKS", "CRYPTO_ROWS"):
+            p[key] = [list(r)[:8] for r in p[key]]
+        f, em, _tx = render_all(p)
+        self.assertIn(">Close</th>", self.table(f, "US market"))
+        self.assertIn(">Price</th>", self.table(f, "Large caps"))
+        self.assertIn("Index · close · YTD", em)
+
+    def test_a_stamp_that_already_names_the_quote_does_not_say_it_twice(self):
+        from brief.render import quote_head_text
+        self.assertEqual(quote_head_text("NAV", "Mon Mar 2 close (5:48 PM ET)"),
+                         "Mon Mar 2 close (5:48 PM ET)")
+        self.assertEqual(quote_head_text("Close", "Mon Mar 2, 4:00 PM EST"),
+                         "Mon Mar 2, 4:00 PM EST close")
+        self.assertEqual(quote_head_text("Price", ""), "Price")
+
+    def test_the_stamped_heading_keeps_its_own_casing(self):
+        """Header CSS uppercases with wide tracking; a whole date set that way
+        would push the money columns off the axes they are drawn against."""
+        f, _em, _tx = render_all(payload())
+        css = f.split("<style>")[1].split("</style>")[0]
+        self.assertIn("th .qh,td.stamp[data-l]::before{text-transform:none", css)

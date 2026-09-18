@@ -133,7 +133,7 @@ class TestGeneratorOutputs(unittest.TestCase):
             self.assertIn(horizon, funds, f"funds missing {horizon}")
             self.assertIn(f"{horizon} axis", page)
         # the email is capped at three columns, so YTD rides in the first one
-        self.assertIn("Fund · NAV · YTD", em)
+        self.assertIn("Fund · Mon Mar 2, 5:48 PM ET NAV · YTD", em)
 
     def test_plain_text_is_a_full_fallback_not_a_stub(self):
         self.assertGreater(len(self.r["text"]), 4000)
