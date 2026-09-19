@@ -1827,3 +1827,52 @@ class TestTrendReadout(unittest.TestCase):
         p["SPARKS"] = {}
         f, _em, _tx = render_all(p)
         self.assertNotIn('data-series="', f)
+
+
+class TestThePageDeclaresItsEncoding(unittest.TestCase):
+    """Safari opened the page and printed "â€”" where every em dash was.
+
+    A document with no declared encoding is decoded by guesswork, and a browser
+    opening a file:// URL guesses a legacy encoding. Chrome happened to guess
+    UTF-8; Safari did not, so the brief's dashes, middots and arrows came out
+    as mojibake in the one place a reader is most likely to open it — the file
+    on their own disk.
+    """
+
+    def test_the_declaration_comes_before_any_byte_that_needs_it(self):
+        f, _em, _tx = render_all(payload())
+        charset = f.index('<meta charset="utf-8">')
+        first_non_ascii = next((i for i, ch in enumerate(f) if ord(ch) > 127), len(f))
+        self.assertLess(charset, first_non_ascii,
+                        "the encoding must be declared before the first character that needs it")
+        self.assertTrue(f.startswith("<!doctype html>"), "and standards mode, not quirks")
+
+    def test_the_page_is_laid_out_at_the_device_width(self):
+        """Without this a phone lays the page out at 980px and shrinks it, so
+        every media query below 980 is dead."""
+        f, _em, _tx = render_all(payload())
+        self.assertIn('<meta name="viewport" content="width=device-width, initial-scale=1">', f)
+
+    def test_the_bytes_written_are_the_bytes_declared(self):
+        import tempfile, subprocess, os, json as _json
+        d = tempfile.mkdtemp()
+        subprocess.run([sys.executable, "-m", "brief", "render", SAMPLE, "--out-dir", d,
+                        "--date", "2026-03-03"], cwd=ROOT, check=True, capture_output=True)
+        page = os.path.join(d, "full-brief-2026-03-03.html")
+        raw = open(page, "rb").read()
+        self.assertIn(b'<meta charset="utf-8">', raw[:200])
+        raw.decode("utf-8")          # raises if the file is not what it says
+
+
+class TestSeverityStripeIsOneBarPerRow(unittest.TestCase):
+    def test_the_row_itself_draws_no_border(self):
+        """A 4px border on the row ran the full height behind the inset stripe,
+        so two rows looked joined by a hairline. That rule belongs to the phone
+        card layout, where each row is its own block."""
+        f, _em, _tx = render_all(payload())
+        css = f.split("<style>")[1].split("</style>")[0]
+        desktop = css.split("@media (max-width:600px)")[0]
+        self.assertNotIn(".hp{border-left:4px", desktop,
+                         "the table layout stripes the cell, not the row")
+        phone = css.split("@media (max-width:600px)")[1]
+        self.assertIn(".hp{border-left:4px", phone, "the card layout still needs it")

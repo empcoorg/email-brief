@@ -609,7 +609,6 @@ ul{{margin:8px 0 0;padding-left:20px}} li{{margin:9px 0;line-height:1.55}}
 .grid3 .card.wide{{grid-column:1/-1}}
 .grid3 .card.wide .tbl-wrap table{{font-size:14px}} .grid3 .card.wide th,.grid3 .card.wide td{{padding:9px 10px}}
 .grid3 .card.wide .dbar,.grid3 .card.wide .daxis{{width:100%;min-width:120px;max-width:none}}
-.hp{{border-left:4px solid var(--ink-3);padding:10px 14px;margin:10px 0;background:var(--surface-2);border-radius:0 8px 8px 0}} .hp.warn{{border-color:var(--warning)}} .hp.ok{{border-color:var(--positive)}} .hp.info{{border-color:var(--accent)}}
 .hp .t{{font-weight:600;font-family:Archivo,sans-serif}} .hp.warn .t{{color:var(--warning)}} .hp.ok .t{{color:var(--positive)}} .hp.info .t{{color:var(--accent)}}
 details{{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 16px;margin-top:18px}} summary{{cursor:pointer;font-family:Archivo,sans-serif;font-weight:600;font-size:14px}}
 .allow p{{font-size:12.5px;margin:6px 0}} .allow b{{color:var(--ink-2)}}
@@ -617,6 +616,7 @@ details{{background:var(--surface);border:1px solid var(--line);border-radius:10
 footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid var(--line);padding-top:14px}}
 @media (max-width:940px){{.grid3{{grid-template-columns:1fr}} .mast{{grid-template-columns:1fr}} .tiles{{grid-template-columns:1fr}} .src{{columns:1}} .grid3 .tbl-wrap table{{font-size:14px}} .grid3 th,.grid3 td{{padding:9px 12px}} .grid3 .dbar{{width:150px}} .grid3 .daxis{{width:150px}} .grid3 .daxis span.mid{{display:block}}}}
 @media (max-width:600px){{
+ .hp{{border-left:4px solid var(--ink-3);padding:10px 14px;margin:10px 0;background:var(--surface-2);border-radius:0 8px 8px 0}} .hp.warn{{border-color:var(--warning)}} .hp.ok{{border-color:var(--positive)}} .hp.info{{border-color:var(--accent)}} .hp.neg{{border-color:var(--negative)}}
  body{{font-size:17px;line-height:1.6}} .wrap{{padding:14px 10px 40px}} .mast{{padding:16px}} .mast h1{{font-size:26px}} .stamps{{grid-template-columns:1fr}} .stamp .val{{font-size:15px}}
  .card{{padding:14px}} .act{{grid-template-columns:5px 1fr;gap:10px}} .act-title{{font-size:16px}} .act .det{{font-size:15px}}
  .tbl-wrap{{border:0;background:transparent;overflow:visible}}
@@ -629,6 +629,16 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
 }}
 """
     o = []
+    # A page with no declared encoding is decoded by guesswork, and a browser
+    # opening a file:// URL guesses a legacy one: every em dash, middot and
+    # arrow in the brief came out as "\u00e2\u20ac\u201d" in Safari while Chrome
+    # happened to guess right. The declaration is first, before any text, so
+    # nothing is decoded before it is read. The viewport line is the other half
+    # of the same omission: without it a phone lays the page out at 980px and
+    # then shrinks it.
+    o.append("<!doctype html>")
+    o.append('<meta charset="utf-8">')
+    o.append('<meta name="viewport" content="width=device-width, initial-scale=1">')
     o.append(f"<title>{e(MAST['title'])}</title>")
     o.append('<meta name="color-scheme" content="dark light">')
     o.append('<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>')
