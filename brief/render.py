@@ -523,7 +523,7 @@ h3{{font-size:14.5px;font-weight:600;margin:16px 0 6px;color:var(--ink-2)}}
 /* The severity stripe is drawn INSIDE the cell, with a gap top and bottom, so
    two rows of the same severity do not fuse into one long bar. */
 tr.hp>td:first-child{{position:relative;padding-left:18px;--sev:var(--line-strong)}}
-tr.hp>td:first-child::before{{content:"";position:absolute;left:0;top:8px;bottom:8px;width:6px;border-radius:3px;background:var(--sev)}}
+tr.hp>td:first-child::before{{content:"";position:absolute;left:0;top:6px;bottom:6px;width:6px;background:var(--sev)}}
 tr.hp.warn>td:first-child{{--sev:var(--warning)}}
 tr.hp.neg>td:first-child{{--sev:var(--negative)}}
 tr.hp.info>td:first-child{{--sev:var(--accent)}}
@@ -581,7 +581,7 @@ td.num{{text-align:right;white-space:nowrap}}
    stylesheet can put them in boxes of different widths. text-indent gives back
    the trailing letter-space of the uppercase label. */
 .dhead.titled{{height:27px}}
-.dhead .t{{left:50%;transform:translateX(-50%);text-indent:.08em;top:0}}
+.dhead .t{{left:50%;transform:translateX(-50%);display:inline-block;letter-spacing:.08em;margin-right:-.08em;top:0}}
 .dhead.titled .l,.dhead.titled .c,.dhead.titled .r{{top:14px}}
 /* The heading's "0" must sit exactly over the ruler's, so it takes the ruler's
    width rule rather than a fixed one: in a wider column a 150px heading centred

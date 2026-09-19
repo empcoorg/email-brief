@@ -514,6 +514,26 @@ class TestHeadingSitsOnItsZero(_BrowserCase):
     uppercase label is given back with text-indent.
     """
 
+    def test_the_labels_glyphs_centre_on_the_zero_not_just_its_box(self):
+        """Measured over the text's own rects rather than the element's, since
+        the gap between the two is exactly what kept drifting."""
+        for width in (1840, 1280, 900):
+            pg = self._page(width)
+            d = pg.evaluate("""() => {
+              const th = [...document.querySelectorAll('th')].find(t => t.querySelector('.dhead .t'));
+              if (!th) return null;
+              const t = th.querySelector('.dhead .t');
+              const r = document.createRange(); r.selectNodeContents(t);
+              const rects = [...r.getClientRects()];
+              const glyphC = (rects[0].left + rects[rects.length - 1].right) / 2;
+              const z = th.querySelector('.dhead .c').getBoundingClientRect();
+              return glyphC - (z.left + z.width / 2);
+            }""")
+            self.assertIsNotNone(d, f"no titled money column at {width}px")
+            self.assertLessEqual(abs(d), 0.5,
+                                 f"the label's glyphs are {d:.2f}px off the zero @{width}px")
+            pg.close()
+
     def test_every_labelled_money_column_centres_on_its_zero(self):
         for width in (1840, 1280, 1000, 820):
             pg = self._page(width)
