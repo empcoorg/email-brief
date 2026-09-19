@@ -92,12 +92,15 @@ def _ai_spend(a):
             return 2
     try:
         charges = _pairs(a.add, "--add")
-        year, totals, carried = accumulate(previous, charges, a.today,
-                                           dict(_pairs(a.basis, "--basis")), a.basis_year)
+        year, totals, carried, opening = accumulate(
+            previous, charges, a.today, dict(_pairs(a.basis, "--basis")), a.basis_year,
+            a.total_basis, a.total_basis_year)
     except ValueError as ex:
         print(f"cannot total AI spend: {ex}", file=sys.stderr)
         return 2
     block = {"year": year, "rows": rows(totals, added(charges))}
+    if opening:
+        block["opening"] = opening
     if a.note:
         block["note"] = a.note
     with open(a.out, "w", encoding="utf-8") as fh:
@@ -109,7 +112,9 @@ def _ai_spend(a):
     for service, total, this_window, note in block["rows"]:
         arrived = f" + ${this_window:,.2f} this window" if this_window else ""
         print(f"  {service}: ${total:,.2f}{arrived}  ({note})")
-    print(format_line(year, totals))
+    if opening:
+        print(f"  (plus ${opening:,.2f} spent before this brief started counting)")
+    print(format_line(year, totals, opening))
     print("Paste the contents of the file into the payload as AI_SPEND.")
     return 0
 
@@ -350,6 +355,11 @@ def main(argv=None):
                           "forward (an opening balance established outside the mailbox)")
     sp_.add_argument("--basis-year", help="the year a --basis applies to; outside it the "
                                           "basis is ignored")
+    sp_.add_argument("--total-basis", type=float, metavar="USD",
+                     help="AI spend already made this year that no service row itemises "
+                          "- for a brief that starts mid-year. Added to the total once, "
+                          "then carried forward on the brief's own line")
+    sp_.add_argument("--total-basis-year", help="the year a --total-basis applies to")
     sp_.add_argument("--note", help="one line shown under the table")
     sp_.add_argument("-o", "--out", default="ai_spend.json", help="where to write the block")
 

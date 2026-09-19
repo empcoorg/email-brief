@@ -88,9 +88,9 @@ class TestColouredIntoTheBrief(unittest.TestCase):
         # column is matched by the word it ends with rather than the word alone.
         self.assertRegex(market, r'class="dir-pos">6,412\.30<')
         self.assertRegex(market, r'class="dir-neg">47,105\.88<')
-        self.assertRegex(market, r'data-l="Fund \u00b7 NAV">.*?class="dir-(pos|neg)"')
+        self.assertRegex(market, r'data-l="Fund \u00b7 NAV \(USD\)">.*?class="dir-(pos|neg)"')
         crypto = f.split("Cryptocurrency")[1][:4000]
-        self.assertRegex(crypto, r'data-l="Asset \u00b7 price">.*?class="dir-(pos|neg)"')
+        self.assertRegex(crypto, r'data-l="Asset \u00b7 price \(USD\)">.*?class="dir-(pos|neg)"')
 
     def test_a_quote_can_say_when_it_was_taken(self):
         """One time for the whole table is stated once, over the column."""

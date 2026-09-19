@@ -68,13 +68,18 @@ SPEC = {
 OPTIONAL_SPEC = {
     "AI_SPEND": ("obj", ("year", "rows"), "AI billing year to date: year, rows of "
                                           "(service, usd_total, usd_this_window, note) "
-                                          "- the third field optional - plus an optional note"),
+                                          "- the third field optional - plus an optional note, and an "
+                                          "optional \"opening\": spend made this year that no row "
+                                          "itemises, for a brief that started mid-year"),
     "TRAVEL": ("rows", (6, 7), "non-flight reservations, kept until the date passes: "
                                "(kind, what, when, where, confirmation, link) and an "
                                "optional 7th field naming where it was booked"),
     # Keyed by the row's own first field - the index name, the fund or stock
     # ticker, the coin - so a series can be added to any table without widening
     # four different row shapes, and a row with no series simply has none.
+    "QUOTE_CCY": ("obj", (), "the currency each quote table counts in, keyed by table: "
+                             "{\"indexes\": \"USD\", \"funds\": \"USD\", \"stocks\": \"USD\", "
+                             "\"crypto\": \"USD\"}. Absent means USD; a table is ONE currency"),
     "SPARKS": ("obj", (), "intraday series for the quote tables, keyed by the row's "
                           "name: {\"S&P 500\": {\"series\": [6410.2, ...], "
                           "\"window\": \"9:30 AM \u2192 1:14 PM ET\"}}"),
@@ -163,6 +168,16 @@ def validate(payload):
             if not all(isinstance(x, str) for x in row):
                 _fail("TRAVEL", f"row {n}: every field must be a string")
 
+    ccy = payload.get("QUOTE_CCY")
+    if ccy is not None:
+        if not isinstance(ccy, dict):
+            _fail("QUOTE_CCY", f"expected an object ({OPTIONAL_SPEC['QUOTE_CCY'][2]})")
+        known = ("indexes", "funds", "stocks", "crypto")
+        for table, code in ccy.items():
+            if table not in known:
+                _fail("QUOTE_CCY", f"unknown table {table!r} - one of {', '.join(known)}")
+            if not isinstance(code, str) or not 2 <= len(code.strip()) <= 6:
+                _fail("QUOTE_CCY", f"{table}: expected a currency code like \"USD\", got {code!r}")
     sparks = payload.get("SPARKS")
     if sparks is not None:
         if not isinstance(sparks, dict):

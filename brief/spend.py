@@ -23,6 +23,9 @@ import datetime as _dt
 import re as _re
 
 LINE_PREFIX = "AI spend YTD"
+# " | opening $250.00" - spend already made this year that no row itemises,
+# carried on the same line so the next run keeps it without being told again.
+OPENING = " | opening $"
 # The line is indented inside the brief's finances section, and a mail client
 # may have quoted it - so it is matched anywhere on its line, not at the margin.
 _LINE = _re.compile(rf"^[>\s]*{LINE_PREFIX} (?P<year>\d{{4}}): (?P<body>.*?)\s*$", _re.M)
@@ -40,22 +43,34 @@ def year_of(today):
 
 
 def parse_line(text):
-    """(year, {service: amount}) from a brief's text copy, or (None, {}).
+    """(year, {service: amount}, opening) from a brief's text copy.
 
     The last such line wins: a quoted older brief cannot displace this one's.
+    `opening` is the un-itemised balance the owner gave when the count started
+    mid-year; it is 0.0 when the line carries none.
 
     >>> parse_line("AI spend YTD 2026: Acme AI $120.00; Northwind AI $18.50")
-    ('2026', {'Acme AI': 120.0, 'Northwind AI': 18.5})
+    ('2026', {'Acme AI': 120.0, 'Northwind AI': 18.5}, 0.0)
+    >>> parse_line("AI spend YTD 2026: Acme AI $120.00 | opening $250.00")
+    ('2026', {'Acme AI': 120.0}, 250.0)
     >>> parse_line("no line here")
-    (None, {})
+    (None, {}, 0.0)
     """
     last = None
     for m in _LINE.finditer(str(text or "")):
         last = m
     if last is None:
-        return None, {}
+        return None, {}, 0.0
+    body = last.group("body")
+    opening = 0.0
+    if OPENING.strip() in body or " | opening $" in body:
+        body, _, tail = body.partition("| opening $")
+        try:
+            opening = float(tail.strip().replace(",", ""))
+        except ValueError:
+            raise ValueError(f"cannot read the opening balance in {last.group(0)!r}")
     totals = {}
-    for part in last.group("body").split(";"):
+    for part in body.split(";"):
         part = part.strip()
         if not part or part == "nothing yet":
             continue
@@ -63,22 +78,26 @@ def parse_line(text):
         if not entry:
             raise ValueError(f"cannot read {part!r} in the {LINE_PREFIX} line")
         totals[entry.group("service").strip()] = float(entry.group("amount").replace(",", ""))
-    return last.group("year"), totals
+    return last.group("year"), totals, opening
 
 
-def format_line(year, totals):
+def format_line(year, totals, opening=0.0):
     """The machine-readable line the next run reads back.
 
     >>> format_line("2026", {"Northwind AI": 18.5, "Acme AI": 120.0})
     'AI spend YTD 2026: Acme AI $120.00; Northwind AI $18.50'
+    >>> format_line("2026", {"Acme AI": 120.0}, 250.0)
+    'AI spend YTD 2026: Acme AI $120.00 | opening $250.00'
     """
+    tail = f"{OPENING}{float(opening):,.2f}" if opening else ""
     if not totals:
-        return f"{LINE_PREFIX} {year}: nothing yet"
+        return f"{LINE_PREFIX} {year}: nothing yet{tail}"
     body = "; ".join(f"{s} ${totals[s]:,.2f}" for s in sorted(totals))
-    return f"{LINE_PREFIX} {year}: {body}"
+    return f"{LINE_PREFIX} {year}: {body}{tail}"
 
 
-def accumulate(previous_text, charges, today, basis=None, basis_year=None):
+def accumulate(previous_text, charges, today, basis=None, basis_year=None,
+               total_basis=None, total_basis_year=None):
     """Totals for today's brief: carried forward, plus this run's charges.
 
     `charges` is [(service, amount_usd)] for billing that arrived in THIS
@@ -86,13 +105,18 @@ def accumulate(previous_text, charges, today, basis=None, basis_year=None):
     adding it again would double-count. A basis applies only in its own year
     and only when nothing was carried forward.
 
-    Returns (year, {service: total}, carried_from_year or None). Use
+    Returns (year, {service: total}, carried_from_year or None, opening). Use
     `added(charges)` for what this window alone billed, which the brief plots.
     """
     year = year_of(today)
-    prev_year, carried = parse_line(previous_text)
+    prev_year, carried, opening = parse_line(previous_text)
     if prev_year != year:
-        carried = {}                          # 1 January: the count starts again
+        carried, opening = {}, 0.0            # 1 January: the count starts again
+    if not opening and total_basis and (total_basis_year is None or str(total_basis_year) == year):
+        # A brief that starts in June cannot itemise January to May, but the
+        # owner may know the total. It is added once and then carried, exactly
+        # like a per-service basis.
+        opening = round(float(total_basis), 2)
     totals = dict(carried)
     if not carried and basis and (basis_year is None or str(basis_year) == year):
         for service, amount in basis.items():
@@ -102,7 +126,7 @@ def accumulate(previous_text, charges, today, basis=None, basis_year=None):
         if not service:
             raise ValueError("a charge needs a service name")
         totals[service] = round(totals.get(service, 0.0) + float(amount), 2)
-    return year, totals, (prev_year if prev_year == year else None)
+    return year, totals, (prev_year if prev_year == year else None), opening
 
 
 def added(charges):
@@ -126,12 +150,12 @@ def rows(totals, new=None):
     it would say nothing about today.
 
     >>> rows({"Acme AI": 120.0, "Northwind AI": 40.0}, {"Acme AI": 20.0})
-    [['Acme AI', 120.0, 20.0, '75% of AI spend'], ['Northwind AI', 40.0, 0.0, '25% of AI spend']]
+    [['Acme AI', 120.0, 20.0, '75% of AI spend YTD'], ['Northwind AI', 40.0, 0.0, '25% of AI spend YTD']]
     """
     grand = sum(totals.values())
     new = new or {}
     out = []
     for service, total in sorted(totals.items(), key=lambda kv: (-kv[1], kv[0])):
-        share = f"{round(100 * total / grand)}% of AI spend" if grand else "no charges yet"
+        share = f"{round(100 * total / grand)}% of AI spend YTD" if grand else "no charges yet"
         out.append([service, round(float(total), 2), round(float(new.get(service, 0.0)), 2), share])
     return out

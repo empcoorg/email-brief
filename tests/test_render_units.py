@@ -831,8 +831,8 @@ class TestAiSpendColumn(unittest.TestCase):
 
     def test_the_share_column_is_named_in_full_and_carries_a_ring(self):
         f, em, _ = render_all(payload(AI_SPEND=self.block()))
-        self.assertIn("Share AI spend (YTD)", f)
-        self.assertIn("share ai spend (ytd)", em.lower())
+        self.assertIn("Share AI spend 2026", f)
+        self.assertIn("share ai spend 2026", em.lower())
         ai = f.split("AI services")[1][:4000]
         self.assertEqual(ai.count('<svg class="ring"'), len(self.ROWS))
         self.assertNotIn("<svg", em, "the sanitizer strips it, so the email states the share in words")
@@ -1364,7 +1364,8 @@ class TestThreeHorizons(unittest.TestCase):
 
     def test_email_states_ytd_in_the_first_column(self):
         _, em, _ = render_all(payload())
-        for header in ("Index · open · YTD", "Fund · NAV · YTD", "Asset · price · YTD"):
+        for header in ("Index · open (USD) · YTD", "Fund · NAV (USD) · YTD",
+                       "Asset · price (USD) · YTD"):
             self.assertIn(header, em, f"email missing {header!r}")
         self.assertGreaterEqual(em.count("YTD "), 10, "every row needs its YTD figure")
 
@@ -1523,14 +1524,14 @@ class TestQuoteStampsBesideTheFigure(unittest.TestCase):
 
     def test_the_heading_names_the_figure_and_the_row_carries_the_time(self):
         f, em, tx = render_all(payload())
-        for after, head in (("US market", "Index \u00b7 open"),
-                            ("Vanguard funds", "Fund \u00b7 NAV"),
-                            ("Large caps", "Ticker \u00b7 price"),
-                            ("Cryptocurrency", "Asset \u00b7 price")):
+        for after, head in (("US market", "Index \u00b7 open (USD)"),
+                            ("Vanguard funds", "Fund \u00b7 NAV (USD)"),
+                            ("Large caps", "Ticker \u00b7 price (USD)"),
+                            ("Cryptocurrency", "Asset \u00b7 price (USD)")):
             self.assertIn(f"<th>{head}</th>", self.table(f, after))
         market = self.table(f, "US market")
         self.assertIn("(09:30 EST)", market, "the time rides with the figure")
-        self.assertIn("Index \u00b7 open \u00b7 YTD", em)
+        self.assertIn("Index \u00b7 open (USD) \u00b7 YTD", em)
         self.assertIn("6,412.30 (09:30 EST)", tx)
 
     def test_todays_date_is_left_to_the_masthead(self):
@@ -1564,7 +1565,7 @@ class TestQuoteStampsBesideTheFigure(unittest.TestCase):
         for key in ("MKT_ROWS", "STOCKS", "CRYPTO_ROWS"):
             p[key] = [list(r)[:8] for r in p[key]]
         f, em, _tx = render_all(p)
-        self.assertIn("<th>Index \u00b7 open</th>", self.table(f, "US market"))
+        self.assertIn("<th>Index \u00b7 open (USD)</th>", self.table(f, "US market"))
         self.assertNotIn("(09:30 EST)", self.table(f, "US market"))
 
     def test_the_name_and_its_figure_are_one_column(self):
@@ -1573,7 +1574,7 @@ class TestQuoteStampsBesideTheFigure(unittest.TestCase):
         f, _em, _tx = render_all(payload())
         row = self.table(f, "US market").split("<tbody>")[1].split("</tr>")[0]
         cells = re.findall(r'data-l="([^"]+)"', row)
-        self.assertEqual(cells[0], "Index \u00b7 open")
+        self.assertEqual(cells[0], "Index \u00b7 open (USD)")
         self.assertEqual(cells[1], "Trend", "the trend follows the figure directly")
         first = row.split("</td>")[0]
         self.assertIn("S&amp;P 500", first)
@@ -1629,14 +1630,14 @@ class TestTheIndexColumnFollowsTheHour(unittest.TestCase):
 
     def test_the_morning_heads_the_column_open(self):
         f, em, tx = render_all(payload())
-        self.assertIn("<th>Index \u00b7 open</th>", f)
-        self.assertIn("Index \u00b7 open \u00b7 YTD", em)
+        self.assertIn("<th>Index \u00b7 open (USD)</th>", f)
+        self.assertIn("Index \u00b7 open (USD) \u00b7 YTD", em)
         self.assertIn("(09:30 EST)", tx)
 
     def test_the_evening_heads_it_close(self):
         f, em, tx = render_all(self.evening(payload()))
-        self.assertIn("<th>Index \u00b7 close</th>", f)
-        self.assertIn("Index \u00b7 close \u00b7 YTD", em)
+        self.assertIn("<th>Index \u00b7 close (USD)</th>", f)
+        self.assertIn("Index \u00b7 close (USD) \u00b7 YTD", em)
 
     def test_only_the_index_column_changes(self):
         """A NAV is a NAV and a share price is a price at any hour."""
@@ -1878,19 +1879,18 @@ class TestSeverityStripeIsOneBarPerRow(unittest.TestCase):
         self.assertIn("bottom:0", css_last)
         self.assertIn("border-bottom-left-radius:9px", css_last)
 
-    def test_the_label_is_centred_over_the_whole_head_line(self):
-        """The line is not symmetric about its zero — "Out ←" is shorter than
-        "→ In" — so a name centred on that zero reads as off-centre against
-        the line a person actually looks at."""
+    def test_the_line_pins_its_zero_and_the_name_is_measured_over_the_line(self):
+        """Two different questions. A bar is read against the zero, so the
+        line's "0" is pinned to the same 50% the ruler uses. The NAME is read
+        against the whole line, which is not symmetric about that zero, so the
+        page measures the line once and centres the name over its ink."""
         f, _em, _tx = render_all(payload())
         css = f.split("<style>")[1].split("</style>")[0]
-        head = [r for r in css.split("}") if ".dhead{" in r][0]
-        self.assertIn("display:flex", head, "the line is centred as a line")
-        self.assertIn("justify-content:center", head)
-        title = [r for r in css.split("}") if ".dhead .t{" in r][0]
-        self.assertIn("left:0", title)
-        self.assertIn("right:0", title)
-        self.assertIn("text-align:center", title)
+        head = [r for r in css.split("}") if ".dhead .c{" in r][0]
+        self.assertIn("left:50%", head)
+        self.assertIn("translateX(-50%)", head)
+        self.assertIn("function centreTitle", f, "the name is placed by measurement")
+        self.assertIn("document.fonts", f, "and again once the fonts have loaded")
 
     def test_the_row_itself_draws_no_border(self):
         """A 4px border on the row ran the full height behind the inset stripe,

@@ -115,6 +115,7 @@ def render_all(payload, email_budget=None, text_budget=None, full_url=None,
     globals()["AI_SPEND"] = payload.get("AI_SPEND") or {}
     globals()["TRAVEL"] = payload.get("TRAVEL") or []
     globals()["SPARKS"] = payload.get("SPARKS") or {}
+    globals()["QUOTE_CCY"] = payload.get("QUOTE_CCY") or {}
     if full_url and url(full_url) == "#":
         # A refused link would still print its text, so refuse the address
         # outright and let the run see why, instead of shipping a dead link.
@@ -304,7 +305,7 @@ def money_amount(amt, cur, usd, sign):
     """
     shown = ("" if sign == "\u00b1" else sign) + f"{cur_sym(cur)}{amt:,.2f}"
     if cur != "USD":
-        shown += f" (\u2248 ${usd:,.2f} USD)"
+        shown += f" (\u2248${usd:,.2f} USD)"
     return shown
 
 
@@ -592,18 +593,21 @@ td.num{{text-align:right;white-space:nowrap}}
 /* The name lives INSIDE the head, on the same 50% line as its "0", so no
    stylesheet can put them in boxes of different widths. text-indent gives back
    the trailing letter-space of the uppercase label. */
-.dhead.titled{{height:27px;align-items:flex-end}}
-.dhead .t{{position:absolute;left:0;right:0;top:0;text-align:center;letter-spacing:.08em;text-indent:.04em}}
+.dhead.titled{{height:31px}}
+.dhead .t{{left:50%;transform:translateX(-50%);letter-spacing:.08em;text-indent:.04em;top:0}}
+.dhead.titled .l,.dhead.titled .c,.dhead.titled .r{{top:18px}}
 /* The heading's "0" must sit exactly over the ruler's, so it takes the ruler's
    width rule rather than a fixed one: in a wider column a 150px heading centred
    its zero 65px left of the bars' zero, over negative territory. */
-/* One centred line, with the name centred over the whole of it: the reader
-   reads "New this window" against "Out <- 0 -> In", not against the zero
-   inside it. The ruler underneath is what puts a 0 exactly on the bars'
-   origin, and it still does - this line's own 0 is a reading aid, and it sits
-   where centring the line puts it. */
-.dhead{{position:relative;height:13px;width:100%;min-width:150px;max-width:280px;display:flex;justify-content:center;gap:6px;white-space:nowrap}}
-.dhead span{{white-space:nowrap}}
+/* The line's "0" is pinned to 50% - the same place the ruler puts its own 0
+   and the bars grow from - because that is the figure a reader checks a bar
+   against. The column's NAME is a different question: it is read against the
+   whole line, which is not symmetric about that zero ("Out <-" is shorter
+   than "-> In, USD"), so it is centred over the line's ink instead, measured
+   once at load. With scripting off it falls back to the 50% line. */
+.dhead{{position:relative;height:13px;width:100%;min-width:150px;max-width:280px}}
+.dhead span{{position:absolute;top:0;white-space:nowrap}}
+.dhead .l{{right:50%;margin-right:7px}} .dhead .c{{left:50%;transform:translateX(-50%)}} .dhead .r{{left:50%;margin-left:7px}}
 .daxis i{{position:absolute;top:0;height:3px;width:1px;background:var(--line)}}
 .daxis i.mj{{height:5px;background:var(--line-strong)}}
 .daxis span{{position:absolute;top:5px;font:500 8.5px 'JetBrains Mono',monospace;letter-spacing:0;text-transform:none;color:var(--ink-3);transform:translateX(-50%)}}
@@ -616,8 +620,10 @@ td.num{{text-align:right;white-space:nowrap}}
 .barfig.trio{{position:relative;height:19px;width:100%;min-width:150px;max-width:280px;margin:0 auto 2px}}
 .barfig.trio span{{position:absolute;top:0;white-space:nowrap}}
 .barfig.trio .l{{right:50%;margin-right:11px}}
-.barfig.trio .c{{left:50%;transform:translateX(-50%)}}
+.barfig.trio .c{{left:50%;transform:translateX(-50%);font-size:.82em;opacity:.8}}
 .barfig.trio .r{{left:50%;margin-left:11px}}
+tr.sum>td{{border-top:2px solid var(--line-strong);background:var(--surface-2);font-weight:700}}
+tr.sum .meta{{font-weight:400}}
 .cap{{font-size:12.5px;color:var(--ink-3);padding:8px 2px}}
 .tiles{{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}}
 .tile{{background:var(--surface-2);border-radius:10px;padding:12px 14px}} .tile .v{{font-size:22px;font-weight:700;margin:2px 0}} .tile .d{{font-size:12.5px;color:var(--ink-3)}}
@@ -748,7 +754,7 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
                  '<th>Service</th><th style="text-align:right">Billed ' + e(AI_SPEND["year"]) + '</th>'
                  + '<th><div class="dcol">'
                  + money_head(title="New this window") + money_axis(AI_AXIS, "ai") + '</div></th>'
-                 '<th>Share AI spend (YTD)</th></tr></thead><tbody>')
+                 f'<th>Share AI spend {e(AI_SPEND["year"])}</th></tr></thead><tbody>')
         for row in ai_spend_rows():
             service, total, note = row[0], row[1], row[-1]
             new = ai_new(row)
@@ -758,8 +764,18 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
                            (f'<span class="dir-neg mono">{e(usd_str(new))}</span>'
                             + money_bar(abs(new), "Out", axis=AI_AXIS, cls="ai")) if new
                            else '<span class="muted">nothing new</span>')
-                     + tdl("Share AI spend (YTD)",
+                     + tdl(f'Share AI spend {e(AI_SPEND["year"])}',
                            f'<span class="ringrow">{ai_ring(ai_share(row))}<span>{e(note)}</span></span>') + '</tr>')
+        opening = ai_opening()
+        o.append('<tr class="sum">' + tdl("Service", f'<span class="lead">Total {e(AI_SPEND["year"])}</span>')
+                 + tdl("Billed", f'<span class="mono">{e(usd_str(ai_grand_total()))}</span>', "num")
+                 + tdl("New this window",
+                       f'<span class="dir-neg mono">{e(usd_str(ai_new_total()))}</span>' if ai_new_total()
+                       else '<span class="muted">nothing new</span>')
+                 + tdl(f'Share AI spend {e(AI_SPEND["year"])}',
+                       f'<span class="meta">includes {e(usd_str(opening))} from before this brief '
+                       'started counting</span>' if opening else '<span class="meta">all services above</span>')
+                 + '</tr>')
         o.append(f'</tbody></table></div><div class="cap">{e(ai_spend_caption())}</div>')
     if FIN_INTERNAL:
         o.append('<h3>Transfers between your own accounts</h3><div class="nothing">' + e(FIN_INTERNAL) + '</div>')
@@ -894,9 +910,9 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
         research.append(f'<div class="card wide"><h2><span class="num">{num()}.</span> US market</h2>')
         if MKT_ROWS:
             stamp = shared_asof([r[8:] for r in MKT_ROWS])
-            research.append('<div class="tbl-wrap"><table><thead><tr><th>Index · {3}</th><th class="sp-head">{4}</th><th>1D{0}</th><th>1W{1}</th><th>YTD{2}</th></tr></thead><tbody>'.format(axis_div(MKT_24), axis_div(MKT_7D), axis_div(MKT_YTD), quote_word().lower(), spark_head()))
+            research.append('<div class="tbl-wrap"><table><thead><tr><th>Index · {3}</th><th class="sp-head">{4}</th><th>1D{0}</th><th>1W{1}</th><th>YTD{2}</th></tr></thead><tbody>'.format(axis_div(MKT_24), axis_div(MKT_7D), axis_div(MKT_YTD), quote_head_line(quote_word().lower(), "indexes"), spark_head()))
             for n, c, p1, v1, p7, v7, py, vy, *asof in MKT_ROWS:
-                research.append('<tr>' + tdl(f"Index · {quote_word().lower()}", quote_lead(n, c, v1, stamp, asof), "mono")
+                research.append('<tr>' + tdl(f'Index · {quote_head_line(quote_word().lower(), "indexes")}', quote_lead(n, c, v1, stamp, asof), "mono")
                                 + tdl(spark_head(), spark_cell_file(n), "spark-cell")
                                 + tdl("1D", horizon_cell_file(p1, v1, MKT_24, "pts"))
                                 + tdl("1W", horizon_cell_file(p7, v7, MKT_7D, "pts"))
@@ -907,9 +923,9 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
             # No trailing date column: each NAV states its own time beside the
             # figure, so the column would be that string once more per fund.
             asof_th = ""
-            research.append(f'<h3>Vanguard funds</h3><div class="tbl-wrap"><table><thead><tr><th>Fund · NAV</th><th class="sp-head">{spark_head()}</th><th>1D{axis_div(FUND_1D)}</th><th>1W{axis_div(FUND_1W)}</th><th>YTD{axis_div(FUND_YTD)}</th>{asof_th}</tr></thead><tbody>')
+            research.append(f'<h3>Vanguard funds</h3><div class="tbl-wrap"><table><thead><tr><th>Fund · {quote_head_line("NAV", "funds")}</th><th class="sp-head">{spark_head()}</th><th>1D{axis_div(FUND_1D)}</th><th>1W{axis_div(FUND_1W)}</th><th>YTD{axis_div(FUND_YTD)}</th>{asof_th}</tr></thead><tbody>')
             for tk, nm, nav, a1, v1, a7, v7, ay, vy, asof, note in FUNDS:
-                research.append('<tr>' + tdl("Fund · NAV", quote_lead(tk, nav, v1, stamp, asof)
+                research.append('<tr>' + tdl(f'Fund · {quote_head_line("NAV", "funds")}', quote_lead(tk, nav, v1, stamp, asof)
                                              + f'<br><span class="meta">{e(nm)}</span>', "mono")
                                 + tdl(spark_head(), spark_cell_file(tk), "spark-cell")
                                 + tdl("1D", horizon_cell_file(a1, v1, FUND_1D))
@@ -919,9 +935,9 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
             research.append(f'</tbody></table></div>{axis_foot(FUND_1D, "1D NAV change, %")}{axis_foot(FUND_1W, "1W NAV change, %")}{axis_foot(FUND_YTD, "YTD NAV change, %")}<div class="cap">Change from the prior published NAV (1D), over one trading week (1W), and since the previous year-end (YTD) - each in $ and %. {axis_note(FUND_1D, "1D axis")}; {axis_note(FUND_1W, "1W axis")}; {axis_note(FUND_YTD, "YTD axis")}. ' + e(" ".join(f"{tk}: {note}" for tk, nm, nav, a1, v1, a7, v7, ay, vy, asof, note in FUNDS)) + '</div>')
         if STOCKS:
             stamp = shared_asof([r[8:] for r in STOCKS])
-            research.append(f'<h3>Large caps</h3><div class="tbl-wrap"><table><thead><tr><th>Ticker · price</th><th class="sp-head">{spark_head()}</th><th>1D{axis_div(STK_1D)}</th><th>1W{axis_div(STK_1W)}</th><th>YTD{axis_div(STK_YTD)}</th></tr></thead><tbody>')
+            research.append(f'<h3>Large caps</h3><div class="tbl-wrap"><table><thead><tr><th>Ticker · {quote_head_line("price", "stocks")}</th><th class="sp-head">{spark_head()}</th><th>1D{axis_div(STK_1D)}</th><th>1W{axis_div(STK_1W)}</th><th>YTD{axis_div(STK_YTD)}</th></tr></thead><tbody>')
             for tk, pr, a1, v1, a7, v7, ay, vy, *asof in STOCKS:
-                research.append('<tr>' + tdl("Ticker · price", quote_lead(tk, pr, v1, stamp, asof), "mono")
+                research.append('<tr>' + tdl(f'Ticker · {quote_head_line("price", "stocks")}', quote_lead(tk, pr, v1, stamp, asof), "mono")
                                 + tdl(spark_head(), spark_cell_file(tk), "spark-cell")
                                 + tdl("1D", horizon_cell_file(a1, v1, STK_1D))
                                 + tdl("1W", horizon_cell_file(a7, v7, STK_1W))
@@ -934,9 +950,9 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
         research.append(f'<div class="card wide"><h2><span class="num">{num()}.</span> Cryptocurrency</h2>')
         if CRYPTO_ROWS:
             stamp = shared_asof([r[8:] for r in CRYPTO_ROWS])
-            research.append(f'<div class="tbl-wrap"><table><thead><tr><th>Asset · price</th><th class="sp-head">{spark_head()}</th><th>1D{axis_div(CRY_24)}</th><th>1W{axis_div(CRY_7D)}</th><th>YTD{axis_div(CRY_YTD)}</th></tr></thead><tbody>')
+            research.append(f'<div class="tbl-wrap"><table><thead><tr><th>Asset · {quote_head_line("price", "crypto")}</th><th class="sp-head">{spark_head()}</th><th>1D{axis_div(CRY_24)}</th><th>1W{axis_div(CRY_7D)}</th><th>YTD{axis_div(CRY_YTD)}</th></tr></thead><tbody>')
             for n, pr, v1, a1, v7, a7, vy, ay, *asof in CRYPTO_ROWS:
-                research.append('<tr>' + tdl("Asset · price", quote_lead(n, pr, v1, stamp, asof), "mono")
+                research.append('<tr>' + tdl(f'Asset · {quote_head_line("price", "crypto")}', quote_lead(n, pr, v1, stamp, asof), "mono")
                                 + tdl(spark_head(), spark_cell_file(n), "spark-cell")
                                 + tdl("1D", horizon_cell_file(a1, v1, CRY_24, reverse=True))
                                 + tdl("1W", horizon_cell_file(a7, v7, CRY_7D, reverse=True))
@@ -1161,6 +1177,29 @@ def ai_spend_total():
     return sum(float(r[1]) for r in ai_spend_rows())
 
 
+def ai_new_total():
+    """What every service billed in THIS window, added up."""
+    return round(sum(ai_new(r) for r in ai_spend_rows()), 2)
+
+
+def ai_opening():
+    """Spend already made this year that no row itemises.
+
+    A brief started in June cannot itemise January to May. The owner can give
+    the total, and it is carried forward on the same machine-readable line as
+    the per-service figures, so it is stated once rather than every run.
+    """
+    try:
+        return round(float((AI_SPEND or {}).get("opening") or 0.0), 2)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def ai_grand_total():
+    """Everything billed this year: the rows, plus what preceded them."""
+    return round(ai_spend_total() + ai_opening(), 2)
+
+
 def ai_spend_caption():
     """Says what the figure is and, plainly, what it is not.
 
@@ -1168,8 +1207,12 @@ def ai_spend_caption():
     reader must not mistake it for a full year of billing.
     """
     note = (AI_SPEND or {}).get("note") or ""
+    opening = ai_opening()
     base = (f"Billed {AI_SPEND['year']} to date across {len(ai_spend_rows())} service(s): "
-            f"{usd_str(ai_spend_total())}. Counted from billing emails as they arrive - earlier "
+            f"{usd_str(ai_grand_total())}"
+            + (f", of which {usd_str(opening)} was already spent before this brief started counting"
+               if opening else "")
+            + ". Counted from billing emails as they arrive - earlier "
             f"charges are not back-dated - and reset to $0.00 on 1 January.")
     return f"{base} {note}".strip()
 
@@ -1367,7 +1410,7 @@ def large_caps_email():
         rws.append([td(f'{lead(tk)}<br>{quote_cell_email(pr, v1, asof)}<br>{sp(f"YTD {pct_str(vy)} {arrow(vy)}", ky)}{spark_row_email(tk)}', mono=True),
                     td(em_trio(e(a1), v1, pct_str(v1), L["pos"] if v1 >= 0 else L["neg"]) + em_bar_div(v1, STK_1D), mono=True),
                     td(em_trio(e(a7), v7, pct_str(v7), L["pos"] if v7 >= 0 else L["neg"]) + em_bar_div(v7, STK_1W), mono=True)])
-    return h3("Large caps") + tbl([f'Ticker {DOT} price {DOT} YTD',
+    return h3("Large caps") + tbl([f'Ticker {DOT} {quote_head_line("price", "stocks")} {DOT} YTD',
                                    th_axis("1D", pct_labels(STK_1D)), th_axis("1W", pct_labels(STK_1W))],
                                   rws, ["30%", "35%", "35%"])
 
@@ -1471,6 +1514,25 @@ SPARK_SCRIPT = """<script>
   }
   var all = document.querySelectorAll('.spark[data-series]');
   for (var i = 0; i < all.length; i++) wire(all[i]);
+  // A money column's name is read against the whole line beneath it, and that
+  // line is not symmetric about its zero. CSS cannot measure text, so the one
+  // place the page needs a measurement is here; without it the name stays on
+  // the 50% line, which is where the stylesheet leaves it.
+  function centreTitle(head) {
+    var title = head.querySelector('.t');
+    var left = head.querySelector('.l');
+    var right = head.querySelector('.r');
+    if (!title || !left || !right) return;
+    var box = head.getBoundingClientRect();
+    if (!box.width) return;
+    var ink = (left.getBoundingClientRect().left + right.getBoundingClientRect().right) / 2;
+    title.style.left = ((ink - box.left) / box.width * 100) + '%';
+  }
+  var heads = document.querySelectorAll('.dhead.titled');
+  function centreAll() { for (var j = 0; j < heads.length; j++) centreTitle(heads[j]); }
+  centreAll();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(centreAll);
+  window.addEventListener('resize', centreAll);
 })();
 </script>"""
 SPARK_SCRIPT = (SPARK_SCRIPT.replace("__PAD__", str(SPARK_PAD))
@@ -1544,6 +1606,23 @@ def clock24(text):
             hour += 12
         return f"{hour:02d}:{m.group(2) or '00'}"
     return _CLOCK.sub(swap, str(text or ""))
+
+
+def quote_ccy(table):
+    """The currency a quote table counts in, "USD" unless the run says otherwise.
+
+    A brief that follows the FTSE or the Nikkei beside the S&P is reading two
+    different units, and a column of bare numbers cannot say which. The run
+    names the currency per table; the heading carries it, so the figures
+    underneath do not have to.
+    """
+    ccy = (QUOTE_CCY or {}).get(table) or "USD"
+    return str(ccy).strip()[:6] or "USD"
+
+
+def quote_head_line(word, table):
+    """"open (USD)" - what the column holds, and in what unit."""
+    return f"{word} ({quote_ccy(table)})"
 
 
 def stamp_beside(stamp):
@@ -2015,7 +2094,7 @@ def em_trio(left, pct, right, colour):
     c = f"padding:0;font-weight:600;color:{colour}"
     return (f'<table width="100%" cellpadding="0" cellspacing="0"><tr>'
             f'<td width="42%" align="right" style="{c}">{left}</td>'
-            f'<td width="16%" align="center" style="{c}">{arrow(pct)}</td>'
+            f'<td width="16%" align="center" style="{c};font-size:12px">{arrow(pct)}</td>'
             f'<td width="42%" align="left" style="{c}">{right}</td></tr></table>')
 
 
@@ -2395,8 +2474,20 @@ def email_html(budget=None):
                         td(sp(e(usd_str(total)), L["ink"]), mono=True),
                         td((sp(e(usd_str(new)), L["neg"]) + em_bar_money(abs(new), "Out", axis=AI_AXIS))
                            if new else muted("nothing new"), mono=True)])
+        opening = ai_opening()
+        sum_note = (f"includes {usd_str(opening)} from before this brief started counting"
+                    if opening else "all services above")
+        rule = f"border-top:2px solid {L['lineS']};"
+        rws.append([f'<td valign="top" style="padding:8px 8px;{rule}">'
+                    f'{sp(e("Total " + str(AI_SPEND["year"])), L["ink"])}'
+                    f'<br>{small(e(sum_note))}</td>',
+                    f'<td valign="top" style="padding:8px 8px;{rule}font-family:{F_M}">'
+                    f'{sp(e(usd_str(ai_grand_total())), L["ink"])}</td>',
+                    f'<td valign="top" style="padding:8px 8px;{rule}font-family:{F_M}">'
+                    + (sp(e(usd_str(ai_new_total())), L["neg"]) if ai_new_total() else muted("nothing new"))
+                    + '</td>'])
         inner += h3("AI services — billed year to date") + tbl(
-            ["Service · share AI spend (YTD)", f'Billed {AI_SPEND["year"]}',
+            [f'Service · share AI spend {AI_SPEND["year"]}', f'Billed {AI_SPEND["year"]}',
              th_axis("New this window", money_labels(AI_AXIS))],
             rws, ["40%", "22%", "38%"]) + cap(ai_spend_caption())
     if FIN_INTERNAL:
@@ -2516,7 +2607,7 @@ def email_html(budget=None):
                 rws.append([td(f'{lead(n)}<br>{quote_cell_email(c, v1, asof)}<br>{sp(f"YTD {pct_str(vy)} {arrow(vy)}", ky)}{spark_row_email(n)}', mono=True),
                             td(em_trio(f"{e(p1)} pts", v1, pct_str(v1), L["pos"] if v1 >= 0 else L["neg"]) + em_bar_div(v1, MKT_24), mono=True),
                             td(em_trio(f"{e(p7)} pts", v7, pct_str(v7), L["pos"] if v7 >= 0 else L["neg"]) + em_bar_div(v7, MKT_7D), mono=True)])
-            inner += tbl([f'Index · {quote_word().lower()} · YTD', th_axis("1D", pct_labels(MKT_24)), th_axis("1W", pct_labels(MKT_7D))], rws, ["30%", "35%", "35%"]) + cap(f"1D = close → close vs the prior session; 1W = trailing 5 sessions; YTD = since the previous year-end, shown as a figure because the email is capped at three columns. {axis_note(MKT_24, '1D axis')}; {axis_note(MKT_7D, '1W axis')}.")
+            inner += tbl([f'Index · {quote_head_line(quote_word().lower(), "indexes")} · YTD', th_axis("1D", pct_labels(MKT_24)), th_axis("1W", pct_labels(MKT_7D))], rws, ["30%", "35%", "35%"]) + cap(f"1D = close → close vs the prior session; 1W = trailing 5 sessions; YTD = since the previous year-end, shown as a figure because the email is capped at three columns. {axis_note(MKT_24, '1D axis')}; {axis_note(MKT_7D, '1W axis')}.")
         if FUNDS:
             rws = []
             stamp = shared_asof([r[9] for r in FUNDS])
@@ -2525,7 +2616,7 @@ def email_html(budget=None):
                 rws.append([td(f'{lead(tk)}<br>{quote_cell_email(nav, v1, asof)}<br>{sp(f"YTD {pct_str(vy)} {arrow(vy)}", ky)}{spark_row_email(tk)}', mono=True),
                             td(em_trio(e(a1), v1, pct_str(v1), L["pos"] if v1 >= 0 else L["neg"]) + em_bar_div(v1, FUND_1D), mono=True),
                             td(em_trio(e(a7), v7, pct_str(v7), L["pos"] if v7 >= 0 else L["neg"]) + em_bar_div(v7, FUND_1W), mono=True)])
-            inner += h3("Vanguard funds") + tbl(['Fund · NAV · YTD', th_axis("1D", pct_labels(FUND_1D)), th_axis("1W", pct_labels(FUND_1W))], rws, ["30%", "35%", "35%"]) + cap("Change from the prior published NAV (1D), over one trading week (1W), and since the previous year-end (YTD). " + " ".join(f"{tk}: {note}" for tk, nm, nav, a1, v1, a7, v7, ay, vy, asof, note in FUNDS))
+            inner += h3("Vanguard funds") + tbl([f'Fund · {quote_head_line("NAV", "funds")} · YTD', th_axis("1D", pct_labels(FUND_1D)), th_axis("1W", pct_labels(FUND_1W))], rws, ["30%", "35%", "35%"]) + cap("Change from the prior published NAV (1D), over one trading week (1W), and since the previous year-end (YTD). " + " ".join(f"{tk}: {note}" for tk, nm, nav, a1, v1, a7, v7, ay, vy, asof, note in FUNDS))
         if STOCKS:
             inner += large_caps_email()
         if MKT_BULLETS:
@@ -2542,7 +2633,7 @@ def email_html(budget=None):
                 rws.append([td(f'{lead(n)}<br>{quote_cell_email(pr, v1, asof)}<br>{sp(f"YTD {pct_str(vy)} {arrow(vy)}", ky)}{spark_row_email(n)}', mono=True),
                             td(em_trio(pct_str(v1), v1, e(a1), L["pos"] if v1 >= 0 else L["neg"]) + em_bar_div(v1, CRY_24), mono=True),
                             td(em_trio(pct_str(v7), v7, e(a7), L["pos"] if v7 >= 0 else L["neg"]) + em_bar_div(v7, CRY_7D), mono=True)])
-            inner += tbl(['Asset · price · YTD', th_axis("1D", pct_labels(CRY_24)), th_axis("1W", pct_labels(CRY_7D))], rws, ["30%", "35%", "35%"]) + cap(f"1D = rolling 24 h; 1W = rolling 7 days; YTD = since the previous year-end — crypto trades continuously, so every window runs back from the quote time. {axis_note(CRY_24, '1D axis')}; {axis_note(CRY_7D, '1W axis')}. {CRYPTO_NOTE}")
+            inner += tbl([f'Asset · {quote_head_line("price", "crypto")} · YTD', th_axis("1D", pct_labels(CRY_24)), th_axis("1W", pct_labels(CRY_7D))], rws, ["30%", "35%", "35%"]) + cap(f"1D = rolling 24 h; 1W = rolling 7 days; YTD = since the previous year-end — crypto trades continuously, so every window runs back from the quote time. {axis_note(CRY_24, '1D axis')}; {axis_note(CRY_7D, '1W axis')}. {CRYPTO_NOTE}")
         if CRYPTO_BULLETS:
             inner += '<ul style="margin:8px 0 0;padding-left:20px">' + "".join(em_li(b) for b in CRYPTO_BULLETS) + "</ul>"
         o.append(card(inner))
@@ -2733,6 +2824,10 @@ def plain_text(budget=None):
             new = ai_new(row)
             arrived = f", {usd_str(new)} billed in this window" if new else ", nothing new in this window"
             A(f"  - {service}: {usd_str(total)} year to date{arrived} ({note})")
+        opening = ai_opening()
+        A(f"  = Total {AI_SPEND['year']}: {usd_str(ai_grand_total())}"
+          + (f" (includes {usd_str(opening)} from before this brief started counting)" if opening else "")
+          + (f", {usd_str(ai_new_total())} billed in this window" if ai_new_total() else ""))
         A("  " + ai_spend_caption())
         # Machine-readable, and the reason the total survives to the next run:
         # tomorrow's brief reads this line out of today's sent email.
@@ -2866,7 +2961,8 @@ def spend_line():
     """The line the next run parses back out of this brief's text copy."""
     from .spend import format_line
     return format_line((AI_SPEND or {}).get("year", ""),
-                       {r[0]: float(r[1]) for r in ai_spend_rows()})
+                       {r[0]: float(r[1]) for r in ai_spend_rows()},
+                       ai_opening())
 
 
 def _carried_text_line(m):

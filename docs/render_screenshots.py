@@ -4,7 +4,7 @@
 Run from the repo root after any design-affecting change (see README):
     pip install playwright   # Chromium must be available to Playwright
     python3 docs/render_screenshots.py
-Writes docs/mock-brief-{top,jobs,sections,travel,usps,packages,markets,trend}.png (dark mode).
+Writes docs/mock-brief-{top,hipri,jobs,sections,travel,usps,packages,markets,trend}.png (dark mode).
 """
 import asyncio, hashlib, os, re, subprocess, sys, tempfile
 
@@ -70,8 +70,16 @@ async def main():
             bar = await pg.query_selector("main > div, .actions, body")
             h = await pg.evaluate("() => { const s = document.querySelectorAll('section'); return s.length > 1 ? s[1].getBoundingClientRect().top + window.scrollY : 1200; }")
             await pg.screenshot(path=os.path.join(DOCS, "mock-brief-top.png"), clip={"x": 0, "y": 0, "width": CAPTURE_WIDTH, "height": min(int(h), 2200)})
-            # Section 1: relevant job posts (ranked table with badges + legend)
+            # Section 2: relevant job posts (ranked table with badges + legend)
             secs = await pg.query_selector_all("section")
+            # Section 1: high priority — the severity stripes and tiered detail
+            hipri = None
+            for s_ in secs:
+                if "high priority" in (await s_.inner_text()).lower():
+                    hipri = s_
+                    break
+            _require("high priority", hipri)
+            await hipri.screenshot(path=os.path.join(DOCS, "mock-brief-hipri.png"))
             jobs = None
             for s in secs:
                 txt = (await s.inner_text()).lower()
@@ -153,7 +161,7 @@ async def main():
             await b.close()
         # inside the temp dir, which is removed on exit from this block
         _write_lock(page_html)
-    print("wrote mock-brief-top/jobs/sections/travel/usps/packages/markets/trend PNGs (dark mode)")
+    print("wrote mock-brief-top/hipri/jobs/sections/travel/usps/packages/markets/trend PNGs (dark mode)")
     print(f"wrote {LOCK} — CI fails if the UI changes without regenerating these")
 
 asyncio.run(main())

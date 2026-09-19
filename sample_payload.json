@@ -248,19 +248,19 @@
         "Acme AI",
         120.0,
         24.0,
-        "71% of AI spend"
+        "71% of AI spend YTD"
       ],
       [
         "Northwind AI",
         34.0,
         0.0,
-        "20% of AI spend"
+        "20% of AI spend YTD"
       ],
       [
         "Cascade Speech",
         15.0,
         15.0,
-        "9% of AI spend"
+        "9% of AI spend YTD"
       ]
     ],
     "note": "Acme AI carries an opening balance agreed for 2026; the others started at $0.00 when their first invoice arrived."
