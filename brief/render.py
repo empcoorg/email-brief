@@ -1555,8 +1555,24 @@ def em_spark(series, window, colour):
             f'line-height:1.3">{e(foot)}</div>')
 
 
+EM_SPARKS_ON = True      # turned off when the send call cannot afford them
+
+
+def draw_email_sparks(on):
+    """Whether the email draws its trends at all.
+
+    The caller turns them off when the whole send call is over its ceiling.
+    They are decoration - the page keeps the real drawing - so they go before
+    anything a reader would otherwise lose: before the plain-text copy is cut,
+    and long before a card is shed.
+    """
+    globals()["EM_SPARKS_ON"] = bool(on)
+
+
 def spark_row_email(name, colour):
     """The row's trend for the email, under the figure it belongs to."""
+    if not EM_SPARKS_ON:
+        return ""
     series, window = spark_for(name)
     drawn = em_spark(series, window, colour)
     return drawn or ""

@@ -445,6 +445,20 @@ def main(argv=None):
 
     total = call_bytes(len(eh.encode("utf-8")), len(pt.encode("utf-8")), sizes)
     if total > limit:
+        # DECORATION FIRST. The email's trend drawings are the only thing in
+        # the call that a reader loses nothing by: the page keeps the real
+        # ones, and every email carries its link. They go before the text copy
+        # is cut and long before a card is shed.
+        from .render import draw_email_sparks
+        draw_email_sparks(False)
+        fh, eh, pt = render_all(payload, cap, a.text_budget, a.full_url, attached, stamp)
+        draw_email_sparks(True)
+        shrunk = call_bytes(len(eh.encode("utf-8")), len(pt.encode("utf-8")), sizes)
+        if shrunk < total:
+            print(f"send call was {total:,} B of {limit:,} — the email's trend "
+                  f"drawings come out first ({total - shrunk:,} B); the page keeps them.")
+        total = shrunk
+    if total > limit:
         # Text before HTML: it is an alternative body, and a reader whose client
         # shows HTML never sees it.
         room_for_text = max(limit - len(eh.encode("utf-8"))

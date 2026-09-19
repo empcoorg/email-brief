@@ -604,3 +604,38 @@ class TestSpecCoversWhatTheRendererReads(unittest.TestCase):
                 if re.search(name + r'\.get\("' + key + r'",', self.SOURCE):
                     continue
                 self.assertIn(key, payload[name], f"sample payload {name} lacks {key!r}")
+
+
+class TestWhatGivesWayWhenTheCallIsFull(unittest.TestCase):
+    """One send call carries the HTML, the plain-text copy and the scans, and
+    it has a hard ceiling. What gets cut first is a judgement, so it is fixed
+    here: decoration, then the text copy, then whole cards.
+
+    A brief shipped with four sections missing from its text copy because the
+    email's trend drawings — which the page keeps anyway — had eaten the room
+    first. That is the wrong way round: a drawing costs a reader a shape, a
+    section costs them the news.
+    """
+
+    def render(self, *args):
+        import subprocess, sys, tempfile, os
+        d = tempfile.mkdtemp()
+        r = subprocess.run([sys.executable, "-m", "brief", "render", "sample_payload.json",
+                            "--out-dir", d, "--date", "2026-09-18", *args],
+                           cwd=ROOT, capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return (r.stdout,
+                open(os.path.join(d, "email.html"), encoding="utf-8").read(),
+                open(os.path.join(d, "email.txt"), encoding="utf-8").read())
+
+    def test_the_drawings_go_before_the_text_copy_loses_a_section(self):
+        out, em, tx = self.render("--connector", "gmail")
+        self.assertIn("trend drawings come out first", out)
+        self.assertNotIn("data-em-spark", em)
+        self.assertIn("US MARKET", tx, "the text copy keeps its sections")
+        self.assertNotIn("SHORTENED", tx)
+
+    def test_nothing_is_dropped_when_the_call_has_room(self):
+        out, em, _tx = self.render("--connector", "gmail", "--send-budget", "400000")
+        self.assertNotIn("come out first", out)
+        self.assertIn("data-em-spark", em, "with room, the email draws them")
