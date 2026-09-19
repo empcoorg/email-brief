@@ -121,10 +121,14 @@ class TestGeneratorOutputs(unittest.TestCase):
                 self.assertNotIn(word, out, f"{name} still spells out {word.strip()!r}")
         self.assertNotIn("\u25b2", tx, "plain text has no color, so it keeps words")
         self.assertIn("Up", tx); self.assertIn("Down", tx)
+        # the arrow sits between the two halves of a figure now, on the line
+        # the bar grows from, so it is matched there rather than at the end
+        self.assertRegex(page, r"\u25b2</span><span class=\"r\">\+\d")
         # the sign still accompanies every figure, so direction survives without
         # color or glyph rendering
-        self.assertRegex(page, r"\+\d+\.\d{2}% \u25b2")
-        self.assertRegex(page, r"\u2212\d+\.\d{2}% \u25bc")
+        self.assertRegex(page, r"\u25bc</span><span class=\"r\">\u2212\d")
+        self.assertRegex(page, r'<span class="r">\+\d+\.\d{2}%</span>')
+        self.assertRegex(page, r'<span class="r">\u2212\d+\.\d{2}%</span>')
 
     def test_fund_rows_carry_change_bars_on_even_axes(self):
         page, em = self.r["page"], self.r["email"]

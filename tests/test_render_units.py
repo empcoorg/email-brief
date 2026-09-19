@@ -1870,20 +1870,27 @@ class TestSeverityStripeIsOneBarPerRow(unittest.TestCase):
         css = f.split("<style>")[1].split("</style>")[0]
         rule = [r for r in css.split("}") if "tr.hp>td:first-child::before" in r][0]
         self.assertNotIn("border-radius", rule, "square ends, not rounded")
-        self.assertIn("top:6px", rule)
-        self.assertIn("bottom:6px", rule)
+        self.assertIn("top:1px", rule)
+        self.assertIn("bottom:1px", rule)
+        # and the last one follows the wrapper's own corner rather than
+        # stopping short of it
+        css_last = [r for r in css.split("}") if "tr.hp:last-child>td:first-child::before" in r][0]
+        self.assertIn("bottom:0", css_last)
+        self.assertIn("border-bottom-left-radius:9px", css_last)
 
-    def test_the_labels_box_excludes_its_trailing_letter_space(self):
-        """Centring a box that carries the trailing letter-space of its last
-        character leaves the glyphs half a space off - by however much the
-        engine happens to round it."""
+    def test_the_label_is_centred_over_the_whole_head_line(self):
+        """The line is not symmetric about its zero — "Out ←" is shorter than
+        "→ In" — so a name centred on that zero reads as off-centre against
+        the line a person actually looks at."""
         f, _em, _tx = render_all(payload())
         css = f.split("<style>")[1].split("</style>")[0]
-        rule = [r for r in css.split("}") if ".dhead .t{" in r][0]
-        self.assertIn("display:inline-block", rule)
-        self.assertIn("margin-right:-.08em", rule)
-        self.assertIn("left:50%", rule)
-        self.assertIn("translateX(-50%)", rule)
+        head = [r for r in css.split("}") if ".dhead{" in r][0]
+        self.assertIn("display:flex", head, "the line is centred as a line")
+        self.assertIn("justify-content:center", head)
+        title = [r for r in css.split("}") if ".dhead .t{" in r][0]
+        self.assertIn("left:0", title)
+        self.assertIn("right:0", title)
+        self.assertIn("text-align:center", title)
 
     def test_the_row_itself_draws_no_border(self):
         """A 4px border on the row ran the full height behind the inset stripe,

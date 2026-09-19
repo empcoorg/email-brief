@@ -109,11 +109,15 @@ class _BrowserCase(unittest.TestCase):
           const z = zero.getBoundingClientRect();
           const hz = table.querySelector('th .dhead .c');
           const h = hz ? hz.getBoundingClientRect() : null;
-          const lb = table.querySelector('th .dcol .dlabel');
+          const lb = table.querySelector('th .dhead .t');
+          const ll = table.querySelector('th .dhead .l');
+          const rr = table.querySelector('th .dhead .r');
           const l = lb ? lb.getBoundingClientRect() : null;
           return {axis: box(ax), zeroCentre: z.left + z.width / 2,
                   headZero: h ? h.left + h.width / 2 : null,
                   labelCentre: l ? l.left + l.width / 2 : null,
+                  lineCentre: (ll && rr) ? (ll.getBoundingClientRect().left
+                                            + rr.getBoundingClientRect().right) / 2 : null,
                   bars: bars.map(b => {
                     const f = b.querySelector('.fill').getBoundingClientRect();
                     return {box: box(b), fill: [f.left, f.right],
@@ -129,15 +133,17 @@ class _BrowserCase(unittest.TestCase):
         # text its glyphs landed 30px left of the bars' zero, so the word "0"
         # sat over negative territory while the ruler beneath it was correct.
         # Checking only the ruler is what let that ship.
-        self.assertIsNotNone(r["headZero"],
-                             f"{what}: the heading must pin its own '0' to the axis")
-        self.assertAlmostEqual(r["headZero"], ax_c, delta=1.0,
-                               msg=f"{what}: the heading's '0' is not over the bars' zero")
-        # A labelled column centres its label on the same zero: left-aligned in
-        # the cell it drifted wherever the column was wide.
-        if r["labelCentre"] is not None:
-            self.assertAlmostEqual(r["labelCentre"], ax_c, delta=1.5,
-                                   msg=f"{what}: the column label is not centred on the axis")
+        # The heading line is centred AS A LINE - the reader reads "New this
+        # window" against the whole of "Out <- 0 -> In", not against the zero
+        # inside it - so its own 0 lands near the axis zero rather than on it.
+        # The ruler's 0, checked above, is what sits exactly on the bars' origin.
+        self.assertIsNotNone(r["headZero"], f"{what}: the heading must carry its own '0'")
+        self.assertAlmostEqual(r["headZero"], ax_c, delta=10.0,
+                               msg=f"{what}: the heading's '0' is nowhere near the axis")
+        # A labelled column centres its label over the heading line beneath it.
+        if r["labelCentre"] is not None and r["lineCentre"] is not None:
+            self.assertAlmostEqual(r["labelCentre"], r["lineCentre"], delta=1.5,
+                                   msg=f"{what}: the column label is not centred over its line")
         for n, bar in enumerate(r["bars"]):
             b_l, b_r, b_c = bar["box"]
             self.assertAlmostEqual(b_l, ax_l, delta=1.0,
@@ -505,16 +511,16 @@ if __name__ == "__main__":
     unittest.main(verbosity=2)
 
 
-class TestHeadingSitsOnItsZero(_BrowserCase):
-    """The money column's name describes the zero, so it sits over the zero.
+class TestHeadingSitsOverItsLine(_BrowserCase):
+    """The money column's name is read against the LINE under it.
 
-    Reported twice as still off. It is now positioned absolutely at the same
-    50% line the ruler puts its 0 on, rather than centred inside a box whose
-    width need not match the ruler's, and the trailing letter-space of the
-    uppercase label is given back with text-indent.
+    It was centred on the zero inside that line for a while, which looked off
+    precisely because the line is not symmetric about its zero: "Out <-" is
+    shorter than "-> In". The name is centred over the line as a whole now,
+    and the ruler below still puts a 0 exactly on the bars' origin.
     """
 
-    def test_the_labels_glyphs_centre_on_the_zero_not_just_its_box(self):
+    def test_the_labels_glyphs_centre_on_the_whole_line_below_it(self):
         """Measured over the text's own rects rather than the element's, since
         the gap between the two is exactly what kept drifting."""
         for width in (1840, 1280, 900):
@@ -526,15 +532,16 @@ class TestHeadingSitsOnItsZero(_BrowserCase):
               const r = document.createRange(); r.selectNodeContents(t);
               const rects = [...r.getClientRects()];
               const glyphC = (rects[0].left + rects[rects.length - 1].right) / 2;
-              const z = th.querySelector('.dhead .c').getBoundingClientRect();
-              return glyphC - (z.left + z.width / 2);
+              const l = th.querySelector('.dhead .l').getBoundingClientRect();
+              const rr = th.querySelector('.dhead .r').getBoundingClientRect();
+              return glyphC - (l.left + rr.right) / 2;
             }""")
             self.assertIsNotNone(d, f"no titled money column at {width}px")
             self.assertLessEqual(abs(d), 0.5,
-                                 f"the label's glyphs are {d:.2f}px off the zero @{width}px")
+                                 f"the label's glyphs are {d:.2f}px off the line @{width}px")
             pg.close()
 
-    def test_every_labelled_money_column_centres_on_its_zero(self):
+    def test_every_labelled_money_column_centres_on_its_line(self):
         for width in (1840, 1280, 1000, 820):
             pg = self._page(width)
             rows = pg.evaluate("""() => {
@@ -543,22 +550,26 @@ class TestHeadingSitsOnItsZero(_BrowserCase):
                 const lbl = th.querySelector('.dhead .t');
                 if (!lbl) continue;
                 const head = th.querySelector('.dhead .c');
+                const l = th.querySelector('.dhead .l');
+                const rr = th.querySelector('.dhead .r');
                 const axis = [...th.querySelectorAll('.daxis span')]
                                .find(s => s.textContent.trim() === '0');
-                if (!head || !axis) continue;
+                if (!head || !axis || !l || !rr) continue;
                 const c = el => { const r = el.getBoundingClientRect();
                                   return r.left + r.width / 2; };
+                const lineC = (l.getBoundingClientRect().left
+                               + rr.getBoundingClientRect().right) / 2;
                 out.push({name: lbl.textContent.trim(),
-                          dLabel: c(lbl) - c(axis), dHead: c(head) - c(axis)});
+                          dLabel: c(lbl) - lineC, dHead: c(head) - c(axis)});
               }
               return out;
             }""")
             self.assertTrue(rows, f"no labelled money column at {width}px")
             for r in rows:
                 self.assertLessEqual(abs(r["dLabel"]), 1.0,
-                                     f"{r['name']!r} is {r['dLabel']:.1f}px off its zero @{width}px")
-                self.assertLessEqual(abs(r["dHead"]), 1.0,
-                                     f"the head's own 0 is {r['dHead']:.1f}px off @{width}px")
+                                     f"{r['name']!r} is {r['dLabel']:.1f}px off its own line @{width}px")
+                self.assertLessEqual(abs(r["dHead"]), 10.0,
+                                     f"the head's own 0 is {r['dHead']:.1f}px from the ruler's @{width}px")
             pg.close()
 
 
@@ -621,5 +632,8 @@ class TestTrendReadoutInTheBrowser(_BrowserCase):
         }""")
         self.assertTrue(gaps, "no high-priority rows to measure")
         for gap in gaps:
-            self.assertGreaterEqual(gap, 8, f"stripes are {gap:.1f}px apart — they read as one bar")
+            self.assertGreaterEqual(gap, 1.5,
+                                    f"stripes are {gap:.1f}px apart — they read as one bar")
+            self.assertLessEqual(gap, 6,
+                                 f"stripes are {gap:.1f}px apart — that reads as a break, not a seam")
         pg.close()

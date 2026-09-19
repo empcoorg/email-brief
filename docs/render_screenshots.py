@@ -4,7 +4,7 @@
 Run from the repo root after any design-affecting change (see README):
     pip install playwright   # Chromium must be available to Playwright
     python3 docs/render_screenshots.py
-Writes docs/mock-brief-{top,jobs,sections,usps,packages,markets}.png (all dark mode).
+Writes docs/mock-brief-{top,jobs,sections,travel,usps,packages,markets,trend}.png (dark mode).
 """
 import asyncio, hashlib, os, re, subprocess, sys, tempfile
 
@@ -128,10 +128,32 @@ async def main():
                     break
             _require("markets", grid)
             await grid.screenshot(path=os.path.join(DOCS, "mock-brief-markets.png"))
+            # The trend column answers a pointer, which a still image cannot
+            # show by itself - so hover one first and capture the answer: the
+            # rule, the marked point and the value under the cursor.
+            spark = await pg.query_selector(".spark[data-series]")
+            _require("trend", spark)
+            await spark.scroll_into_view_if_needed()
+            await pg.wait_for_timeout(150)
+            box = await spark.bounding_box()
+            await pg.mouse.move(box["x"] + box["width"] * 0.58, box["y"] + box["height"] * 0.4)
+            await pg.wait_for_timeout(200)
+            live = await pg.evaluate("() => document.querySelector('.spark').classList.contains('live')")
+            if not live:
+                raise SystemExit("render_screenshots: the trend readout did not open on hover - "
+                                 "capturing it dark would document a feature that looks broken")
+            rows = await pg.query_selector_all("tr")
+            row = None
+            for r in rows:
+                if "S&P 500" in (await r.inner_text()):
+                    row = r
+                    break
+            _require("trend row", row)
+            await row.screenshot(path=os.path.join(DOCS, "mock-brief-trend.png"))
             await b.close()
         # inside the temp dir, which is removed on exit from this block
         _write_lock(page_html)
-    print("wrote mock-brief-top/jobs/sections/travel/usps/packages/markets PNGs (dark mode)")
+    print("wrote mock-brief-top/jobs/sections/travel/usps/packages/markets/trend PNGs (dark mode)")
     print(f"wrote {LOCK} — CI fails if the UI changes without regenerating these")
 
 asyncio.run(main())

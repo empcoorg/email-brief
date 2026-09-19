@@ -273,15 +273,24 @@ def detail_html_email(detail):
 
 
 def horizon_cell_file(amount, pct, axis, unit="", reverse=False):
-    """One horizon's figure centered over its bar, for the standalone file.
+    """One horizon's figure, with the direction arrow ON the axis's zero.
+
+    The two halves of the figure used to be joined by a middot and the arrow
+    tacked on the end, so the one mark that says WHICH WAY sat wherever the
+    text happened to end. It now takes the separator's place in the middle and
+    is pinned to 50% - the same line the ruler's 0 and the bars' origin sit on
+    - so the eye reads direction and magnitude from the same column of pixels.
 
     `reverse` puts the percentage first, which reads better where the absolute
     move is a price delta rather than index points.
     """
     cls = "dir-pos" if pct >= 0 else "dir-neg"
-    left = f"{pct_str(pct)} {arrow(pct)}" if reverse else f"{e(amount)}{' ' + unit if unit else ''}"
-    right = f"{e(amount)}" if reverse else f"{pct_str(pct)} {arrow(pct)}"
-    return (f'<span class="barfig"><span class="{cls} mono">{left} \u00b7 {right}</span></span>'
+    left = f"{pct_str(pct)}" if reverse else f"{e(amount)}{' ' + unit if unit else ''}"
+    right = f"{e(amount)}" if reverse else f"{pct_str(pct)}"
+    return (f'<span class="barfig trio {cls} mono">'
+            f'<span class="l">{left}</span>'
+            f'<span class="c">{arrow(pct)}</span>'
+            f'<span class="r">{right}</span></span>'
             + bar_div(pct, axis))
 
 
@@ -523,7 +532,10 @@ h3{{font-size:14.5px;font-weight:600;margin:16px 0 6px;color:var(--ink-2)}}
 /* The severity stripe is drawn INSIDE the cell, with a gap top and bottom, so
    two rows of the same severity do not fuse into one long bar. */
 tr.hp>td:first-child{{position:relative;padding-left:18px;--sev:var(--line-strong)}}
-tr.hp>td:first-child::before{{content:"";position:absolute;left:0;top:6px;bottom:6px;width:6px;background:var(--sev)}}
+tr.hp>td:first-child::before{{content:"";position:absolute;left:0;top:1px;bottom:1px;width:6px;background:var(--sev)}}
+/* the last stripe follows the wrapper's own corner, so the column of
+   colour ends where the table does rather than stopping short of it */
+tr.hp:last-child>td:first-child::before{{bottom:0;border-bottom-left-radius:9px}}
 tr.hp.warn>td:first-child{{--sev:var(--warning)}}
 tr.hp.neg>td:first-child{{--sev:var(--negative)}}
 tr.hp.info>td:first-child{{--sev:var(--accent)}}
@@ -580,15 +592,18 @@ td.num{{text-align:right;white-space:nowrap}}
 /* The name lives INSIDE the head, on the same 50% line as its "0", so no
    stylesheet can put them in boxes of different widths. text-indent gives back
    the trailing letter-space of the uppercase label. */
-.dhead.titled{{height:27px}}
-.dhead .t{{left:50%;transform:translateX(-50%);display:inline-block;letter-spacing:.08em;margin-right:-.08em;top:0}}
-.dhead.titled .l,.dhead.titled .c,.dhead.titled .r{{top:14px}}
+.dhead.titled{{height:27px;align-items:flex-end}}
+.dhead .t{{position:absolute;left:0;right:0;top:0;text-align:center;letter-spacing:.08em;text-indent:.04em}}
 /* The heading's "0" must sit exactly over the ruler's, so it takes the ruler's
    width rule rather than a fixed one: in a wider column a 150px heading centred
    its zero 65px left of the bars' zero, over negative territory. */
-.dhead{{position:relative;height:13px;width:100%;min-width:150px;max-width:280px}}
-.dhead span{{position:absolute;top:0;white-space:nowrap}}
-.dhead .l{{right:50%;margin-right:7px}} .dhead .c{{left:50%;transform:translateX(-50%)}} .dhead .r{{left:50%;margin-left:7px}}
+/* One centred line, with the name centred over the whole of it: the reader
+   reads "New this window" against "Out <- 0 -> In", not against the zero
+   inside it. The ruler underneath is what puts a 0 exactly on the bars'
+   origin, and it still does - this line's own 0 is a reading aid, and it sits
+   where centring the line puts it. */
+.dhead{{position:relative;height:13px;width:100%;min-width:150px;max-width:280px;display:flex;justify-content:center;gap:6px;white-space:nowrap}}
+.dhead span{{white-space:nowrap}}
 .daxis i{{position:absolute;top:0;height:3px;width:1px;background:var(--line)}}
 .daxis i.mj{{height:5px;background:var(--line-strong)}}
 .daxis span{{position:absolute;top:5px;font:500 8.5px 'JetBrains Mono',monospace;letter-spacing:0;text-transform:none;color:var(--ink-3);transform:translateX(-50%)}}
@@ -596,6 +611,13 @@ td.num{{text-align:right;white-space:nowrap}}
 .daxis-foot{{display:none}}
 /* the figure sits centered over the track, i.e. over the axis zero the bar grows from */
 .barfig{{display:block;text-align:center;margin-bottom:2px}}
+/* and its ARROW is what sits on the zero: the mark that says which way belongs
+   on the line the bar grows from, not at the end of the text. */
+.barfig.trio{{position:relative;height:19px;width:100%;min-width:150px;max-width:280px;margin:0 auto 2px}}
+.barfig.trio span{{position:absolute;top:0;white-space:nowrap}}
+.barfig.trio .l{{right:50%;margin-right:11px}}
+.barfig.trio .c{{left:50%;transform:translateX(-50%)}}
+.barfig.trio .r{{left:50%;margin-left:11px}}
 .cap{{font-size:12.5px;color:var(--ink-3);padding:8px 2px}}
 .tiles{{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}}
 .tile{{background:var(--surface-2);border-radius:10px;padding:12px 14px}} .tile .v{{font-size:22px;font-weight:700;margin:2px 0}} .tile .d{{font-size:12.5px;color:var(--ink-3)}}
@@ -1343,8 +1365,8 @@ def large_caps_email():
     for tk, pr, a1, v1, a7, v7, ay, vy, *asof in STOCKS:
         ky = L["pos"] if vy >= 0 else L["neg"]
         rws.append([td(f'{lead(tk)}<br>{quote_cell_email(pr, v1, asof)}<br>{sp(f"YTD {pct_str(vy)} {arrow(vy)}", ky)}{spark_row_email(tk)}', mono=True),
-                    td(f'<div style="text-align:center">{sp(f"{e(a1)} {DOT} {pct_str(v1)} {arrow(v1)}", L["pos"] if v1 >= 0 else L["neg"])}</div>{em_bar_div(v1, STK_1D)}', mono=True),
-                    td(f'<div style="text-align:center">{sp(f"{e(a7)} {DOT} {pct_str(v7)} {arrow(v7)}", L["pos"] if v7 >= 0 else L["neg"])}</div>{em_bar_div(v7, STK_1W)}', mono=True)])
+                    td(em_trio(e(a1), v1, pct_str(v1), L["pos"] if v1 >= 0 else L["neg"]) + em_bar_div(v1, STK_1D), mono=True),
+                    td(em_trio(e(a7), v7, pct_str(v7), L["pos"] if v7 >= 0 else L["neg"]) + em_bar_div(v7, STK_1W), mono=True)])
     return h3("Large caps") + tbl([f'Ticker {DOT} price {DOT} YTD',
                                    th_axis("1D", pct_labels(STK_1D)), th_axis("1W", pct_labels(STK_1W))],
                                   rws, ["30%", "35%", "35%"])
@@ -1979,6 +2001,24 @@ def _em_bar(frac, col, right):
 
 def em_bar_div(pct, ax):
     return _em_bar(min(abs(pct) / ax[1], 1.0), L["pos"] if pct >= 0 else L["neg"], pct >= 0)
+def em_trio(left, pct, right, colour):
+    """The email's horizon figure, with the arrow over the axis's zero.
+
+    Three equal cells, the same shape as the axis header above it, so the
+    middle one - the arrow - lands on the same line as that header's "0" and
+    the centre of the bar below. The email cannot position anything, but it
+    can lay out a table.
+    """
+    # The parent cell already sets the mono family, so each cell here carries
+    # only what it must: the email is charged by the byte against a send-call
+    # ceiling, and three nested cells per figure is twelve per row.
+    c = f"padding:0;font-weight:600;color:{colour}"
+    return (f'<table width="100%" cellpadding="0" cellspacing="0"><tr>'
+            f'<td width="42%" align="right" style="{c}">{left}</td>'
+            f'<td width="16%" align="center" style="{c}">{arrow(pct)}</td>'
+            f'<td width="42%" align="left" style="{c}">{right}</td></tr></table>')
+
+
 def em_bar_money(amt, dirw, sign="", axis=None):
     side, cls = money_side(dirw, sign)
     col = {"pos": L["pos"], "neg": L["neg"], "neu": L["ink3"]}[cls]
@@ -2474,8 +2514,8 @@ def email_html(budget=None):
             for n, c, p1, v1, p7, v7, py, vy, *asof in MKT_ROWS:
                 ky = L["pos"] if vy >= 0 else L["neg"]
                 rws.append([td(f'{lead(n)}<br>{quote_cell_email(c, v1, asof)}<br>{sp(f"YTD {pct_str(vy)} {arrow(vy)}", ky)}{spark_row_email(n)}', mono=True),
-                            td(f'<div style="text-align:center">{sp(f"{e(p1)} pts · {pct_str(v1)} {arrow(v1)}", L["pos"] if v1 >= 0 else L["neg"])}</div>{em_bar_div(v1, MKT_24)}', mono=True),
-                            td(f'<div style="text-align:center">{sp(f"{e(p7)} pts · {pct_str(v7)} {arrow(v7)}", L["pos"] if v7 >= 0 else L["neg"])}</div>{em_bar_div(v7, MKT_7D)}', mono=True)])
+                            td(em_trio(f"{e(p1)} pts", v1, pct_str(v1), L["pos"] if v1 >= 0 else L["neg"]) + em_bar_div(v1, MKT_24), mono=True),
+                            td(em_trio(f"{e(p7)} pts", v7, pct_str(v7), L["pos"] if v7 >= 0 else L["neg"]) + em_bar_div(v7, MKT_7D), mono=True)])
             inner += tbl([f'Index · {quote_word().lower()} · YTD', th_axis("1D", pct_labels(MKT_24)), th_axis("1W", pct_labels(MKT_7D))], rws, ["30%", "35%", "35%"]) + cap(f"1D = close → close vs the prior session; 1W = trailing 5 sessions; YTD = since the previous year-end, shown as a figure because the email is capped at three columns. {axis_note(MKT_24, '1D axis')}; {axis_note(MKT_7D, '1W axis')}.")
         if FUNDS:
             rws = []
@@ -2483,8 +2523,8 @@ def email_html(budget=None):
             for tk, nm, nav, a1, v1, a7, v7, ay, vy, asof, note in FUNDS:
                 ky = L["pos"] if vy >= 0 else L["neg"]
                 rws.append([td(f'{lead(tk)}<br>{quote_cell_email(nav, v1, asof)}<br>{sp(f"YTD {pct_str(vy)} {arrow(vy)}", ky)}{spark_row_email(tk)}', mono=True),
-                            td(f'<div style="text-align:center">{sp(f"{e(a1)} · {pct_str(v1)} {arrow(v1)}", L["pos"] if v1 >= 0 else L["neg"])}</div>{em_bar_div(v1, FUND_1D)}', mono=True),
-                            td(f'<div style="text-align:center">{sp(f"{e(a7)} · {pct_str(v7)} {arrow(v7)}", L["pos"] if v7 >= 0 else L["neg"])}</div>{em_bar_div(v7, FUND_1W)}', mono=True)])
+                            td(em_trio(e(a1), v1, pct_str(v1), L["pos"] if v1 >= 0 else L["neg"]) + em_bar_div(v1, FUND_1D), mono=True),
+                            td(em_trio(e(a7), v7, pct_str(v7), L["pos"] if v7 >= 0 else L["neg"]) + em_bar_div(v7, FUND_1W), mono=True)])
             inner += h3("Vanguard funds") + tbl(['Fund · NAV · YTD', th_axis("1D", pct_labels(FUND_1D)), th_axis("1W", pct_labels(FUND_1W))], rws, ["30%", "35%", "35%"]) + cap("Change from the prior published NAV (1D), over one trading week (1W), and since the previous year-end (YTD). " + " ".join(f"{tk}: {note}" for tk, nm, nav, a1, v1, a7, v7, ay, vy, asof, note in FUNDS))
         if STOCKS:
             inner += large_caps_email()
@@ -2500,8 +2540,8 @@ def email_html(budget=None):
             for n, pr, v1, a1, v7, a7, vy, ay, *asof in CRYPTO_ROWS:
                 ky = L["pos"] if vy >= 0 else L["neg"]
                 rws.append([td(f'{lead(n)}<br>{quote_cell_email(pr, v1, asof)}<br>{sp(f"YTD {pct_str(vy)} {arrow(vy)}", ky)}{spark_row_email(n)}', mono=True),
-                            td(f'<div style="text-align:center">{sp(f"{pct_str(v1)} {arrow(v1)} · {e(a1)}", L["pos"] if v1 >= 0 else L["neg"])}</div>{em_bar_div(v1, CRY_24)}', mono=True),
-                            td(f'<div style="text-align:center">{sp(f"{pct_str(v7)} {arrow(v7)} · {e(a7)}", L["pos"] if v7 >= 0 else L["neg"])}</div>{em_bar_div(v7, CRY_7D)}', mono=True)])
+                            td(em_trio(pct_str(v1), v1, e(a1), L["pos"] if v1 >= 0 else L["neg"]) + em_bar_div(v1, CRY_24), mono=True),
+                            td(em_trio(pct_str(v7), v7, e(a7), L["pos"] if v7 >= 0 else L["neg"]) + em_bar_div(v7, CRY_7D), mono=True)])
             inner += tbl(['Asset · price · YTD', th_axis("1D", pct_labels(CRY_24)), th_axis("1W", pct_labels(CRY_7D))], rws, ["30%", "35%", "35%"]) + cap(f"1D = rolling 24 h; 1W = rolling 7 days; YTD = since the previous year-end — crypto trades continuously, so every window runs back from the quote time. {axis_note(CRY_24, '1D axis')}; {axis_note(CRY_7D, '1W axis')}. {CRYPTO_NOTE}")
         if CRYPTO_BULLETS:
             inner += '<ul style="margin:8px 0 0;padding-left:20px">' + "".join(em_li(b) for b in CRYPTO_BULLETS) + "</ul>"
