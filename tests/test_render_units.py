@@ -48,8 +48,13 @@ class TestEscaping(unittest.TestCase):
         p["FIN_MOVES"][0][1] = "Payee <img src=x onerror=alert(1)>"
         p["PKG"][0][2] = "Item </td></tr><tr><td>injected"
         f, em, _ = render_all(p)
+        # The page carries exactly one script of its own - the sparkline's
+        # readout - so "no script" is checked as "no script the payload put
+        # there", and the email carries none at all.
+        self.assertEqual(f.count("<script>"), 1, "only the renderer's own script")
+        self.assertNotIn("<script>alert", f)
+        self.assertNotIn("<script", em)
         for out in (f, em):
-            self.assertNotIn("<script>", out)
             self.assertNotIn("<img src=x", out)
             self.assertIn("&lt;script&gt;", out)
 
@@ -937,8 +942,8 @@ class TestFlightColumns(unittest.TestCase):
         self.assertIn("<th>Airline</th><th>Confirmation</th>", head,
                       "the airline column sits directly before the confirmation")
         rows = travel.split("<tbody>")[1].split("<tr>")[1:]
-        self.assertIn('data-l="Airline">American<', rows[0])
-        self.assertIn('data-l="Airline">JetBlue<', rows[1])
+        self.assertRegex(rows[0], r'data-l="Airline">(<a [^>]*>)?American<')
+        self.assertRegex(rows[1], r'data-l="Airline">(<a [^>]*>)?JetBlue<')
         self.assertIn("Airline · confirmation", em, "the email folds it into that cell")
         for doc in (em, tx):
             self.assertIn("American", doc)
@@ -949,7 +954,7 @@ class TestFlightColumns(unittest.TestCase):
         p["FLIGHTS"]["legs"][0]["airline"] = "Cascade Air"
         p["FLIGHTS"]["legs"][0]["flight"] = "AA 1200"     # the code would say American
         f, _em, _tx = render_all(p)
-        self.assertIn('data-l="Airline">Cascade Air<', f)
+        self.assertRegex(f, r'data-l="Airline">(<a [^>]*>)?Cascade Air<')
 
     def test_an_unreadable_code_borrows_the_booking_only_when_it_is_unambiguous(self):
         """On a two-airline record, naming one of them would be a coin toss,
@@ -1524,35 +1529,35 @@ class TestQuoteStampsBesideTheFigure(unittest.TestCase):
                             ("Cryptocurrency", "Asset \u00b7 price")):
             self.assertIn(f"<th>{head}</th>", self.table(f, after))
         market = self.table(f, "US market")
-        self.assertIn("(9:30 AM EST)", market, "the time rides with the figure")
+        self.assertIn("(09:30 EST)", market, "the time rides with the figure")
         self.assertIn("Index \u00b7 open \u00b7 YTD", em)
-        self.assertIn("6,412.30 (9:30 AM EST)", tx)
+        self.assertIn("6,412.30 (09:30 EST)", tx)
 
     def test_todays_date_is_left_to_the_masthead(self):
         from brief.render import stamp_beside, same_day_as_brief
         render_all(payload())               # binds the masthead
         self.assertTrue(same_day_as_brief("Tue Mar 3, 9:30 AM EST"))
-        self.assertEqual(stamp_beside("Tue Mar 3, 9:30 AM EST"), "(9:30 AM EST)")
+        self.assertEqual(stamp_beside("Tue Mar 3, 9:30 AM EST"), "(09:30 EST)")
         f, _em, _tx = render_all(payload())
-        self.assertNotIn("(Tue Mar 3, 9:30 AM EST)", f, "the brief is already dated Mar 3")
+        self.assertNotIn("Tue Mar 3, 09:30", f, "the brief is already dated Mar 3")
 
     def test_a_figure_from_another_day_keeps_its_date(self):
         """A NAV is published after the close, so it is yesterday's by the
         time the morning brief goes out - and that is worth saying."""
         from brief.render import stamp_beside
         render_all(payload())
-        self.assertEqual(stamp_beside("Mon Mar 2, 5:48 PM ET"), "(Mon Mar 2, 5:48 PM ET)")
+        self.assertEqual(stamp_beside("Mon Mar 2, 5:48 PM ET"), "(Mon Mar 2, 17:48 ET)")
         f, _em, tx = render_all(payload())
-        self.assertIn("(Mon Mar 2, 5:48 PM ET)", self.table(f, "Vanguard funds"))
-        self.assertIn("(Mon Mar 2, 5:48 PM ET)", tx)
+        self.assertIn("(Mon Mar 2, 17:48 ET)", self.table(f, "Vanguard funds"))
+        self.assertIn("(Mon Mar 2, 17:48 ET)", tx)
 
     def test_rows_read_at_different_times_each_show_their_own(self):
         p = payload()
         p["MKT_ROWS"][0][8] = "Tue Mar 3, 9:41 AM EST, mid-session"
         f, em, tx = render_all(p)
         market = self.table(f, "US market")
-        self.assertIn("(9:41 AM EST, mid-session)", market)
-        self.assertIn("(9:30 AM EST)", market, "the other rows keep theirs")
+        self.assertIn("(09:41 EST, mid-session)", market)
+        self.assertIn("(09:30 EST)", market, "the other rows keep theirs")
 
     def test_a_table_with_no_times_states_none(self):
         p = payload()
@@ -1560,7 +1565,7 @@ class TestQuoteStampsBesideTheFigure(unittest.TestCase):
             p[key] = [list(r)[:8] for r in p[key]]
         f, em, _tx = render_all(p)
         self.assertIn("<th>Index \u00b7 open</th>", self.table(f, "US market"))
-        self.assertNotIn("(9:30 AM EST)", self.table(f, "US market"))
+        self.assertNotIn("(09:30 EST)", self.table(f, "US market"))
 
     def test_the_name_and_its_figure_are_one_column(self):
         """A name in one column and its number two columns away reads as a
@@ -1626,7 +1631,7 @@ class TestTheIndexColumnFollowsTheHour(unittest.TestCase):
         f, em, tx = render_all(payload())
         self.assertIn("<th>Index \u00b7 open</th>", f)
         self.assertIn("Index \u00b7 open \u00b7 YTD", em)
-        self.assertIn("(9:30 AM EST)", tx)
+        self.assertIn("(09:30 EST)", tx)
 
     def test_the_evening_heads_it_close(self):
         f, em, tx = render_all(self.evening(payload()))
@@ -1668,7 +1673,7 @@ class TestSparklines(unittest.TestCase):
         css = f.split("<style>")[1].split("</style>")[0]
         self.assertIn("background:transparent", css)
         self.assertIn(".spark .sp-base", css, "a dashed rule marks where the series began")
-        cell = f.split('data-l="Trend"')[1][:1400]
+        cell = f.split('data-l="Trend"')[1][:2600]
         self.assertIn("sp-hi", cell); self.assertIn("sp-lo", cell)
         self.assertIn("sp-when", cell, "the cell says what window it covers")
 
@@ -1745,3 +1750,80 @@ class TestJournalByline(unittest.TestCase):
         papers = f.split("Research &amp; publications")[1].split("</table>")[0]
         self.assertNotIn("not captured", papers)
         self.assertNotIn('<span class="meta"></span>', papers, "no empty byline line")
+
+
+class TestQuoteClockIs24Hour(unittest.TestCase):
+    """Two characters of meridiem per row, on every quote table, is a column's
+    worth of space spent saying what 24-hour time says without them."""
+
+    def test_the_stamp_beside_a_figure_drops_am_and_pm(self):
+        from brief.render import clock24
+        self.assertEqual(clock24("9:30 AM EST"), "09:30 EST")
+        self.assertEqual(clock24("4:00 PM EST"), "16:00 EST")
+        self.assertEqual(clock24("12:05 AM ET"), "00:05 ET")
+        self.assertEqual(clock24("12:30 PM ET"), "12:30 ET")
+        self.assertEqual(clock24("last close"), "last close", "nothing to convert")
+
+    def test_no_quote_table_prints_am_or_pm(self):
+        f, em, tx = render_all(payload())
+        for after in ("US market", "Vanguard funds", "Large caps", "Cryptocurrency"):
+            table = f.split(after)[1].split("</table>")[0]
+            self.assertNotRegex(table, r"\d\s*[AP]M\b", f"{after} still prints a meridiem")
+        self.assertIn("(09:30 EST)", f)
+        self.assertIn("(09:30 EST)", em)
+        self.assertIn("(09:30 EST)", tx)
+
+    def test_the_trend_window_follows_the_same_clock(self):
+        f, _em, _tx = render_all(payload())
+        self.assertIn("09:30 → 09:55 ET", f)
+
+    def test_the_rest_of_the_brief_keeps_its_own_wording(self):
+        """Only the quote tables were asked for; a movement's time is prose."""
+        _f, _em, tx = render_all(payload())
+        self.assertIn("AM EST", tx, "the money movements still read as they were written")
+
+
+class TestAirlineLinks(unittest.TestCase):
+    def test_a_known_airline_links_to_its_own_site(self):
+        from brief.links import airline_site
+        self.assertEqual(airline_site("Alaska"), "https://www.alaskaair.com")
+        self.assertEqual(airline_site("alaska"), "https://www.alaskaair.com")
+        p = payload()
+        p["FLIGHTS"]["legs"][0]["flight"] = "AS 1200"
+        f, em, _tx = render_all(p)
+        self.assertIn('<a href="https://www.alaskaair.com">Alaska</a>', f)
+        self.assertIn("https://www.alaskaair.com", em)
+
+    def test_an_unknown_carrier_stays_plain_text(self):
+        """A guessed domain could belong to somebody else entirely."""
+        from brief.links import airline_site
+        self.assertEqual(airline_site("Northwind Air"), "")
+        f, _em, _tx = render_all(payload())          # the sample flies Northwind
+        travel = f.split("Upcoming travel")[1].split("</table>")[0]
+        self.assertIn("Northwind Air", travel)
+        self.assertNotRegex(travel, r'<a href="[^"]*">Northwind Air</a>')
+
+
+class TestTrendReadout(unittest.TestCase):
+    """The drawing answers "what was it worth here?" when asked, and only then."""
+
+    def test_the_series_travels_with_the_drawing(self):
+        f, _em, _tx = render_all(payload())
+        self.assertIn('data-series="', f)
+        self.assertIn('data-window="', f)
+        self.assertIn("sp-cursor", f)
+        self.assertIn("sp-read", f)
+
+    def test_the_script_is_in_the_page_alone(self):
+        """A mail client strips scripts, and the text copy has no DOM at all."""
+        f, em, tx = render_all(payload())
+        self.assertIn("<script>", f)
+        self.assertEqual(f.count("<script>"), 1, "one script, and only this one")
+        self.assertNotIn("<script", em)
+        self.assertNotIn("<script", tx)
+
+    def test_a_row_with_no_series_carries_no_readout(self):
+        p = payload()
+        p["SPARKS"] = {}
+        f, _em, _tx = render_all(p)
+        self.assertNotIn('data-series="', f)

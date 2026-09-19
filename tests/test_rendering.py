@@ -520,7 +520,7 @@ class TestHeadingSitsOnItsZero(_BrowserCase):
             rows = pg.evaluate("""() => {
               const out = [];
               for (const th of document.querySelectorAll('th')) {
-                const lbl = th.querySelector('.dlabel');
+                const lbl = th.querySelector('.dhead .t');
                 if (!lbl) continue;
                 const head = th.querySelector('.dhead .c');
                 const axis = [...th.querySelectorAll('.daxis span')]
@@ -540,3 +540,66 @@ class TestHeadingSitsOnItsZero(_BrowserCase):
                 self.assertLessEqual(abs(r["dHead"]), 1.0,
                                      f"the head's own 0 is {r['dHead']:.1f}px off @{width}px")
             pg.close()
+
+
+class TestTrendReadoutInTheBrowser(_BrowserCase):
+    """Hovering a sparkline draws a rule where the pointer is and prints the
+    value under it. Measured by hovering, because the answer only exists once
+    a browser has laid the drawing out."""
+
+    def test_hovering_reads_the_value_at_that_point(self):
+        pg = self._page(1400, height=1000)
+        el = pg.query_selector(".spark[data-series]")
+        self.assertIsNotNone(el, "no sparkline in the page")
+        el.scroll_into_view_if_needed()
+        pg.wait_for_timeout(120)
+        box = el.bounding_box()
+        pg.mouse.move(box["x"] + box["width"] * 0.62, box["y"] + box["height"] * 0.4)
+        pg.wait_for_timeout(120)
+        state = pg.evaluate("""() => {
+          const s = document.querySelector('.spark[data-series]');
+          const read = s.querySelector('.sp-read');
+          const cursor = s.querySelector('.sp-cursor');
+          const series = s.getAttribute('data-series').split(',').map(Number);
+          return {live: s.classList.contains('live'), text: read.textContent,
+                  shown: cursor.style.display !== 'none',
+                  x1: parseFloat(cursor.getAttribute('x1')),
+                  values: series.map(v => v.toLocaleString(undefined,
+                            {minimumFractionDigits: 2, maximumFractionDigits: 2}))};
+        }""")
+        self.assertTrue(state["live"], "hovering should show the readout")
+        self.assertTrue(state["shown"], "and the vertical rule")
+        self.assertIn(state["text"], state["values"],
+                      "the number shown must be one of the series' own values")
+        self.assertGreater(state["x1"], 0, "the rule follows the pointer")
+        pg.mouse.move(5, 5)
+        pg.wait_for_timeout(120)
+        self.assertFalse(pg.evaluate("document.querySelector('.spark').classList.contains('live')"),
+                         "leaving the drawing puts it back as it was")
+        pg.close()
+
+    def test_the_page_carries_no_other_script(self):
+        pg = self._page(1200)
+        self.assertEqual(pg.evaluate("document.scripts.length"), 1)
+        pg.close()
+
+    def test_a_severity_stripe_does_not_touch_the_one_below_it(self):
+        """Two rows of the same severity fused into one long bar."""
+        pg = self._page(1200)
+        gaps = pg.evaluate("""() => {
+          const rows = [...document.querySelectorAll('tr.hp')];
+          const boxes = rows.map(r => {
+            const td = r.querySelector('td');
+            const cs = getComputedStyle(td, '::before');
+            const rect = td.getBoundingClientRect();
+            return {top: rect.top + parseFloat(cs.top || 0),
+                    bottom: rect.bottom - parseFloat(cs.bottom || 0)};
+          });
+          const out = [];
+          for (let i = 1; i < boxes.length; i++) out.push(boxes[i].top - boxes[i - 1].bottom);
+          return out;
+        }""")
+        self.assertTrue(gaps, "no high-priority rows to measure")
+        for gap in gaps:
+            self.assertGreaterEqual(gap, 8, f"stripes are {gap:.1f}px apart — they read as one bar")
+        pg.close()

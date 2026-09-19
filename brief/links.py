@@ -189,3 +189,37 @@ def source_label(link, fallback="open"):
     elif len(parts) > 2:
         bare = ".".join(parts[-2:])
     return bare or fallback
+
+
+# Where an airline's own website lives, so a row can name the desk AND reach it.
+# Only carriers the IATA map already knows; an unknown airline stays plain text
+# rather than guessing a domain that might belong to somebody else.
+AIRLINE_SITES = {
+    "American": "https://www.aa.com", "Alaska": "https://www.alaskaair.com",
+    "JetBlue": "https://www.jetblue.com", "Delta": "https://www.delta.com",
+    "Frontier": "https://www.flyfrontier.com", "Allegiant": "https://www.allegiantair.com",
+    "Hawaiian": "https://www.hawaiianairlines.com", "Spirit": "https://www.spirit.com",
+    "Sun Country": "https://www.suncountry.com", "United": "https://www.united.com",
+    "Southwest": "https://www.southwest.com", "Air Canada": "https://www.aircanada.com",
+    "Aeromexico": "https://www.aeromexico.com", "Air France": "https://www.airfrance.com",
+    "British Airways": "https://www.britishairways.com", "Norwegian": "https://www.norwegian.com",
+    "Emirates": "https://www.emirates.com", "Iberia": "https://www.iberia.com",
+    "KLM": "https://www.klm.com", "Lufthansa": "https://www.lufthansa.com",
+    "Qantas": "https://www.qantas.com", "Turkish": "https://www.turkishairlines.com",
+    "Virgin Atlantic": "https://www.virginatlantic.com", "WestJet": "https://www.westjet.com",
+}
+
+
+def airline_site(name):
+    """The airline's own website, or "" when this one is not in the map.
+
+    >>> airline_site("Alaska"), airline_site("alaska")
+    ('https://www.alaskaair.com', 'https://www.alaskaair.com')
+    >>> airline_site("Northwind Air"), airline_site("")
+    ('', '')
+    """
+    key = str(name or "").strip().lower()
+    for airline, site in AIRLINE_SITES.items():
+        if airline.lower() == key:
+            return site
+    return ""

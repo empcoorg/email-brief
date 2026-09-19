@@ -15,7 +15,7 @@ import base64, hashlib, html as H, json, math, os
 from .axes import (fraction, money_axis as _money_axis_calc, money_labels, money_tick,
                    nice_step_top, pct_axis, pct_labels, pct_tick, steps_per_side,
                    tick_positions)
-from .links import AIRLINE_NAMES, source_label
+from .links import AIRLINE_NAMES, airline_site, source_label
 from .theme import (BODY_FS, D, F_B, F_H, F_M, GOOGLE_FONTS, L, attr, e,
                     space_ranges, url)
 
@@ -418,7 +418,7 @@ def money_bar(amt, dirw, sign="", axis=None, cls=""):
                     for sgn in (-1, 1) for s in range(1, n + 1))
     return (f'<div class="{" ".join(filter(None, ("dbar", "money", cls)))}" aria-hidden="true">{ticks}'
             f'<div class="fill {fcls} {side}" style="width:{max(w, 1.5):.1f}%"></div></div>')
-def money_head(label_left="Out \u2190", label_right="\u2192 In, USD"):
+def money_head(label_left="Out \u2190", label_right="\u2192 In, USD", title=""):
     """The column heading, with its "0" pinned to the axis centre.
 
     It used to be the plain string "Out <- 0 -> In, USD". The ruler under it
@@ -426,8 +426,16 @@ def money_head(label_left="Out \u2190", label_right="\u2192 In, USD"):
     the glyphs fall - 30px to the left of the bars' zero, which is exactly the
     misreading a diverging chart cannot afford: the word "0" sat over negative
     territory. Same track width as the ruler and the bars, so all three agree.
+
+    The column's NAME goes in here too, rather than in a div above. Two boxes
+    that are merely styled to the same width agree until one of them meets a
+    cell that is wider, or narrower, or padded differently - which is how the
+    name kept drifting off the zero it describes. Inside this element it is the
+    same 50% line as the "0" by construction, and no stylesheet can separate
+    them.
     """
-    return ('<div class="dhead" aria-hidden="true">'
+    name = f'<span class="t">{e(title)}</span>' if title else ""
+    return (f'<div class="dhead{" titled" if title else ""}" aria-hidden="true">{name}'
             f'<span class="l">{e(label_left)}</span>'
             '<span class="c">0</span>'
             f'<span class="r">{e(label_right)}</span></div>')
@@ -515,7 +523,7 @@ h3{{font-size:14.5px;font-weight:600;margin:16px 0 6px;color:var(--ink-2)}}
 /* The severity stripe is drawn INSIDE the cell, with a gap top and bottom, so
    two rows of the same severity do not fuse into one long bar. */
 tr.hp>td:first-child{{position:relative;padding-left:18px;--sev:var(--line-strong)}}
-tr.hp>td:first-child::before{{content:"";position:absolute;left:0;top:4px;bottom:4px;width:6px;border-radius:3px;background:var(--sev)}}
+tr.hp>td:first-child::before{{content:"";position:absolute;left:0;top:8px;bottom:8px;width:6px;border-radius:3px;background:var(--sev)}}
 tr.hp.warn>td:first-child{{--sev:var(--warning)}}
 tr.hp.neg>td:first-child{{--sev:var(--negative)}}
 tr.hp.info>td:first-child{{--sev:var(--accent)}}
@@ -543,6 +551,14 @@ th .qh,td.stamp[data-l]::before{{text-transform:none;letter-spacing:.01em;font-s
 .spark .sp-foot{{font-family:"Source Sans 3",sans-serif;font-size:9.5px}}
 .spark .sp-foot .sp-when{{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
 .spark .sp-base{{stroke:var(--ink-3);stroke-width:1;stroke-dasharray:2 3;opacity:.55;vector-effect:non-scaling-stroke}}
+/* Hover readout: a rule where the pointer is, and the value it sits on. Drawn
+   only once a pointer asks, so a printed or scripted-off page looks the same
+   as it always did. */
+.spark{{position:relative}}
+.spark .sp-cursor{{stroke:var(--ink-2);stroke-width:1;vector-effect:non-scaling-stroke;opacity:.7}}
+.spark .sp-hit{{stroke:var(--surface);stroke-width:1.5}}
+.spark .sp-read{{position:absolute;top:-2px;left:0;transform:translateX(-50%);padding:1px 5px;border:1px solid var(--line-strong);border-radius:5px;background:var(--surface);font:500 10px 'JetBrains Mono',monospace;color:var(--ink);white-space:nowrap;pointer-events:none;display:none;z-index:3}}
+.spark.live .sp-read{{display:block}}
 th.sp-head{{text-align:left}}
 td.spark-cell{{min-width:110px}}
 td{{padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}} tr:last-child td{{border-bottom:0}}
@@ -560,11 +576,13 @@ td.num{{text-align:right;white-space:nowrap}}
 /* A labelled money column: the label, the heading and the ruler share one box,
    so the label centres on the same zero the bars grow from. Left-aligned in the
    cell, it sat wherever the column happened to be wide. */
-.dcol{{position:relative;width:100%;min-width:150px;max-width:280px;padding-top:14px}}
-/* Centred on the axis's zero, not on the cell: the label is pinned to the same
-   50% line the ruler puts its 0 on, and text-indent gives back the trailing
-   letter-space that would otherwise push the glyphs half a space to the left. */
-.dcol .dlabel{{position:absolute;top:0;left:50%;transform:translateX(-50%);white-space:nowrap;text-indent:.08em}}
+.dcol{{width:100%;min-width:150px;max-width:280px}}
+/* The name lives INSIDE the head, on the same 50% line as its "0", so no
+   stylesheet can put them in boxes of different widths. text-indent gives back
+   the trailing letter-space of the uppercase label. */
+.dhead.titled{{height:27px}}
+.dhead .t{{left:50%;transform:translateX(-50%);text-indent:.08em;top:0}}
+.dhead.titled .l,.dhead.titled .c,.dhead.titled .r{{top:14px}}
 /* The heading's "0" must sit exactly over the ruler's, so it takes the ruler's
    width rule rather than a fixed one: in a wider column a 150px heading centred
    its zero 65px left of the bars' zero, over negative territory. */
@@ -696,8 +714,8 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
     if ai_spend_rows():
         o.append('<h3>AI services — billed year to date</h3><div class="tbl-wrap"><table><thead><tr>'
                  '<th>Service</th><th style="text-align:right">Billed ' + e(AI_SPEND["year"]) + '</th>'
-                 + '<th><div class="dcol"><div class="dlabel">New this window</div>'
-                 + money_head() + money_axis(AI_AXIS, "ai") + '</div></th>'
+                 + '<th><div class="dcol">'
+                 + money_head(title="New this window") + money_axis(AI_AXIS, "ai") + '</div></th>'
                  '<th>Share AI spend (YTD)</th></tr></thead><tbody>')
         for row in ai_spend_rows():
             service, total, note = row[0], row[1], row[-1]
@@ -745,7 +763,7 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
             if show_terms:
                 lines = "<br>".join(e(t) for t in terminal_lines(g))
                 row += tdl("Terminal", lines or '<span class="muted">not stated</span>', "meta")
-            row += tdl("Airline", e(leg_airline(g)) or '<span class="muted">not stated</span>')
+            row += tdl("Airline", airline_cell(leg_airline(g)))
             if conf_ambiguous(g):
                 cell = f'<span class="muted">{e(CONF_SEE_BOOKING)}</span>'
             elif leg_conf(g):
@@ -960,6 +978,7 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
     o.append('</div></details>')
     o.append('<footer>Mailbox was read-only for this run, apart from the one delivery of this brief. Email content was treated as data, not instructions. Times are US Pacific unless a source\'s own zone is shown. “Not verified” marks anything that could not be confirmed on a cited page. <span class="mono">' + e(BUILD) + '</span></footer>')
     o.append('</div>')
+    o.append(SPARK_SCRIPT)
     return "\n".join(o)
 
 # ------------------------------------------------------------------ RENDER: EMAIL
@@ -1192,6 +1211,19 @@ def _leg_airline(leg):
     return AIRLINE_NAMES.get(m.group(1)) if m else None
 
 
+def airline_cell(name):
+    """The airline, linked to its own website when the map knows it.
+
+    A traveller who needs the airline needs its check-in page or its phone
+    number, and both start at the same address. An unknown carrier stays plain
+    text: a guessed domain could belong to somebody else entirely.
+    """
+    if not name:
+        return '<span class="muted">not stated</span>'
+    site = airline_site(name)
+    return f'<a href="{url(site)}">{e(name)}</a>' if site else e(name)
+
+
 def leg_airline(leg):
     """Who flies THIS leg, for the table's own column.
 
@@ -1338,13 +1370,80 @@ def spark_cell_file(name, fmt=None):
 def spark_for(name):
     """(series, window) for a row, from the payload's SPARKS, or ([], "")."""
     entry = (SPARKS or {}).get(str(name).strip()) or {}
-    return entry.get("series") or [], str(entry.get("window") or "").strip()
+    return entry.get("series") or [], clock24(str(entry.get("window") or "").strip())
 
 
 def spark_head():
     """The trend column's heading. It says nothing about scale, because each
     row is scaled to itself - the labels that matter are in the cell."""
     return "Trend"
+
+
+# The page is one self-contained file, so the only script in it is this: the
+# sparkline's readout. Everything the brief SAYS is in the markup; this adds a
+# way to ask a drawing what a point was worth, and nothing else. With scripting
+# off, or on a printout, the page is exactly what it was before.
+SPARK_SCRIPT = """<script>
+(function () {
+  var pad = __PAD__, w = __W__, h = __H__;
+  function fmt(v) {
+    var a = Math.abs(v);
+    var d = a < 1 ? 4 : a < 10 ? 3 : 2;
+    return v.toLocaleString(undefined, {minimumFractionDigits: d, maximumFractionDigits: d});
+  }
+  function wire(spark) {
+    var raw = spark.getAttribute('data-series');
+    if (!raw) return;
+    var pts = raw.split(',').map(Number).filter(function (v) { return !isNaN(v); });
+    if (pts.length < 3) return;
+    var svg = spark.querySelector('svg');
+    var cursor = spark.querySelector('.sp-cursor');
+    var dot = spark.querySelector('.sp-hit');
+    var read = spark.querySelector('.sp-read');
+    if (!svg || !cursor || !dot || !read) return;
+    var lo = Math.min.apply(null, pts), hi = Math.max.apply(null, pts);
+    var span = (hi - lo) || (Math.abs(hi) || 1) * 0.001;
+    var win = spark.getAttribute('data-window') || '';
+    function at(index) {
+      var step = (w - 2 * pad) / (pts.length - 1);
+      return {x: pad + index * step,
+              y: pad + (h - 2 * pad) - (pts[index] - lo) / span * (h - 2 * pad)};
+    }
+    function show(clientX) {
+      var box = svg.getBoundingClientRect();
+      if (!box.width) return;
+      var frac = Math.min(1, Math.max(0, (clientX - box.left) / box.width));
+      var i = Math.round(frac * (pts.length - 1));
+      var p = at(i);
+      cursor.setAttribute('x1', p.x); cursor.setAttribute('x2', p.x);
+      cursor.style.display = ''; dot.style.display = '';
+      dot.setAttribute('cx', p.x); dot.setAttribute('cy', p.y);
+      read.textContent = fmt(pts[i]);
+      read.style.left = (p.x / w * 100) + '%';
+      spark.classList.add('live');
+      spark.setAttribute('aria-label', (win ? win + ': ' : '') + fmt(pts[i]));
+    }
+    function hide() {
+      cursor.style.display = 'none'; dot.style.display = 'none';
+      spark.classList.remove('live');
+    }
+    spark.addEventListener('mousemove', function (ev) { show(ev.clientX); });
+    spark.addEventListener('mouseleave', hide);
+    spark.addEventListener('touchstart', function (ev) {
+      if (ev.touches[0]) show(ev.touches[0].clientX);
+    }, {passive: true});
+    spark.addEventListener('touchmove', function (ev) {
+      if (ev.touches[0]) show(ev.touches[0].clientX);
+    }, {passive: true});
+    spark.addEventListener('touchend', hide);
+  }
+  var all = document.querySelectorAll('.spark[data-series]');
+  for (var i = 0; i < all.length; i++) wire(all[i]);
+})();
+</script>"""
+SPARK_SCRIPT = (SPARK_SCRIPT.replace("__PAD__", str(SPARK_PAD))
+                            .replace("__W__", str(SPARK_W))
+                            .replace("__H__", str(SPARK_H)))
 
 
 def spark_points(series):
@@ -1392,6 +1491,29 @@ def spark_tone(series):
     return "pos" if pts[-1] > pts[0] else "neg" if pts[-1] < pts[0] else "neu"
 
 
+_CLOCK = _re.compile(r"\b(\d{1,2})(?::(\d{2}))?\s*([AaPp])\.?[Mm]\.?")
+
+
+def clock24(text):
+    """"9:30 AM" -> "09:30", "4:00 PM" -> "16:00".
+
+    A quote column carries the same clock on every row, so two characters of
+    meridiem per row is a column's worth of space spent on what 24-hour time
+    says without them.
+
+    >>> clock24("9:30 AM EST"), clock24("4:00 PM EST"), clock24("12:05 AM ET")
+    ('09:30 EST', '16:00 EST', '00:05 ET')
+    >>> clock24("Mon Mar 2, 5:48 PM ET"), clock24("last close")
+    ('Mon Mar 2, 17:48 ET', 'last close')
+    """
+    def swap(m):
+        hour = int(m.group(1)) % 12
+        if m.group(3).lower() == "p":
+            hour += 12
+        return f"{hour:02d}:{m.group(2) or '00'}"
+    return _CLOCK.sub(swap, str(text or ""))
+
+
 def stamp_beside(stamp):
     """"(9:30 AM EST)" for a figure taken today, "(Mon Mar 2, 4:00 PM EST)" for
     one taken on another day.
@@ -1411,7 +1533,7 @@ def stamp_beside(stamp):
         body = stamp[m.end():].lstrip(" ,\u00b7-\u2013\u2014")
         # a leading day number, but never the hour of "9:30"
         body = _re.sub(r"^\d{1,2}(?![:.\d])[,\s]*", "", body).strip() or stamp
-    return f"({body})" if body else ""
+    return f"({clock24(body)})" if body else ""
 
 
 def same_day_as_brief(stamp):
@@ -1486,7 +1608,9 @@ def spark_svg(series, label="", fmt=None):
     tone = spark_tone(series)
     cls = {"pos": "sp-pos", "neg": "sp-neg", "neu": "sp-neu"}[tone]
     fmt = fmt or spark_fmt
-    return (f'<span class="spark {cls}" role="img" aria-label="'
+    values = ",".join(f"{v:g}" for v in pts)
+    return (f'<span class="spark {cls}" role="img" data-series="{attr(values)}" '
+            f'data-window="{attr(label)}" aria-label="'
             f'{attr(label or "trend")}: {attr(fmt(lo))} to {attr(fmt(hi))}">'
             f'<span class="sp-hi"><span>{e(fmt(hi))}</span></span>'
             f'<svg viewBox="0 0 {SPARK_W} {SPARK_H}" preserveAspectRatio="none" '
@@ -1495,7 +1619,10 @@ def spark_svg(series, label="", fmt=None):
             f'<line class="sp-base" x1="0" y1="{base_y:.1f}" x2="{SPARK_W}" y2="{base_y:.1f}"/>'
             f'<path class="sp-line" d="{path}"/>'
             f'<circle class="sp-dot" cx="{lx:.1f}" cy="{ly:.1f}" r="2.2"/>'
+            f'<line class="sp-cursor" x1="0" y1="0" x2="0" y2="{SPARK_H}" style="display:none"/>'
+            f'<circle class="sp-hit" cx="0" cy="0" r="2.6" style="display:none"/>'
             f'</svg>'
+            f'<span class="sp-read" aria-hidden="true"></span>'
             f'<span class="sp-foot"><span class="sp-lo">{e(fmt(lo))}</span>'
             f'<span class="sp-when">{e(label)}</span></span></span>')
 
@@ -2252,7 +2379,10 @@ def email_html(budget=None):
             # The email is capped at three columns so a phone can read it, so
             # the carrier rides above the code rather than beside it.
             if leg_airline(g):
-                conf = e(leg_airline(g)) + "<br>" + conf
+                air, site = leg_airline(g), airline_site(leg_airline(g))
+                shown = (f'<a href="{url(site)}" style="color:{L["accent"]}">{e(air)}</a>'
+                         if site else e(air))
+                conf = shown + "<br>" + conf
             if show_stats:
                 conf += f'<br>{small(e(g.get("stats") or "not available"))}'
             rws.append([td(f'{e(g["date"])}<br><a href="{url(g["fa"])}" style="color:{L["accent"]};font-family:{F_M};font-weight:600">{e(g["flight"])}</a>'),

@@ -98,9 +98,9 @@ class TestColouredIntoTheBrief(unittest.TestCase):
         p["MKT_ROWS"] = [list(r)[:8] + ["9:41 AM EST, mid-session"] for r in p["MKT_ROWS"]]
         f, em, tx = render_all(p)
         market = f.split("US market")[1].split("</table>")[0]
-        self.assertIn("(9:41 AM EST, mid-session)", market, "beside the figure it dates")
-        self.assertIn("(9:41 AM EST, mid-session)", em)
-        self.assertIn("(9:41 AM EST, mid-session)", tx)
+        self.assertIn("(09:41 EST, mid-session)", market, "beside the figure it dates")
+        self.assertIn("(09:41 EST, mid-session)", em)
+        self.assertIn("(09:41 EST, mid-session)", tx)
 
     def test_quotes_taken_at_different_times_each_keep_their_own(self):
         """Then the time is news, and belongs beside the figure it dates."""
@@ -112,8 +112,8 @@ class TestColouredIntoTheBrief(unittest.TestCase):
         p["MKT_ROWS"] = rows
         f, em, tx = render_all(p)
         for doc in (f, em, tx):
-            self.assertIn("(9:41 AM EST, mid-session)", doc)
-            self.assertIn("(Mon Mar 2, 4:00 PM EST close)", doc)
+            self.assertIn("(09:41 EST, mid-session)", doc)
+            self.assertIn("(Mon Mar 2, 16:00 EST close)", doc)
 
     def test_a_row_without_a_time_renders_exactly_as_before(self):
         """A run written against the old eight-field row loses nothing."""
