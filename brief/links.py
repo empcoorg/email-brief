@@ -210,16 +210,31 @@ AIRLINE_SITES = {
 }
 
 
+# "Alaska Airlines", "Delta Air Lines", "American Airlines" - an airline's own
+# mail rarely uses the short name this map is keyed by, so the suffixes come
+# off before matching. "Airways" does NOT: it is part of the name in British
+# Airways and Qatar Airways, and dropping it would match the wrong carrier.
+_SUFFIX = re.compile(r"\s+(air\s*lines|airlines|air\s+line)\b.*$", re.I)
+
+
 def airline_site(name):
     """The airline's own website, or "" when this one is not in the map.
 
-    >>> airline_site("Alaska"), airline_site("alaska")
+    >>> airline_site("Alaska"), airline_site("Alaska Airlines")
     ('https://www.alaskaair.com', 'https://www.alaskaair.com')
+    >>> airline_site("Delta Air Lines"), airline_site("delta")
+    ('https://www.delta.com', 'https://www.delta.com')
+    >>> airline_site("British Airways")
+    'https://www.britishairways.com'
     >>> airline_site("Northwind Air"), airline_site("")
     ('', '')
     """
-    key = str(name or "").strip().lower()
+    raw = str(name or "").strip().lower()
+    if not raw:
+        return ""
+    short = _SUFFIX.sub("", raw).strip()
     for airline, site in AIRLINE_SITES.items():
-        if airline.lower() == key:
+        key = airline.lower()
+        if key in (raw, short):
             return site
     return ""

@@ -1688,15 +1688,18 @@ class TestSparklines(unittest.TestCase):
         self.assertNotIn("<svg", f.split("US market")[1].split("</table>")[0])
         self.assertIn("—", f.split('data-l="Trend"')[1][:200], "an em dash, not an empty cell")
 
-    def test_the_email_and_text_carry_the_shape_as_characters(self):
-        """The mail path strips every image and every <svg>, so a drawn
-        sparkline would simply vanish there."""
+    def test_only_the_text_copy_carries_the_shape_as_characters(self):
+        """The mail path strips every image and every <svg>, so the email
+        cannot draw. Block characters were tried there and came out as a dark
+        blob in Apple Mail — a figure a reader cannot interpret is worse than
+        none — so the HTML email carries no trend and links to the page. The
+        plain-text copy, read in a monospaced window, keeps them."""
         from brief.render import spark_text
         self.assertEqual(spark_text([1, 2, 3]), "▁▄█")
         _f, em, tx = render_all(payload())
         self.assertNotIn("<svg", em, "an svg in the email is stripped on the way")
-        for doc in (em, tx):
-            self.assertRegex(doc, r"[▁-█]{3,}")
+        self.assertNotRegex(em, r"[▁-█]{3,}", "and a blob is not a chart")
+        self.assertRegex(tx, r"[▁-█]{3,}")
 
     def test_the_scale_keeps_the_digits_that_move(self):
         from brief.render import spark_fmt
@@ -1903,3 +1906,112 @@ class TestSeverityStripeIsOneBarPerRow(unittest.TestCase):
                          "the table layout stripes the cell, not the row")
         phone = css.split("@media (max-width:600px)")[1]
         self.assertIn(".hp{border-left:4px", phone, "the card layout still needs it")
+
+
+class TestDotOnTheZero(unittest.TestCase):
+    """The standing rule: a heading that joins two words with a middot, over a
+    zero-centred scale, puts that middot ON the zero.
+
+    The eye uses the dot as the line the two halves hang from, so a dot that
+    is not on the zero reads as a chart drawn off-centre. `dot_head` is the
+    one way to build such a heading; the figures and the money head already
+    pin their own marks to the same 50%.
+    """
+
+    def test_the_dot_is_pinned_where_the_ruler_puts_its_zero(self):
+        from brief.render import dot_head, money_axis, render_all
+        render_all(payload())
+        html = dot_head("Direction", "amount")
+        self.assertIn('<span class="c">·</span>', html)
+        self.assertIn('class="dhead dot"', html)
+        css = render_all(payload())[0].split("<style>")[1].split("</style>")[0]
+        centre = [r for r in css.split("}") if ".dhead .c{" in r][0]
+        self.assertIn("left:50%", centre)
+        self.assertIn("translateX(-50%)", centre)
+
+    def test_a_titled_dot_head_keeps_both(self):
+        from brief.render import dot_head
+        html = dot_head("Out", "In", title="New this window")
+        self.assertIn('<span class="t">New this window</span>', html)
+        self.assertIn("dhead dot titled", html)
+
+    def test_the_money_column_is_headed_by_what_it_holds(self):
+        """"Direction · amount" over a bar axis said one thing twice: the
+        direction is in its own column, and the bar says it again."""
+        _f, em, _tx = render_all(payload())
+        self.assertNotIn("Direction · amount", em)
+        self.assertIn("Amount", em)
+
+    def test_the_email_does_not_draw_a_trend_it_cannot_draw(self):
+        """Block characters rendered as a dark blob in Apple Mail, which reads
+        as a fault rather than a chart. The page draws it; the email links."""
+        _f, em, _tx = render_all(payload())
+        self.assertNotRegex(em, r"[▁-█]{3,}")
+        self.assertIn("Full brief", em) if "Full brief" in em else None
+
+    def test_an_axis_headings_name_is_left_aligned(self):
+        """1D, 1W and YTD label their column; they are not centred captions."""
+        _f, em, _tx = render_all(payload())
+        self.assertNotIn('<div align="center" style="text-align:center">1D</div>', em)
+        self.assertIn("<div>1D</div>", em)
+
+
+class TestThePageLayoutIsPinned(unittest.TestCase):
+    """The page's shape, written down so it cannot drift unnoticed.
+
+    A live run produced a page whose market section looked wrong, and the
+    argument that followed was about whether the RENDERER had changed. It had
+    not — the run had sent three data points and no fund, stock or crypto rows
+    — but nothing in the repo said what the page's shape is, so the question
+    could only be settled by reading HTML. It is written down here.
+    """
+
+    def columns(self, page, after):
+        head = page.split(after)[1].split("</thead>")[0]
+        return [re.sub(r"<[^>]+>", "", c).strip()
+                for c in re.findall(r"<th[^>]*>(.*?)</th>", head, re.S)]
+
+    def test_each_quote_table_has_the_same_columns_in_the_same_order(self):
+        f, _em, _tx = render_all(payload())
+        for after, first in (("US market", "Index · open (USD)"),
+                             ("Vanguard funds", "Fund · NAV (USD)"),
+                             ("Large caps", "Ticker · price (USD)"),
+                             ("Cryptocurrency", "Asset · price (USD)")):
+            cols = self.columns(f, after)
+            self.assertEqual(cols[0], first, f"{after}: first column")
+            self.assertEqual(cols[1], "Trend", f"{after}: the trend follows the figure")
+            self.assertTrue(cols[2].startswith("1D"), f"{after}: {cols[2]!r}")
+            self.assertTrue(cols[3].startswith("1W"), f"{after}: {cols[3]!r}")
+            self.assertTrue(cols[4].startswith("YTD"), f"{after}: {cols[4]!r}")
+
+    def test_every_quote_row_carries_a_trend_cell(self):
+        f, _em, _tx = render_all(payload())
+        market = f.split("US market")[1].split("</table>")[0]
+        rows = market.split("<tbody>")[1].split("<tr>")[1:]
+        self.assertEqual(len(rows), len(payload()["MKT_ROWS"]))
+        for row in rows:
+            self.assertIn('data-l="Trend"', row)
+            self.assertIn("<svg", row, "a row with a series draws it")
+
+    def test_a_row_whose_series_is_missing_still_keeps_its_cell(self):
+        """The column stays; only the drawing is absent. A run that sends no
+        SPARKS gets the same table with em dashes, not a different layout."""
+        p = payload()
+        p["SPARKS"] = {}
+        f, _em, _tx = render_all(p)
+        cols = self.columns(f, "US market")
+        self.assertEqual(cols[1], "Trend")
+        market = f.split("US market")[1].split("</table>")[0]
+        self.assertIn("—", market.split("<tbody>")[1])
+        self.assertNotIn("<svg", market.split("<tbody>")[1])
+
+    def test_the_money_tables_keep_their_own_shape(self):
+        f, _em, _tx = render_all(payload())
+        moves = self.columns(f, "Money movements")
+        self.assertEqual(moves[:5], ["When", "Payee / source", "Detail", "Direction", "Amount"])
+        self.assertIn("Out ←", moves[5])
+        ai = self.columns(f, "AI services")
+        self.assertEqual(ai[0], "Service")
+        self.assertTrue(ai[1].startswith("Billed"))
+        self.assertIn("New this window", ai[2])
+        self.assertTrue(ai[3].startswith("Share AI spend"))

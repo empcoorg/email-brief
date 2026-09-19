@@ -451,6 +451,26 @@ def money_head(label_left="Out \u2190", label_right="\u2192 In, USD", title=""):
             f'<span class="r">{e(label_right)}</span></div>')
 
 
+def dot_head(left, right, title=""):
+    """"left \u00b7 right" for a column whose scale below is centred on zero.
+
+    THE STANDING RULE: when a heading joins two words with a middot and a
+    zero-centred ruler sits under it, the MIDDOT goes on the zero. The eye
+    uses that dot as the line the two halves hang from, and a dot that is not
+    on the zero reads as a chart drawn off-centre. It is the same mechanism
+    the figures use (`horizon_cell_file`) and the same one the "0" in the
+    money head uses, so all three land on one column of pixels.
+
+    A heading with no ruler under it does not use this - it is a heading, not
+    an axis - which is why the market tables' "Index \u00b7 open (USD)" is plain text.
+    """
+    name = f'<span class="t">{e(title)}</span>' if title else ""
+    return (f'<div class="dhead dot{" titled" if title else ""}" aria-hidden="true">{name}'
+            f'<span class="l">{e(left)}</span>'
+            '<span class="c">\u00b7</span>'
+            f'<span class="r">{e(right)}</span></div>')
+
+
 def money_axis(axis=None, cls=""):
     """Minimal ticks: a notch at every even step, labels only at \u2212top, 0, +top."""
     axis = axis or FIN_AXIS
@@ -608,6 +628,7 @@ td.num{{text-align:right;white-space:nowrap}}
 .dhead{{position:relative;height:13px;width:100%;min-width:150px;max-width:280px}}
 .dhead span{{position:absolute;top:0;white-space:nowrap}}
 .dhead .l{{right:50%;margin-right:7px}} .dhead .c{{left:50%;transform:translateX(-50%)}} .dhead .r{{left:50%;margin-left:7px}}
+.dhead.dot .l{{margin-right:5px}} .dhead.dot .r{{margin-left:5px}}
 .daxis i{{position:absolute;top:0;height:3px;width:1px;background:var(--line)}}
 .daxis i.mj{{height:5px;background:var(--line-strong)}}
 .daxis span{{position:absolute;top:5px;font:500 8.5px 'JetBrains Mono',monospace;letter-spacing:0;text-transform:none;color:var(--ink-3);transform:translateX(-50%)}}
@@ -1429,10 +1450,15 @@ def spark_text_suffix(name):
 
 
 def spark_row_email(name):
-    """The row's sparkline for the email, on its own line under the figure."""
-    series, window = spark_for(name)
-    cell = spark_cell_email(series, window)
-    return f"<br>{cell}" if cell else ""
+    """Nothing. The email does not draw the trend at all.
+
+    It was drawn with block characters, since the mail path strips images and
+    SVG - but a row of \u2581\u2583\u2585 at 14px renders as a dark blob in Apple Mail,
+    which reads as a rendering fault rather than as a chart. A figure the
+    reader cannot interpret is worse than no figure: the page has the real
+    drawing, and every email carries its link.
+    """
+    return ""
 
 
 def spark_cell_file(name, fmt=None):
@@ -1999,7 +2025,7 @@ def th_axis(name, labels):
     lo, mid, hi = labels
     cell = f"font:400 10px {F_M};text-transform:none;letter-spacing:0;color:{L['ink3']};padding:0"
     return Raw(
-        f'<div align="center" style="text-align:center">{e(name)}</div>'
+        f'<div>{e(name)}</div>'
         f'<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:1px">'
         f'<tr><td width="33%" align="left" style="{cell}">{e(lo)}</td>'
         f'<td width="34%" align="center" style="{cell}">{e(mid)}</td>'
@@ -2464,7 +2490,7 @@ def email_html(budget=None):
         amt_s = money_amount(amt, cur, usd, sign)
         rws.append([td(f'<span style="font-family:{F_M}">{e(when)}</span><br>{e(payee)}'), td(detail_html_email(det)), td(f'{sp(e(sign+" "+dirw), col)} {sp(amt_s, col)}<br>{em_bar_money(usd, dirw, sign)}')])
     if FIN_MOVES:
-        inner += h3("Money movements (outside → you / you → outside)") + tbl(["When · payee", "Detail", th_axis("Direction · amount", money_labels(FIN_AXIS))], rws, ["30%", "32%", "38%"]) + cap(f"Bar axis, in USD: {money_axis_note()}. Amounts shown in their original currency; bars plotted from the USD equivalent. In = green right of 0, out / past due = red left of 0, internal = grey (magnitude only) — sign and word state it too.")
+        inner += h3("Money movements (outside → you / you → outside)") + tbl(["When · payee", "Detail", th_axis("Amount", money_labels(FIN_AXIS))], rws, ["30%", "32%", "38%"]) + cap(f"Bar axis, in USD: {money_axis_note()}. Amounts shown in their original currency; bars plotted from the USD equivalent. In = green right of 0, out / past due = red left of 0, internal = grey (magnitude only) — sign and word state it too.")
     if ai_spend_rows():
         rws = []
         for row in ai_spend_rows():

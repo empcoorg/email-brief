@@ -732,3 +732,26 @@ class TestReadmeAndPrivacy(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class TestTheRunIsToldToBuildTablesNotExcuses(unittest.TestCase):
+    """A live run dropped the funds, large-caps and crypto TABLES because one
+    field (a YTD baseline) could not be verified, wrote the figures as prose
+    bullets, and opened the section with "TEST NOTE" paragraphs explaining
+    itself. Everything the section exists for - axes, bars, trend, colour -
+    was lost to a missing field, and the brief read as broken.
+    """
+
+    FENCE = open(os.path.join(ROOT, "ROUTINE_PROMPT.template.md"), encoding="utf-8").read()
+
+    def test_a_missing_field_does_not_take_the_table_with_it(self):
+        self.assertIn("A TABLE IS NOT OPTIONAL BECAUSE ONE OF ITS FIELDS IS HARD", self.FENCE)
+        self.assertIn("The ONLY case for omitting a table is having NO rows at all", self.FENCE)
+
+    def test_the_brief_never_talks_about_the_run(self):
+        self.assertIn("NEVER WRITE ABOUT THE RUN INSIDE THE BRIEF", self.FENCE)
+        self.assertIn("TEST NOTE", self.FENCE, "the prompt names the exact thing it forbids")
+
+    def test_a_session_series_has_enough_points_to_be_a_session(self):
+        self.assertIn("A SESSION SERIES NEEDS ENOUGH POINTS", self.FENCE)
+        self.assertIn("12 to 60 points", self.FENCE)

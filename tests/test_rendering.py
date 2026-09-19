@@ -282,35 +282,36 @@ class TestRendering(_BrowserCase):
                                      f"email axis 0 is {p_['dz']:.1f}px off the track center @{width}px")
             pg.close()
 
-    def test_email_axis_heading_is_centred_on_its_zero(self):
-        """"Direction · amount" left-aligned began at the far end of a diverging
-        track and read as a heading for the negative half. The name describes
-        the zero, so it sits over the zero."""
+    def test_an_email_axis_heading_labels_its_column_from_the_left(self):
+        """1D, 1W and YTD name their column; they are not captions to be
+        centred. Only a heading that joins two words with a middot over a
+        zero-centred scale pins that middot to the zero — see dot_head — and
+        the email has none of those since the money column became "Amount".
+        """
         for width in (860, 390):
             pg = self._page(width, content=self.email_html)
-            heads = pg.evaluate("""() => {
+            lefts = pg.evaluate("""() => {
                 const out = [];
                 for (const th of document.querySelectorAll('th')) {
                     const cells = th.querySelectorAll('td');
                     if (cells.length !== 3) continue;
-                    const zero = cells[1];
-                    if (zero.textContent.trim() !== '0') continue;
                     const name = th.querySelector('div');
                     if (!name) continue;
-                    // the text's own box, not the full-width div it sits in
                     const r = document.createRange();
                     r.selectNodeContents(name);
-                    const n = r.getBoundingClientRect(), z = zero.getBoundingClientRect();
+                    const n = r.getBoundingClientRect();
+                    const box = th.getBoundingClientRect();
+                    const pad = parseFloat(getComputedStyle(th).paddingLeft) || 0;
                     out.push({name: name.textContent.trim(),
-                              d: (n.left + n.width / 2) - (z.left + z.width / 2)});
+                              d: n.left - (box.left + pad)});
                 }
                 return out;
             }""")
-            self.assertGreaterEqual(len(heads), 4,
-                                    f"expected axis headings @{width}px, saw {len(heads)}")
-            for h in heads:
+            self.assertGreaterEqual(len(lefts), 4,
+                                    f"expected axis headings @{width}px, saw {len(lefts)}")
+            for h in lefts:
                 self.assertLessEqual(abs(h["d"]), 2.0,
-                                     f"{h['name']!r} is {h['d']:.1f}px off its zero @{width}px")
+                                     f"{h['name']!r} is {h['d']:.1f}px from the column's left edge")
             pg.close()
 
     def test_severity_chips_never_wrap_in_the_email(self):
