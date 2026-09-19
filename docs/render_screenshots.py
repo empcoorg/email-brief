@@ -4,7 +4,7 @@
 Run from the repo root after any design-affecting change (see README):
     pip install playwright   # Chromium must be available to Playwright
     python3 docs/render_screenshots.py
-Writes docs/mock-brief-{top,hipri,jobs,sections,travel,usps,packages,markets,trend}.png (dark mode).
+Writes docs/mock-brief-{top,hipri,jobs,sections,travel,usps,packages,usmarket,crypto,research,trend}.png (dark mode).
 """
 import asyncio, hashlib, os, re, subprocess, sys, tempfile
 
@@ -135,7 +135,35 @@ async def main():
                     grid = s
                     break
             _require("markets", grid)
-            await grid.screenshot(path=os.path.join(DOCS, "mock-brief-markets.png"))
+                        # The market and crypto cards on their own, so the README can set
+            # the interactive-trend example between them.
+            cards = await grid.query_selector_all(".card")
+            us_card = crypto_card = None
+            for c in cards:
+                txt = (await c.inner_text()).lower()
+                if us_card is None and "us market" in txt:
+                    us_card = c
+                elif crypto_card is None and txt.startswith("cryptocurrency") or (
+                        crypto_card is None and "cryptocurrency" in txt[:40]):
+                    crypto_card = c
+            _require("US market card", us_card)
+            _require("cryptocurrency card", crypto_card)
+            await us_card.screenshot(path=os.path.join(DOCS, "mock-brief-usmarket.png"))
+            await crypto_card.screenshot(path=os.path.join(DOCS, "mock-brief-crypto.png"))
+            # The rest of the research grid, with the two cards already shown
+            # hidden, so the README's images do not repeat each other.
+            await grid.evaluate("""(el) => {
+              for (const c of el.querySelectorAll('.card')) {
+                const t = c.innerText.toLowerCase().trim();
+                if (t.includes('us market') || t.startsWith('9.')) c.style.display = 'none';
+              }
+            }""")
+            await pg.wait_for_timeout(120)
+            await grid.screenshot(path=os.path.join(DOCS, "mock-brief-research.png"))
+            await grid.evaluate("""(el) => {
+              for (const c of el.querySelectorAll('.card')) c.style.display = '';
+            }""")
+            await pg.wait_for_timeout(120)
             # The trend column answers a pointer, which a still image cannot
             # show by itself - so hover one first and capture the answer: the
             # rule, the marked point and the value under the cursor.
@@ -161,7 +189,7 @@ async def main():
             await b.close()
         # inside the temp dir, which is removed on exit from this block
         _write_lock(page_html)
-    print("wrote mock-brief-top/hipri/jobs/sections/travel/usps/packages/markets/trend PNGs (dark mode)")
+    print("wrote mock-brief-top/hipri/jobs/sections/travel/usps/packages/usmarket/crypto/research/trend PNGs (dark mode)")
     print(f"wrote {LOCK} — CI fails if the UI changes without regenerating these")
 
 asyncio.run(main())

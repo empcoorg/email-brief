@@ -40,15 +40,23 @@ Package tracking — carrier, tracking number (or the link/order reference to qu
 
 ![Mock brief — package tracking section](docs/mock-brief-packages.png)
 
-The researched cards — US indexes, your fund tickers and crypto. Each row names its figure and the time it was taken, draws the session as a small red/green trend, and carries **1D**, **1W** and **YTD** columns on their own even axes, each figure straddling the zero its bar grows from, with the direction arrow on that zero:
+The researched cards. Section 8, the US market — indexes, your fund tickers and the large caps you list. Each row names its figure, the time it was taken and the currency it is quoted in, draws the session as a small red/green trend, and carries **1D**, **1W** and **YTD** columns on their own even axes, the direction arrow sitting on the zero its bar grows from:
 
-![Mock brief — US market and cryptocurrency sections](docs/mock-brief-markets.png)
+![Mock brief — US market section: indexes, funds and large caps](docs/mock-brief-usmarket.png)
 
-**The trend answers a pointer.** Each row's sparkline is drawn from an intraday series the run collects (the payload's `SPARKS`), scaled to that row alone, with a dashed rule at the value it opened from. Hover anywhere along it on the page and a rule marks that moment and prints what the figure was worth — here, mid-session, 6,338.17 on a line that opened at 6,336.30 and stood at 6,412.30 when the brief was built:
+**The trend column is interactive on the page.** It is drawn from an intraday series the run collects (the payload's `SPARKS`), scaled to that row alone, with a dashed rule at the value it opened from. Hover anywhere along it and a rule marks that moment and prints what the figure was worth — below, mid-session, 6,338.17 on a line that opened at 6,336.30 and stood at 6,412.30 when the brief was built:
 
 ![Mock brief — hovering a trend line prints the value at that moment](docs/mock-brief-trend.png)
 
 That is the whole of the page's interactivity, and the only script in the file; with scripting off it is the same drawing, minus the readout. The email cannot draw at all — the mail path strips images and SVG — so there the same shape arrives as block characters: `▁▃▅▄▇█`.
+
+Section 9, cryptocurrency, follows the market directly, on rolling 24-hour and 7-day windows because a coin has no daily close:
+
+![Mock brief — cryptocurrency section](docs/mock-brief-crypto.png)
+
+Then the Fed & labor market, AI & programming and research & publications cards, which share the same grid:
+
+![Mock brief — Fed & labor market, AI & programming and research & publications](docs/mock-brief-research.png)
 
 > **Maintenance rule:** these screenshots are generated from [`sample_payload.json`](sample_payload.json) by [`docs/render_screenshots.py`](docs/render_screenshots.py). Whenever a PR changes anything the brief renders, regenerate them (`python3 docs/render_screenshots.py`; captures in dark mode) and commit the updated PNGs. **This is enforced, not a convention:** the script records a fingerprint of the rendered HTML in `docs/screenshots.lock`, and a test fails CI if the current render no longer matches it — so a UI change cannot merge while the README still shows the old one. It fingerprints the HTML rather than the pixels because font rasterisation differs between macOS and the Linux CI runner.
 >
