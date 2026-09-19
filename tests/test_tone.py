@@ -151,8 +151,10 @@ class TestAsOfCarriesItsYear(unittest.TestCase):
 class TestTerminalsReadPerAirport(unittest.TestCase):
     def test_each_airport_gets_its_own_line(self):
         f, em, tx = render_all(payload())
-        self.assertIn("DEN: Terminal A, gate A12<br>ORD: Terminal 2", f)
-        self.assertIn("DEN: Terminal A, gate A12", em)
+        # the airport code and the gate carry their own colour now, so the
+        # line is matched around the tags rather than as one plain string
+        self.assertRegex(f, r">DEN</b>: Terminal A, <b[^>]*>gate A12</b><br><b[^>]*>ORD</b>: Terminal 2")
+        self.assertRegex(em, r">DEN</b>: Terminal A, <b[^>]*>gate A12</b>")
         self.assertRegex(tx, r"DEN: Terminal A, gate A12\n\s+ORD: Terminal 2")
 
     def test_a_single_terminal_is_left_alone(self):

@@ -641,7 +641,7 @@ td.num{{text-align:right;white-space:nowrap}}
 .barfig.trio{{position:relative;height:19px;width:100%;min-width:150px;max-width:280px;margin:0 auto 2px}}
 .barfig.trio span{{position:absolute;top:0;white-space:nowrap}}
 .barfig.trio .l{{right:50%;margin-right:11px}}
-.barfig.trio .c{{left:50%;transform:translateX(-50%);font-size:.82em;opacity:.8}}
+.barfig.trio .c{{left:50%;transform:translateX(-50%);font-size:.82em;opacity:.7}}
 .barfig.trio .r{{left:50%;margin-left:11px}}
 tr.sum>td{{border-top:2px solid var(--line-strong);background:var(--surface-2);font-weight:700}}
 tr.sum .meta{{font-weight:400}}
@@ -830,7 +830,7 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
                    + tdl("Departs (airport local)", f'{e(g["frm"])}<br><span class="mono">{e(g["dep"])}</span>')
                    + tdl("Arrives (airport local)", f'{e(g["to"])}<br><span class="mono">{e(g["arr"])}</span>'))
             if show_terms:
-                lines = "<br>".join(e(t) for t in terminal_lines(g))
+                lines = terminal_html(terminal_lines(g))
                 row += tdl("Terminal", lines or '<span class="muted">not stated</span>', "meta")
             row += tdl("Airline", airline_cell(leg_airline(g)))
             if conf_ambiguous(g):
@@ -841,7 +841,7 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
                 cell = '<span class="muted">not stated</span>'
             row += tdl("Confirmation", cell)
             if show_stats:
-                row += tdl("Recent on-time record", e(g.get("stats") or "not available"), "meta")
+                row += tdl("Recent on-time record", ontime_html(g.get("stats")), "meta")
             o.append('<tr>' + row + '</tr>')
         note = FLIGHTS["note"] + (" " + CONF_NOTE if legs_need_conf() else "")
         o.append(f'</tbody></table></div><div class="cap">{e(note)}</div>')
@@ -1355,6 +1355,74 @@ def leg_terminals(leg):
 _AIRPORT = _re.compile(r"\(([A-Z]{3})\)")
 
 
+_ONTIME = _re.compile(r"(\d{1,3})\s*%")
+_DELAY = _re.compile(r"(\d{1,3})\s*(?:min|minutes)\b", _re.I)
+
+
+def ontime_tone(pct):
+    """A flight's recent record, coloured by what it means for a connection.
+
+    80% or better is a flight you can plan around; below 60% is one you should
+    not put a tight connection behind. The band between is amber - the figure
+    a traveller should read rather than skim.
+    """
+    if pct is None:
+        return ""
+    return "dir-pos" if pct >= 80 else "dir-neg" if pct < 60 else "c-warn"
+
+
+def delay_tone(minutes):
+    """The same question for the average delay: a quarter of an hour is noise,
+    three quarters is a missed connection."""
+    if minutes is None:
+        return ""
+    return "dir-pos" if minutes <= 15 else "dir-neg" if minutes > 45 else "c-warn"
+
+
+def ontime_html(text):
+    """"71% on time \u00b7 avg delay 18 min" with the two figures coloured.
+
+    The rest of the string - the window, the source - stays plain: it is
+    context, not a figure to judge.
+    """
+    text = str(text or "").strip()
+    if not text:
+        return '<span class="muted">not available</span>'
+    out, last = [], 0
+    for m in _ONTIME.finditer(text):
+        pct = int(m.group(1))
+        out.append(e(text[last:m.start()]))
+        out.append(f'<b class="{ontime_tone(pct)}">{e(m.group(0))}</b>')
+        last = m.end()
+    rest = text[last:]
+    d = _DELAY.search(rest)
+    if d:
+        out.append(e(rest[:d.start()]))
+        out.append(f'<b class="{delay_tone(int(d.group(1)))}">{e(d.group(0))}</b>')
+        out.append(e(rest[d.end():]))
+    else:
+        out.append(e(rest))
+    return "".join(out)
+
+
+def terminal_html(lines):
+    """Terminals, with the part a traveller needs at the last minute picked out.
+
+    The airport code says WHICH line to read; the gate is what changes and
+    what they will be looking for on the board, so it carries the accent. The
+    terminal itself is plain: it is the answer, not the alarm.
+    """
+    out = []
+    for line in lines:
+        code, sep, rest = line.partition(":")
+        head = f'<b class="c-accent">{e(code)}</b>{e(sep)} ' if sep else ""
+        body = rest.strip() if sep else line
+        body = _re.sub(r"(gate\s+\S+)", lambda m: f'<b class="c-warn">{e(m.group(1))}</b>',
+                       e(body), flags=_re.I)
+        out.append(head + body)
+    return "<br>".join(out)
+
+
 def terminal_lines(leg):
     """One line per airport: ["DEN: Terminal A, gate A12", "ORD: Terminal 2"].
 
@@ -1428,7 +1496,8 @@ def large_caps_email():
     stamp = shared_asof([r[8:] for r in STOCKS])
     for tk, pr, a1, v1, a7, v7, ay, vy, *asof in STOCKS:
         ky = L["pos"] if vy >= 0 else L["neg"]
-        rws.append([td(f'{lead(tk)}<br>{quote_cell_email(pr, v1, asof)}<br>{sp(f"YTD {pct_str(vy)} {arrow(vy)}", ky)}{spark_row_email(tk)}', mono=True),
+        dircol = L["pos"] if v1 >= 0 else L["neg"]
+        rws.append([td(f'{lead(tk)}<br>{quote_cell_email(pr, v1, asof)}<br>{sp(f"YTD {pct_str(vy)} {arrow(vy)}", ky)}{spark_row_email(tk, dircol)}', mono=True),
                     td(em_trio(e(a1), v1, pct_str(v1), L["pos"] if v1 >= 0 else L["neg"]) + em_bar_div(v1, STK_1D), mono=True),
                     td(em_trio(e(a7), v7, pct_str(v7), L["pos"] if v7 >= 0 else L["neg"]) + em_bar_div(v7, STK_1W), mono=True)])
     return h3("Large caps") + tbl([f'Ticker {DOT} {quote_head_line("price", "stocks")} {DOT} YTD',
@@ -1449,16 +1518,48 @@ def spark_text_suffix(name):
     return f" {shape}" + (f" ({window})" if window else "")
 
 
-def spark_row_email(name):
-    """Nothing. The email does not draw the trend at all.
+EM_SPARK_H = 26          # px, the drawing's own height in the email
+EM_SPARK_COLS = 8        # readings; every column costs ~70 bytes of send call
 
-    It was drawn with block characters, since the mail path strips images and
-    SVG - but a row of \u2581\u2583\u2585 at 14px renders as a dark blob in Apple Mail,
-    which reads as a rendering fault rather than as a chart. A figure the
-    reader cannot interpret is worse than no figure: the page has the real
-    drawing, and every email carries its link.
+
+def em_spark(series, window, colour):
+    """The same trend, drawn with table cells because the email has nothing else.
+
+    The page draws an SVG and lets a pointer query it. The mail path strips
+    both <svg> and <img>, and block characters came out as a dark blob - so
+    the shape is built from table cells here: one column per reading, as tall
+    as its value, in the row's own colour. Same drawing, same colours, no
+    pointer, which is all an email can promise.
+
+    It is deliberately COARSE. Every column is markup inside a send call that
+    is capped at ~130 KB for the whole message, so ten readings carry the
+    shape at a price the brief can pay; the page keeps the full series.
     """
-    return ""
+    pts = spark_points(series)
+    if not pts:
+        return ""
+    if len(pts) > EM_SPARK_COLS:                     # keep both ends, thin the middle
+        step = (len(pts) - 1) / (EM_SPARK_COLS - 1)
+        pts = [pts[min(len(pts) - 1, round(i * step))] for i in range(EM_SPARK_COLS)]
+    lo, hi = min(pts), max(pts)
+    span = (hi - lo) or (abs(hi) or 1) * 0.001
+    fill = blend(colour, L["surface"], 0.45)
+    cells = "".join(
+        f'<td valign="bottom"><div style="height:{max(3, round((v - lo) / span * (EM_SPARK_H - 3)) + 3)}px;'
+        f'background:{fill}"></div></td>' for v in pts)
+    foot = f"{spark_fmt(lo)}\u2013{spark_fmt(hi)}" + (f" \u00b7 {window}" if window else "")
+    return (f'<table width="100%" cellpadding="0" cellspacing="0" {EM_SPARK_MARK}="1" '
+            f'style="table-layout:fixed;margin:4px 0 0;font-size:0;line-height:0">'
+            f'<tr>{cells}</tr></table>'
+            f'<div data-em-foot="1" style="font:400 10px {F_M};color:{L["ink3"]};'
+            f'line-height:1.3">{e(foot)}</div>')
+
+
+def spark_row_email(name, colour):
+    """The row's trend for the email, under the figure it belongs to."""
+    series, window = spark_for(name)
+    drawn = em_spark(series, window, colour)
+    return drawn or ""
 
 
 def spark_cell_file(name, fmt=None):
@@ -2106,6 +2207,48 @@ def _em_bar(frac, col, right):
 
 def em_bar_div(pct, ax):
     return _em_bar(min(abs(pct) / ax[1], 1.0), L["pos"] if pct >= 0 else L["neg"], pct >= 0)
+def blend(colour, bg, alpha):
+    """`colour` at `alpha` over `bg`, as a hex string.
+
+    A mail client cannot be relied on for opacity - Outlook ignores it, some
+    webmail strips it - so a mark that should read at 70% is MIXED to 70% and
+    sent as a plain colour. The page uses real alpha; both land in the same
+    place.
+
+    >>> black, white = "#" + "0" * 6, "#" + "F" * 6
+    >>> blend(black, white, 0.5) == "#" + "80" * 3
+    True
+    """
+    def parts(h):
+        h = h.lstrip("#")
+        return [int(h[i:i + 2], 16) for i in (0, 2, 4)]
+    a, b = parts(colour), parts(bg)
+    return "#" + "".join(f"{round(x * alpha + y * (1 - alpha)):02X}" for x, y in zip(a, b))
+
+
+def em_arrow_colour(colour):
+    """The arrow between two figures, at 70% over the email's own background."""
+    return blend(colour, L["surface"], 0.7)
+
+
+def em_ontime(text):
+    """The on-time record for the email, coloured figure by figure."""
+    text = str(text or "").strip()
+    if not text:
+        return muted("not available")
+    html = ontime_html(text)
+    for cls, colour in (("dir-pos", L["pos"]), ("dir-neg", L["neg"]), ("c-warn", L["warn"])):
+        html = html.replace(f'<b class="{cls}">', f'<b style="color:{colour}">')
+    return html.replace('<b class="">', "<b>")
+
+
+def em_terminal(lines):
+    """The same for terminals: the airport code and the gate carry colour."""
+    html = terminal_html(lines)
+    html = html.replace('<b class="c-accent">', f'<b style="color:{L["accent"]}">')
+    return html.replace('<b class="c-warn">', f'<b style="color:{L["warn"]}">')
+
+
 def em_trio(left, pct, right, colour):
     """The email's horizon figure, with the arrow over the axis's zero.
 
@@ -2120,7 +2263,8 @@ def em_trio(left, pct, right, colour):
     c = f"padding:0;font-weight:600;color:{colour}"
     return (f'<table width="100%" cellpadding="0" cellspacing="0"><tr>'
             f'<td width="42%" align="right" style="{c}">{left}</td>'
-            f'<td width="16%" align="center" style="{c};font-size:12px">{arrow(pct)}</td>'
+            f'<td width="16%" align="center" style="padding:0;font-weight:600;'
+            f'color:{em_arrow_colour(colour)};font-size:12px">{arrow(pct)}</td>'
             f'<td width="42%" align="left" style="{c}">{right}</td></tr></table>')
 
 
@@ -2380,6 +2524,14 @@ def _assemble_email(parts, droppable, budget=None):
     def size(names):
         return len(("\n".join(parts)).encode("utf-8")) + len(trim_note(names).encode("utf-8"))
 
+    # DECORATION GOES BEFORE CONTENT. The trend drawings are the most expensive
+    # thing in the email per byte of meaning - about a kilobyte each, against a
+    # send call capped near 130 KB - so when the email is over budget they are
+    # removed first, from all rows at once. Losing a drawing costs a shape the
+    # page still carries; losing a card costs the reader a section.
+    if size(dropped) > budget and any(EM_SPARK_MARK in part for part in parts):
+        parts[:] = [_drop_em_sparks(part) for part in parts]
+        dropped_sparks = True
     while size(dropped) > budget:
         nxt = next((n for n in SHED_ORDER if n in droppable and parts[droppable[n]]), None)
         if nxt is None:
@@ -2411,6 +2563,16 @@ def _assemble_email(parts, droppable, budget=None):
     html = "\n".join(parts)
     LAST_EMAIL_REPORT["bytes"] = len(html.encode("utf-8"))
     return html
+
+
+EM_SPARK_MARK = "data-em-spark"   # so the drawings can be found and removed whole
+_EM_SPARK = _re.compile(r"<table[^>]*" + EM_SPARK_MARK + r".*?</table>\s*<div[^>]*data-em-foot[^>]*>.*?</div>",
+                        _re.S)
+
+
+def _drop_em_sparks(part):
+    """Every trend drawing in this card, removed whole."""
+    return _EM_SPARK.sub("", part)
 
 
 def email_html(budget=None):
@@ -2535,8 +2697,9 @@ def email_html(budget=None):
         for g in FLIGHTS["legs"]:
             route = (f'{e(g["frm"])} <span style="font-family:{F_M}">{e(g["dep"])}</span>'
                      f'<br>→ {e(g["to"])} <span style="font-family:{F_M}">{e(g["arr"])}</span>')
-            for line in terminal_lines(g):
-                route += f'<br>{small(e(line))}'
+            terms = terminal_lines(g)
+            if terms:
+                route += f'<br><span style="font-size:12.5px">{em_terminal(terms)}</span>'
             if conf_ambiguous(g):
                 conf = muted(e(CONF_SEE_BOOKING))
             elif leg_conf(g):
@@ -2551,7 +2714,8 @@ def email_html(budget=None):
                          if site else e(air))
                 conf = shown + "<br>" + conf
             if show_stats:
-                conf += f'<br>{small(e(g.get("stats") or "not available"))}'
+                conf += ('<br><span style="font-size:12.5px;color:' + L["ink3"] + '">'
+                         + em_ontime(g.get("stats")) + '</span>')
             rws.append([td(f'{e(g["date"])}<br><a href="{url(g["fa"])}" style="color:{L["accent"]};font-family:{F_M};font-weight:600">{e(g["flight"])}</a>'),
                         td(route), td(conf)])
         show_airline = any(leg_airline(g) for g in FLIGHTS["legs"])
@@ -2630,7 +2794,8 @@ def email_html(budget=None):
             stamp = shared_asof([r[8:] for r in MKT_ROWS])
             for n, c, p1, v1, p7, v7, py, vy, *asof in MKT_ROWS:
                 ky = L["pos"] if vy >= 0 else L["neg"]
-                rws.append([td(f'{lead(n)}<br>{quote_cell_email(c, v1, asof)}<br>{sp(f"YTD {pct_str(vy)} {arrow(vy)}", ky)}{spark_row_email(n)}', mono=True),
+                dircol = L["pos"] if v1 >= 0 else L["neg"]
+                rws.append([td(f'{lead(n)}<br>{quote_cell_email(c, v1, asof)}<br>{sp(f"YTD {pct_str(vy)} {arrow(vy)}", ky)}{spark_row_email(n, dircol)}', mono=True),
                             td(em_trio(f"{e(p1)} pts", v1, pct_str(v1), L["pos"] if v1 >= 0 else L["neg"]) + em_bar_div(v1, MKT_24), mono=True),
                             td(em_trio(f"{e(p7)} pts", v7, pct_str(v7), L["pos"] if v7 >= 0 else L["neg"]) + em_bar_div(v7, MKT_7D), mono=True)])
             inner += tbl([f'Index · {quote_head_line(quote_word().lower(), "indexes")} · YTD', th_axis("1D", pct_labels(MKT_24)), th_axis("1W", pct_labels(MKT_7D))], rws, ["30%", "35%", "35%"]) + cap(f"1D = close → close vs the prior session; 1W = trailing 5 sessions; YTD = since the previous year-end, shown as a figure because the email is capped at three columns. {axis_note(MKT_24, '1D axis')}; {axis_note(MKT_7D, '1W axis')}.")
@@ -2639,7 +2804,8 @@ def email_html(budget=None):
             stamp = shared_asof([r[9] for r in FUNDS])
             for tk, nm, nav, a1, v1, a7, v7, ay, vy, asof, note in FUNDS:
                 ky = L["pos"] if vy >= 0 else L["neg"]
-                rws.append([td(f'{lead(tk)}<br>{quote_cell_email(nav, v1, asof)}<br>{sp(f"YTD {pct_str(vy)} {arrow(vy)}", ky)}{spark_row_email(tk)}', mono=True),
+                dircol = L["pos"] if v1 >= 0 else L["neg"]
+                rws.append([td(f'{lead(tk)}<br>{quote_cell_email(nav, v1, asof)}<br>{sp(f"YTD {pct_str(vy)} {arrow(vy)}", ky)}{spark_row_email(tk, dircol)}', mono=True),
                             td(em_trio(e(a1), v1, pct_str(v1), L["pos"] if v1 >= 0 else L["neg"]) + em_bar_div(v1, FUND_1D), mono=True),
                             td(em_trio(e(a7), v7, pct_str(v7), L["pos"] if v7 >= 0 else L["neg"]) + em_bar_div(v7, FUND_1W), mono=True)])
             inner += h3("Vanguard funds") + tbl([f'Fund · {quote_head_line("NAV", "funds")} · YTD', th_axis("1D", pct_labels(FUND_1D)), th_axis("1W", pct_labels(FUND_1W))], rws, ["30%", "35%", "35%"]) + cap("Change from the prior published NAV (1D), over one trading week (1W), and since the previous year-end (YTD). " + " ".join(f"{tk}: {note}" for tk, nm, nav, a1, v1, a7, v7, ay, vy, asof, note in FUNDS))
@@ -2656,7 +2822,8 @@ def email_html(budget=None):
             stamp = shared_asof([r[8:] for r in CRYPTO_ROWS])
             for n, pr, v1, a1, v7, a7, vy, ay, *asof in CRYPTO_ROWS:
                 ky = L["pos"] if vy >= 0 else L["neg"]
-                rws.append([td(f'{lead(n)}<br>{quote_cell_email(pr, v1, asof)}<br>{sp(f"YTD {pct_str(vy)} {arrow(vy)}", ky)}{spark_row_email(n)}', mono=True),
+                dircol = L["pos"] if v1 >= 0 else L["neg"]
+                rws.append([td(f'{lead(n)}<br>{quote_cell_email(pr, v1, asof)}<br>{sp(f"YTD {pct_str(vy)} {arrow(vy)}", ky)}{spark_row_email(n, dircol)}', mono=True),
                             td(em_trio(pct_str(v1), v1, e(a1), L["pos"] if v1 >= 0 else L["neg"]) + em_bar_div(v1, CRY_24), mono=True),
                             td(em_trio(pct_str(v7), v7, e(a7), L["pos"] if v7 >= 0 else L["neg"]) + em_bar_div(v7, CRY_7D), mono=True)])
             inner += tbl([f'Asset · {quote_head_line("price", "crypto")} · YTD', th_axis("1D", pct_labels(CRY_24)), th_axis("1W", pct_labels(CRY_7D))], rws, ["30%", "35%", "35%"]) + cap(f"1D = rolling 24 h; 1W = rolling 7 days; YTD = since the previous year-end — crypto trades continuously, so every window runs back from the quote time. {axis_note(CRY_24, '1D axis')}; {axis_note(CRY_7D, '1W axis')}. {CRYPTO_NOTE}")

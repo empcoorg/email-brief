@@ -460,6 +460,12 @@ def main(argv=None):
             room = min(room, cap)
         print(f"still {total:,} B of {limit:,}; the HTML must shed to {room:,} B.")
         _, eh, _ = render_all(payload, room, a.text_budget, a.full_url, attached, stamp)
+        # The HTML just got smaller, so the text gets its room back: it was
+        # trimmed a moment ago against the LARGER html, and leaving it that way
+        # spent the saving on nothing. (The email's decoration is shed before
+        # any card, so this is usually a drawing's worth of bytes.)
+        room_for_text = max(limit - len(eh.encode("utf-8"))
+                            - sum(b64(n) for n in sizes), 1024)
         pt = plain_text(min(room_for_text, a.text_budget or room_for_text))
 
     os.makedirs(a.out_dir, exist_ok=True)

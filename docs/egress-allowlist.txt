@@ -347,6 +347,8 @@ www.delta.com
 faa.gov
 www.faa.gov
 flightaware.com
+www.flightera.net
+flightera.net
 www.flightaware.com
 transtats.bts.gov
 united.com

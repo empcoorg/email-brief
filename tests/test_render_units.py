@@ -983,7 +983,7 @@ class TestFlightColumns(unittest.TestCase):
         f, em, tx = render_all(p)
         for doc in (f, em, tx):
             self.assertIn("XGGF4", doc)
-            self.assertIn("Terminal A, gate A12", doc)
+            self.assertRegex(doc, r"Terminal A, (<b[^>]*>)?gate A12")
         self.assertIn("<th>Terminal</th>", f)
         self.assertIn("<th>Confirmation</th>", f)
 
@@ -2015,3 +2015,83 @@ class TestThePageLayoutIsPinned(unittest.TestCase):
         self.assertTrue(ai[1].startswith("Billed"))
         self.assertIn("New this window", ai[2])
         self.assertTrue(ai[3].startswith("Share AI spend"))
+
+
+class TestTheEmailDrawsTheTrendToo(unittest.TestCase):
+    """The mail path strips <svg> and <img>, so the email draws the same shape
+    with table cells: one column per reading, in the row's own colour.
+
+    It is the most expensive thing in the email per byte of meaning — about a
+    kilobyte a row against a send call capped near 130 KB — so it is also the
+    FIRST thing dropped when the call is full. Losing a drawing costs a shape
+    the page still carries; losing a card costs the reader a section.
+    """
+
+    def test_the_email_carries_the_drawing_when_there_is_room(self):
+        _f, em, _tx = render_all(payload(), email_budget=10 ** 7)
+        self.assertIn("data-em-spark", em)
+        self.assertEqual(em.count("data-em-spark"), 17, "one per quote row")
+        self.assertNotIn("<svg", em, "still nothing the mail path would strip")
+        self.assertRegex(em, r'height:\d+px;background:#[0-9A-F]{6}', "columns, drawn")
+
+    def test_it_keeps_the_page_s_colours_and_scale(self):
+        from brief.render import em_spark, blend
+        from brief.theme import L
+        html = em_spark([1, 5, 3, 9], "09:30 → 09:55 ET", L["pos"])
+        self.assertIn(blend(L["pos"], L["surface"], 0.45), html, "the page's fill, mixed for mail")
+        self.assertIn("09:30 → 09:55 ET", html, "and the window it covers")
+        self.assertIn("1.000", html.replace(",", ""))     # the low
+        self.assertIn("9.000", html.replace(",", ""))     # the high
+
+    def test_a_full_call_drops_drawings_before_it_drops_a_card(self):
+        from brief.render import LAST_EMAIL_REPORT
+        _f, em, _tx = render_all(payload(), email_budget=120_000)
+        self.assertNotIn("data-em-spark", em, "the drawings go first")
+        self.assertEqual(LAST_EMAIL_REPORT["shed"], [], "and no card goes with them")
+
+    def test_a_budget_tight_enough_still_sheds_cards_afterwards(self):
+        from brief.render import LAST_EMAIL_REPORT
+        _f, em, _tx = render_all(payload(), email_budget=100_000)
+        self.assertNotIn("data-em-spark", em)
+        self.assertTrue(LAST_EMAIL_REPORT["shed"], "decoration first, then content")
+
+
+class TestFlightColumnsAreColoured(unittest.TestCase):
+    """A terminal and an on-time record are read in a hurry, at an airport."""
+
+    def test_the_on_time_figures_carry_their_own_verdict(self):
+        from brief.render import ontime_html
+        self.assertIn('class="dir-pos">92%', ontime_html("92% on time · avg delay 6 min"))
+        self.assertIn('class="c-warn">71%', ontime_html("71% on time · avg delay 18 min"))
+        self.assertIn('class="dir-neg">54%', ontime_html("54% on time · avg delay 61 min"))
+        self.assertIn('class="dir-neg">61 min', ontime_html("54% on time · avg delay 61 min"))
+        self.assertIn("muted", ontime_html(""))
+
+    def test_the_gate_is_what_changes_so_the_gate_is_picked_out(self):
+        from brief.render import terminal_html
+        html = terminal_html(["DEN: Terminal A, gate A12", "ORD: Terminal 2"])
+        self.assertIn('<b class="c-accent">DEN</b>', html)
+        self.assertIn('<b class="c-warn">gate A12</b>', html)
+        self.assertIn("Terminal 2", html)
+
+    def test_both_columns_are_coloured_in_the_page_and_the_email(self):
+        p = payload()
+        p["FLIGHTS"]["legs"][0]["term"] = "Terminal A, gate A12 → Terminal 2"
+        p["FLIGHTS"]["legs"][0]["stats"] = "92% on time · avg delay 6 min"
+        f, em, _tx = render_all(p)
+        self.assertIn('<b class="c-accent">DEN</b>', f)
+        self.assertIn('class="dir-pos">92%', f)
+        from brief.theme import L
+        self.assertIn(f'<b style="color:{L["accent"]}">DEN</b>', em)
+        self.assertIn(f'<b style="color:{L["pos"]}">92%', em)
+
+    def test_the_arrow_between_figures_is_a_mark_not_a_word(self):
+        f, em, _tx = render_all(payload())
+        css = f.split("<style>")[1].split("</style>")[0]
+        rule = [r for r in css.split("}") if ".barfig.trio .c{" in r][0]
+        self.assertIn("opacity:.7", rule)
+        self.assertIn("font-size:.82em", rule)
+        from brief.render import blend
+        from brief.theme import L
+        self.assertIn(blend(L["pos"], L["surface"], 0.7), em,
+                      "the email cannot do opacity, so the colour is mixed instead")

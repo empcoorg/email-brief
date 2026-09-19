@@ -273,8 +273,10 @@ class TestGeneratorOutputs(unittest.TestCase):
         self.assertGreaterEqual(len(idents), 2, "each flight needs a FlightAware link")
         for out in (page, em, tx):
             self.assertIn("flightaware.com/live/flight/", out)
-            self.assertRegex(out, r"\d+% on time")
-            self.assertRegex(out, r"avg delay \d+ min")
+            # the percentage carries a colour now, so the tag between them is
+            # part of the string a reader never sees
+            self.assertRegex(out, r"\d+%(</b>)? on time")
+            self.assertRegex(out, r"avg delay (<b[^>]*>)?\d+ min")
         # framed as history, never as a prediction
         self.assertIn("not a prediction", page)
 
@@ -597,8 +599,9 @@ class TestTemplate(unittest.TestCase):
             "RESEARCH & PUBLICATIONS",
             "THIS SECTION PERSISTS",              # flights
             "LOCAL TIME AT THAT AIRPORT",
-            "LINK EVERY FLIGHT NUMBER TO FLIGHTAWARE",
-            'OMIT the leg\'s "stats" field',       # drop the column, do not apologize
+            "THE FLIGHT NUMBER ALWAYS LINKS TO FLIGHTAWARE",
+            "THE ON-TIME RECORD COMES FROM WHEREVER ANSWERS",
+            'leave the leg\'s "stats" out and the column drops itself',
             "WORK DOWN THIS CHAIN",               # fund NAV fallback sources
             "QUOTE THAT MARKER",                  # proof the renderer ran
             "MAY LIST SEVERAL MAILBOXES",         # one address or many
