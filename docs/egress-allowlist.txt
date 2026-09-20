@@ -1,10 +1,16 @@
 # Egress allowlist for the Routine's cloud environment.
 #
-# Paste the domains below (comment lines and blanks are ignored by the
-# field; strip them if it will not take them) into claude.ai/code ->
-# the cloud environment this Routine runs in -> Edit -> Network access
-# -> Custom, with "also include the default list" ticked so package
-# registries and GitHub keep working.
+# WHERE IT GOES: claude.ai -> Settings -> Capabilities -> "Code execution
+# and file creation" -> Allow network egress ON -> Domain allowlist set to
+# "Package managers only" (which keeps pip, npm and GitHub working) ->
+# "Additional allowed domains".
+#
+# THAT FIELD TAKES ONE ENTRY AT A TIME, so this file - 312 hosts, apex and
+# www listed separately because the proxy matches exact hostnames - is the
+# REFERENCE, not something anyone types. The field also accepts wildcards, so
+# egress-allowlist-core.txt next door carries the same sources as 40 wildcard
+# entries in the order a run needs them; type those. Come here when a run is
+# refused a host that list does not cover.
 #
 # WHY THIS FILE EXISTS: the prompt's own domain list says which sources to
 # PREFER. It cannot grant access: the sandbox sits behind an egress proxy

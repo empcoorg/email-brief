@@ -1,0 +1,75 @@
+# The SHORT list — what to type into claude.ai's domain allowlist by hand.
+#
+# WHERE: claude.ai -> Settings -> Capabilities -> "Code execution and file
+# creation" -> Allow network egress ON -> Domain allowlist: "Package managers
+# only" (which keeps pip/npm/GitHub working) -> "Additional allowed domains".
+#
+# That field takes ONE entry at a time, with an Add button, and it accepts a
+# wildcard: "*.example.com". This file exists because of that. The full list
+# next door (egress-allowlist.txt) names every host a brief might read - 312
+# of them, apex and www separately - and nobody types 312 entries into a
+# one-at-a-time box. An allowlist nobody can update is how a run ends up
+# reporting an empty market table.
+#
+# So: these are the sources the prompt's own chains NAME, one wildcard entry
+# each, in the order a run needs them. Add them top to bottom; stop when you
+# run out of patience - the ones above the blank line are what a morning
+# brief cannot do without.
+#
+# EACH ENTRY IS STILL A PLACE A RUN THAT HAS JUST READ A MAILBOX COULD SEND A
+# REQUEST. A wildcard widens that to every subdomain of the site, which is why
+# these are quote sources, wire services and journals rather than anything
+# that would take a payload. The prompt's own rule - nothing from the mailbox
+# ever goes into a web request - is what actually keeps the two apart.
+
+# Quotes, funds and crypto — the tables that come out empty without these
+*.stockanalysis.com
+*.stooq.com
+*.marketwatch.com
+*.investing.com
+*.tradingeconomics.com
+*.coingecko.com
+*.coinmarketcap.com
+*.yahoo.com
+*.cnbc.com
+*.nasdaq.com
+
+# Macro, rates and labour
+*.bls.gov
+*.federalreserve.gov
+*.treasury.gov
+*.bea.gov
+*.cmegroup.com
+
+# Wire services and business press
+*.reuters.com
+*.apnews.com
+*.bloomberg.com
+*.wsj.com
+*.ft.com
+
+# AI and programming
+*.arxiv.org
+*.github.com
+*.theregister.com
+*.techcrunch.com
+*.arstechnica.com
+*.theverge.com
+*.openai.com
+*.anthropic.com
+*.huggingface.co
+
+# Journals
+*.nature.com
+*.science.org
+*.cell.com
+*.nih.gov
+*.wiley.com
+
+# Flights, post and jobs
+*.flightera.net
+*.bts.gov
+*.flightaware.com
+*.usps.com
+*.linkedin.com
+*.indeed.com

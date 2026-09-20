@@ -126,7 +126,7 @@ class TestEgressAllowlist(unittest.TestCase):
         with open(self.PATH, encoding="utf-8") as fh:
             head = fh.read().split("# Markets")[0]
         self.assertIn("EGRESS_BLOCKED", head, "it must say why the prompt's own list is not enough")
-        self.assertIn("Network access", head, "it must say where the list is pasted")
+        self.assertIn("Domain allowlist", head, "it must say where the list is pasted")
         self.assertIn("mailbox", head, "it must say what widening egress costs")
 
     def test_the_readme_points_at_the_file(self):
@@ -142,3 +142,49 @@ class TestTheDocRuleIsWrittenDown(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class TestTheShortAllowlist(unittest.TestCase):
+    """The long list is a reference; this one is what a person types.
+
+    claude.ai's allowlist field takes one entry at a time, so a 312-host file
+    is not something anyone will keep current — and an allowlist nobody
+    updates is how a run ends up reporting an empty market table. The short
+    list carries the same sources as wildcards, in the order a run needs them.
+    """
+
+    PATH = os.path.join(ROOT, "docs", "egress-allowlist-core.txt")
+
+    def entries(self):
+        with open(self.PATH, encoding="utf-8") as fh:
+            return [l.strip() for l in fh if l.strip() and not l.startswith("#")]
+
+    def test_every_entry_is_one_site_not_a_whole_suffix(self):
+        for d in self.entries():
+            self.assertRegex(d, r"^\*\.[a-z0-9-]+\.[a-z.]{2,6}$",
+                             f"{d}: one wildcard, one site")
+            self.assertNotRegex(d, r"^\*\.[a-z]{2,6}$", f"{d}: that is a whole suffix")
+
+    def test_it_covers_the_chains_the_prompt_names_first(self):
+        """A source the prompt tries first, absent here, is a table that comes
+        out empty on the first run after someone follows this file."""
+        listed = {d.lstrip("*.") for d in self.entries()}
+        for must in ("stockanalysis.com", "stooq.com", "coingecko.com", "bls.gov",
+                     "flightera.net", "marketwatch.com", "investing.com"):
+            self.assertIn(must, listed, f"the short list omits {must}")
+
+    def test_it_is_short_enough_that_someone_will_finish_it(self):
+        self.assertLessEqual(len(self.entries()), 60,
+                             "past about sixty one-at-a-time entries this stops being done")
+
+    def test_it_says_where_it_goes_and_what_it_costs(self):
+        head = open(self.PATH, encoding="utf-8").read().split("# Quotes")[0]
+        self.assertIn("Capabilities", head, "the panel it is typed into has moved before")
+        self.assertIn("Additional allowed domains", head)
+        self.assertIn("mailbox", head, "it must say what widening egress costs")
+
+    def test_the_long_list_points_at_the_short_one(self):
+        long_head = open(os.path.join(ROOT, "docs", "egress-allowlist.txt"),
+                         encoding="utf-8").read().split("# Markets")[0]
+        self.assertIn("egress-allowlist-core.txt", long_head)
+        self.assertIn("ONE ENTRY AT A TIME", long_head)
