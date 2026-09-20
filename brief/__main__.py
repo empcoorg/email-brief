@@ -164,6 +164,84 @@ def _evening(a):
     return 0
 
 
+def _verify_sent(raw_path, html_path, text_path):
+    """Is the message about to go out the BRIEF, or only its fallback?
+
+    A morning brief arrived as the plain-text copy: no HTML part at all, so
+    every client showed the fallback - headings gone, tables gone, the trimmed
+    "SHORTENED" note at the top of what the reader saw. Carrying ~110 KB of
+    HTML through a tool call is the most expensive step of a run, and a run
+    that cannot finish it can finish the text instead and look like it worked.
+    Nothing checked, so nothing failed; it just arrived wrong.
+
+    This reads the draft back as RAW and answers four questions before a send:
+    is there an HTML part at all, is it the brief (the build marker), is it
+    WHOLE (byte identical to the file), and is it the LAST alternative - the
+    one a mail client picks when it has both.
+    """
+    import email
+    import email.policy
+    try:
+        raw = open(raw_path, "rb").read()
+        want_html = open(html_path, encoding="utf-8").read()
+    except OSError as ex:
+        print(f"cannot check the draft: {ex}", file=sys.stderr)
+        return 2
+    if b"Content-Type" not in raw[:4096] and b"content-type" not in raw[:4096]:
+        # a base64url blob, as some connectors hand RAW back
+        import base64
+        try:
+            raw = base64.urlsafe_b64decode(raw.strip() + b"=" * (-len(raw.strip()) % 4))
+        except Exception:
+            pass
+    msg = email.message_from_bytes(raw, policy=email.policy.default)
+    parts = [p_ for p_ in msg.walk() if not p_.get_content_maintype() == "multipart"]
+    html = [p_ for p_ in parts if p_.get_content_type() == "text/html"]
+    text = [p_ for p_ in parts if p_.get_content_type() == "text/plain"]
+    problems = []
+    if not html:
+        problems.append("NO HTML PART AT ALL — this draft would arrive as the plain-text "
+                        "fallback. Do not send it. Rebuild the draft with the htmlBody "
+                        "carried whole; if you cannot, re-render with --clip-guard (a "
+                        "smaller email that is still the brief) rather than sending text.")
+    else:
+        got = html[0].get_content()
+        marker = _build_marker(want_html)
+        if marker and marker not in got:
+            problems.append(f"the HTML part does not carry this render's marker ({marker}) — "
+                            "it is a different brief, or a placeholder")
+        if len(got.strip()) < len(want_html.strip()):
+            short = len(want_html.strip()) - len(got.strip())
+            problems.append(f"the HTML part is {short:,} characters short of email.html — "
+                            "it was truncated on the way in; rebuild the draft")
+        alts = [p_ for p_ in parts if p_.get_content_type() in ("text/plain", "text/html")]
+        if alts and alts[-1].get_content_type() != "text/html":
+            problems.append("the plain-text part comes AFTER the HTML one; a mail client "
+                            "shows the last alternative, so the fallback would win")
+    if text_path and text:
+        try:
+            want_text = open(text_path, encoding="utf-8").read()
+        except OSError:
+            want_text = ""
+        if want_text and want_text.strip()[:200] not in text[0].get_content():
+            problems.append("the plain-text part is not the renderer's email.txt")
+    if problems:
+        print("DRAFT IS NOT SENDABLE:", file=sys.stderr)
+        for p_ in problems:
+            print(f"  - {p_}", file=sys.stderr)
+        return 6
+    print(f"OK   the draft carries the brief: HTML part {len(html[0].get_content()):,} chars, "
+          f"marker present, plain text second. Safe to send.")
+    return 0
+
+
+def _build_marker(html):
+    """The build marker the renderer wrote into all three outputs."""
+    import re as _re
+    m = _re.search(r"brief-[0-9a-f]{12}", html)
+    return m.group(0) if m else ""
+
+
 def _verify(source, readback):
     """Compare an attachment against what came back out of the message.
 
@@ -315,6 +393,13 @@ def main(argv=None):
     vf.add_argument("readback", help="the same file decoded out of the draft "
                                      "or sent message")
 
+    vs = sub.add_parser("verify-sent",
+                        help="is the draft the BRIEF or only its text fallback? "
+                             "(exit 0 sendable, 6 not)")
+    vs.add_argument("raw", help="the draft read back with messageFormat RAW")
+    vs.add_argument("--html", required=True, help="the email.html the renderer wrote")
+    vs.add_argument("--text", help="the email.txt the renderer wrote")
+
     xp = sub.add_parser("extract-payload",
                         help="recover the payload embedded in a published page "
                              "(exit 0 found, 2 none)")
@@ -373,6 +458,8 @@ def main(argv=None):
     xr.add_argument("--today", required=True, help="the run's date, YYYY-MM-DD")
     a = ap.parse_args(argv)
 
+    if a.cmd == "verify-sent":
+        return _verify_sent(a.raw, a.html, a.text)
     if a.cmd == "verify":
         return _verify(a.source, a.readback)
 

@@ -639,3 +639,80 @@ class TestWhatGivesWayWhenTheCallIsFull(unittest.TestCase):
         out, em, _tx = self.render("--connector", "gmail", "--send-budget", "400000")
         self.assertNotIn("come out first", out)
         self.assertIn("data-em-spark", em, "with room, the email draws them")
+
+
+class TestADraftIsCheckedBeforeItIsSent(unittest.TestCase):
+    """A morning brief arrived as its own plain-text fallback.
+
+    Carrying ~110 KB of HTML through a tool call is the most expensive step of
+    a run, and a run that cannot finish it can finish the text instead and
+    look like it worked: the message goes out, the log says "sent", and the
+    reader gets a brief with no headings, no tables and a "SHORTENED" note at
+    the top. Nothing checked, so nothing failed. These are the four questions
+    asked of a draft before it is allowed to go.
+    """
+
+    def drafts(self):
+        import email.message, email.policy, subprocess, sys, tempfile, os
+        d = tempfile.mkdtemp()
+        subprocess.run([sys.executable, "-m", "brief", "render", "sample_payload.json",
+                        "--out-dir", d, "--date", "2026-09-20"],
+                       cwd=ROOT, check=True, capture_output=True)
+        html = open(os.path.join(d, "email.html"), encoding="utf-8").read()
+        text = open(os.path.join(d, "email.txt"), encoding="utf-8").read()
+
+        def build(kind):
+            m = email.message.EmailMessage(policy=email.policy.default)
+            m["Subject"], m["From"], m["To"] = "Morning Brief", "a@example.com", "b@example.com"
+            if kind == "both":
+                m.set_content(text); m.add_alternative(html, subtype="html")
+            elif kind == "text-only":
+                m.set_content(text)
+            elif kind == "wrong-order":
+                m.set_content(html, subtype="html"); m.add_alternative(text)
+            elif kind == "truncated":
+                m.set_content(text); m.add_alternative(html[:len(html) // 2], subtype="html")
+            path = os.path.join(d, f"raw-{kind}.eml")
+            open(path, "wb").write(m.as_bytes())
+            return path
+
+        return d, {k: build(k) for k in ("both", "text-only", "wrong-order", "truncated")}
+
+    def check(self, raw, d):
+        import subprocess, sys, os
+        return subprocess.run([sys.executable, "-m", "brief", "verify-sent", raw,
+                               "--html", os.path.join(d, "email.html"),
+                               "--text", os.path.join(d, "email.txt")],
+                              cwd=ROOT, capture_output=True, text=True)
+
+    def test_a_good_draft_passes(self):
+        d, raws = self.drafts()
+        r = self.check(raws["both"], d)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("carries the brief", r.stdout)
+
+    def test_a_text_only_draft_is_refused(self):
+        """The exact failure that shipped."""
+        d, raws = self.drafts()
+        r = self.check(raws["text-only"], d)
+        self.assertEqual(r.returncode, 6)
+        self.assertIn("NO HTML PART AT ALL", r.stderr)
+        self.assertIn("--clip-guard", r.stderr, "and it says what to do instead")
+
+    def test_a_draft_whose_fallback_would_win_is_refused(self):
+        d, raws = self.drafts()
+        r = self.check(raws["wrong-order"], d)
+        self.assertEqual(r.returncode, 6)
+        self.assertIn("last alternative", r.stderr)
+
+    def test_a_truncated_html_part_is_refused(self):
+        d, raws = self.drafts()
+        r = self.check(raws["truncated"], d)
+        self.assertEqual(r.returncode, 6)
+
+    def test_the_prompt_makes_the_check_mandatory(self):
+        fence = open(os.path.join(ROOT, "ROUTINE_PROMPT.template.md"), encoding="utf-8").read()
+        self.assertIn("EVERY BRIEF GOES THROUGH A DRAFT", fence)
+        self.assertIn("verify-sent", fence)
+        self.assertIn("DO NOT SEND A DRAFT THAT FAILS THIS", fence)
+        self.assertIn("never send the text copy as the body", fence)
