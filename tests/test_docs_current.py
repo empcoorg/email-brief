@@ -188,3 +188,31 @@ class TestTheShortAllowlist(unittest.TestCase):
                          encoding="utf-8").read().split("# Markets")[0]
         self.assertIn("egress-allowlist-core.txt", long_head)
         self.assertIn("ONE ENTRY AT A TIME", long_head)
+
+
+class TestTheAllowlistFeeder(unittest.TestCase):
+    """40 domains into a field that takes one per Add is where good intentions
+    die, so the repo carries the thing that hands them over one at a time."""
+
+    TOOL = os.path.join(ROOT, "tools", "allowlist_feed.py")
+
+    def test_it_reads_the_short_list_by_default(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("allowlist_feed", self.TOOL)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        self.assertTrue(mod.DEFAULT.endswith("egress-allowlist-core.txt"))
+        items = mod.entries(mod.DEFAULT)
+        self.assertGreaterEqual(len(items), 20)
+        self.assertTrue(all(not i.startswith("#") for i in items))
+
+    def test_it_says_the_or_in_the_placeholder_is_not_a_separator(self):
+        """The field refuses a line of domains joined by "or" — the placeholder
+        is showing two accepted formats. That cost a round trip; it is written
+        down where the next person will look."""
+        doc = open(self.TOOL, encoding="utf-8").read()
+        self.assertIn("not a separator", doc)
+        self.assertIn("Additional allowed domains", doc)
+
+    def test_the_readme_mentions_it(self):
+        self.assertIn("allowlist_feed.py", README)
