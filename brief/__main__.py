@@ -194,6 +194,18 @@ def _verify_sent(raw_path, html_path, text_path):
             raw = base64.urlsafe_b64decode(raw.strip() + b"=" * (-len(raw.strip()) % 4))
         except Exception:
             pass
+    def flat(text):
+        """Line endings as the transport left them, not as the file has them.
+
+        A mail transport rewrites the body to CRLF, and may re-wrap it. A
+        check that compares raw bytes calls that a corrupted draft - which is
+        what happened on the first brief this gate ever guarded: it refused a
+        draft that was carrying the real HTML, over line endings. A gate that
+        cries wolf is a gate that gets overridden, so it compares text as text.
+        """
+        return "\n".join(line.rstrip() for line in str(text).replace("\r\n", "\n")
+                          .replace("\r", "\n").split("\n")).strip()
+
     msg = email.message_from_bytes(raw, policy=email.policy.default)
     parts = [p_ for p_ in msg.walk() if not p_.get_content_maintype() == "multipart"]
     html = [p_ for p_ in parts if p_.get_content_type() == "text/html"]
@@ -205,15 +217,21 @@ def _verify_sent(raw_path, html_path, text_path):
                         "carried whole; if you cannot, re-render with --clip-guard (a "
                         "smaller email that is still the brief) rather than sending text.")
     else:
-        got = html[0].get_content()
+        got, want = flat(html[0].get_content()), flat(want_html)
         marker = _build_marker(want_html)
         if marker and marker not in got:
             problems.append(f"the HTML part does not carry this render's marker ({marker}) — "
                             "it is a different brief, or a placeholder")
-        if len(got.strip()) < len(want_html.strip()):
-            short = len(want_html.strip()) - len(got.strip())
-            problems.append(f"the HTML part is {short:,} characters short of email.html — "
-                            "it was truncated on the way in; rebuild the draft")
+        # Truncation is what this is looking for, so it asks whether the END
+        # arrived - a transport may re-wrap the middle, but it cannot invent
+        # the last line of a file it never received.
+        tail = want[-160:]
+        if tail and tail not in got:
+            problems.append("the HTML part does not end where email.html ends — it was "
+                            "truncated on the way in; rebuild the draft")
+        elif len(got) < len(want) * 0.98:
+            problems.append(f"the HTML part is {len(want) - len(got):,} characters short of "
+                            "email.html; rebuild the draft")
         alts = [p_ for p_ in parts if p_.get_content_type() in ("text/plain", "text/html")]
         if alts and alts[-1].get_content_type() != "text/html":
             problems.append("the plain-text part comes AFTER the HTML one; a mail client "
@@ -223,7 +241,7 @@ def _verify_sent(raw_path, html_path, text_path):
             want_text = open(text_path, encoding="utf-8").read()
         except OSError:
             want_text = ""
-        if want_text and want_text.strip()[:200] not in text[0].get_content():
+        if want_text and flat(want_text)[:200] not in flat(text[0].get_content()):
             problems.append("the plain-text part is not the renderer's email.txt")
     if problems:
         print("DRAFT IS NOT SENDABLE:", file=sys.stderr)

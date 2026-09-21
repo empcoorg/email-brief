@@ -710,6 +710,42 @@ class TestADraftIsCheckedBeforeItIsSent(unittest.TestCase):
         r = self.check(raws["truncated"], d)
         self.assertEqual(r.returncode, 6)
 
+    def test_a_transport_that_rewrites_line_endings_is_not_a_corrupt_draft(self):
+        """The first draft this gate ever guarded was a real brief, refused
+        over CRLF: Gmail rewrites the body's line endings, and the check was
+        comparing bytes. A gate that cries wolf is a gate that gets
+        overridden, so it compares text as text.
+        """
+        import email.message, email.policy, os
+        d, _raws = self.drafts()
+        html = open(os.path.join(d, "email.html"), encoding="utf-8").read()
+        text = open(os.path.join(d, "email.txt"), encoding="utf-8").read()
+        m = email.message.EmailMessage(policy=email.policy.default)
+        m["Subject"], m["From"], m["To"] = "Morning Brief", "a@example.com", "b@example.com"
+        m.set_content(text.replace("\n", "\r\n"))
+        m.add_alternative(html.replace("\n", "\r\n"), subtype="html")
+        raw = os.path.join(d, "raw-crlf.eml")
+        open(raw, "wb").write(m.as_bytes())
+        r = self.check(raw, d)
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+    def test_truncation_is_still_caught_when_the_endings_differ(self):
+        """The point of the check survives the fix: it asks whether the END of
+        the file arrived, which a transport cannot invent."""
+        import email.message, email.policy, os
+        d, _raws = self.drafts()
+        html = open(os.path.join(d, "email.html"), encoding="utf-8").read()
+        text = open(os.path.join(d, "email.txt"), encoding="utf-8").read()
+        m = email.message.EmailMessage(policy=email.policy.default)
+        m["Subject"], m["From"], m["To"] = "Morning Brief", "a@example.com", "b@example.com"
+        m.set_content(text.replace("\n", "\r\n"))
+        m.add_alternative(html[:int(len(html) * 0.9)].replace("\n", "\r\n"), subtype="html")
+        raw = os.path.join(d, "raw-crlf-cut.eml")
+        open(raw, "wb").write(m.as_bytes())
+        r = self.check(raw, d)
+        self.assertEqual(r.returncode, 6)
+        self.assertIn("does not end where email.html ends", r.stderr)
+
     def test_the_prompt_makes_the_check_mandatory(self):
         fence = open(os.path.join(ROOT, "ROUTINE_PROMPT.template.md"), encoding="utf-8").read()
         self.assertIn("EVERY BRIEF GOES THROUGH A DRAFT", fence)
