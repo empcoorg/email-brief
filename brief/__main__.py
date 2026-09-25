@@ -195,16 +195,19 @@ def _verify_sent(raw_path, html_path, text_path):
         except Exception:
             pass
     def flat(text):
-        """Line endings as the transport left them, not as the file has them.
+        """What the draft SAYS, with everything a mail store is free to change
+        taken back out.
 
-        A mail transport rewrites the body to CRLF, and may re-wrap it. A
-        check that compares raw bytes calls that a corrupted draft - which is
-        what happened on the first brief this gate ever guarded: it refused a
-        draft that was carrying the real HTML, over line endings. A gate that
-        cries wolf is a gate that gets overridden, so it compares text as text.
+        A draft store is not a file store. Gmail's rewrites the body to CRLF,
+        re-wraps lines, and HTML-entity-escapes quotes and apostrophes - so
+        the renderer's own footer, which contains both, comes back looking
+        different byte for byte while being the same text. This gate refused
+        two perfectly good briefs on exactly that before the rule was learned:
+        compare what a reader would see, not how it was stored.
         """
-        return "\n".join(line.rstrip() for line in str(text).replace("\r\n", "\n")
-                          .replace("\r", "\n").split("\n")).strip()
+        import html as _html
+        out = _html.unescape(str(text).replace("\r\n", "\n").replace("\r", "\n"))
+        return " ".join(out.split())
 
     msg = email.message_from_bytes(raw, policy=email.policy.default)
     parts = [p_ for p_ in msg.walk() if not p_.get_content_maintype() == "multipart"]
@@ -229,6 +232,9 @@ def _verify_sent(raw_path, html_path, text_path):
         if tail and tail not in got:
             problems.append("the HTML part does not end where email.html ends — it was "
                             "truncated on the way in; rebuild the draft")
+        elif not got.endswith(want[-40:]):
+            problems.append("the HTML part carries email.html's ending but does not END "
+                            "there — something was appended after the brief")
         elif len(got) < len(want) * 0.98:
             problems.append(f"the HTML part is {len(want) - len(got):,} characters short of "
                             "email.html; rebuild the draft")
@@ -236,20 +242,33 @@ def _verify_sent(raw_path, html_path, text_path):
         if alts and alts[-1].get_content_type() != "text/html":
             problems.append("the plain-text part comes AFTER the HTML one; a mail client "
                             "shows the last alternative, so the fallback would win")
-    if text_path and text:
+    warnings = []
+    if text_path:
         try:
             want_text = open(text_path, encoding="utf-8").read()
         except OSError:
             want_text = ""
-        if want_text and flat(want_text)[:200] not in flat(text[0].get_content()):
-            problems.append("the plain-text part is not the renderer's email.txt")
+        if not text:
+            # A warning, not a refusal: every client that can show HTML shows
+            # it, so the brief still arrives as a brief. It is worth saying
+            # because it means an update_draft carried htmlBody alone and the
+            # store dropped the other part.
+            warnings.append("there is no plain-text part — an update that sets only "
+                            "htmlBody wipes it. Re-update the draft with BOTH bodies "
+                            "so the fallback exists.")
+        elif want_text and flat(want_text)[:200] not in flat(text[0].get_content()):
+            warnings.append("the plain-text part is not this render's email.txt")
     if problems:
         print("DRAFT IS NOT SENDABLE:", file=sys.stderr)
         for p_ in problems:
             print(f"  - {p_}", file=sys.stderr)
         return 6
+    for w in warnings:
+        print(f"note: {w}", file=sys.stderr)
     print(f"OK   the draft carries the brief: HTML part {len(html[0].get_content()):,} chars, "
-          f"marker present, plain text second. Safe to send.")
+          f"marker present"
+          + (", plain text second" if text else ", no plain-text part")
+          + ". Safe to send.")
     return 0
 
 

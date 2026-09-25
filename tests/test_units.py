@@ -746,6 +746,48 @@ class TestADraftIsCheckedBeforeItIsSent(unittest.TestCase):
         self.assertEqual(r.returncode, 6)
         self.assertIn("does not end where email.html ends", r.stderr)
 
+    def test_a_store_that_escapes_quotes_is_not_a_truncated_draft(self):
+        """Gmail's draft store HTML-entity-escapes quotes and apostrophes, and
+        the renderer's footer contains both — so a byte-wise tail check called
+        a perfect draft truncated. Twice. Compare what a reader would see.
+        """
+        import email.message, email.policy, os
+        d, _raws = self.drafts()
+        html = open(os.path.join(d, "email.html"), encoding="utf-8").read()
+        text = open(os.path.join(d, "email.txt"), encoding="utf-8").read()
+
+        def stored(s):
+            return s.replace("'", "&#39;").replace('"', "&quot;").replace("\n", "\r\n")
+
+        m = email.message.EmailMessage(policy=email.policy.default)
+        m["Subject"], m["From"], m["To"] = "Morning Brief", "a@example.com", "b@example.com"
+        m.set_content(stored(text))
+        m.add_alternative(stored(html), subtype="html")
+        raw = os.path.join(d, "raw-stored.eml")
+        open(raw, "wb").write(m.as_bytes())
+        r = self.check(raw, d)
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+    def test_a_missing_text_part_is_said_but_does_not_block(self):
+        """An update that sets only htmlBody wipes the fallback. Every client
+        that can show HTML still shows the brief, so this is worth saying and
+        not worth refusing — refusing it is how a gate gets overridden."""
+        import email.message, email.policy, os
+        d, _raws = self.drafts()
+        html = open(os.path.join(d, "email.html"), encoding="utf-8").read()
+        m = email.message.EmailMessage(policy=email.policy.default)
+        m["Subject"], m["From"], m["To"] = "Morning Brief", "a@example.com", "b@example.com"
+        m.set_content(html, subtype="html")
+        raw = os.path.join(d, "raw-html-only.eml")
+        open(raw, "wb").write(m.as_bytes())
+        r = self.check(raw, d)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("no plain-text part", r.stderr + r.stdout)
+
+    def test_the_prompt_says_an_update_carries_both_bodies(self):
+        fence = open(os.path.join(ROOT, "ROUTINE_PROMPT.template.md"), encoding="utf-8").read()
+        self.assertIn("EVERY update_draft CARRIES BOTH BODIES", fence)
+
     def test_the_prompt_makes_the_check_mandatory(self):
         fence = open(os.path.join(ROOT, "ROUTINE_PROMPT.template.md"), encoding="utf-8").read()
         self.assertIn("EVERY BRIEF GOES THROUGH A DRAFT", fence)

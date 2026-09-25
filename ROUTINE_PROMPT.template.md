@@ -244,6 +244,7 @@ STEP 4 — deliver:
            cd /tmp/eb && python3 -m brief verify-sent /tmp/raw.eml --html /tmp/eb/out/email.html --text /tmp/eb/out/email.txt
          Exit 0 means the draft carries the brief — an HTML part, whole, with this render's build marker, and the plain text before it so a client shows the HTML. Exit 6 prints exactly what is wrong. DO NOT SEND A DRAFT THAT FAILS THIS.
       3. Only then send_message with that draftId.
+      EVERY update_draft CARRIES BOTH BODIES. A draft update replaces the message: one that sets only htmlBody deletes the plain-text part, and one that sets only the text body deletes the brief. If you rewrite a draft, pass the htmlBody AND the plain-text body in the same call, every time.
     IF YOU CANNOT CARRY THE WHOLE HTML, RE-RENDER SMALLER — never send the text copy as the body. `python3 -m brief render ... --clip-guard` sheds the least actionable cards (the email names which, and the page keeps them all) and produces a body around 80 KB instead of 130 KB, which is one reliable carry. A smaller brief that arrives as a brief beats a complete one that arrives as a fallback.
   * MAILPIECE SCANS GO THROUGH THE SAME DRAFT. Attach every valid new intended-recipient scan as a JPG named usps-YYYY-MM-DD-<n>.jpg, and deliver it like this:
       1. create_draft with the same htmlBody, the same plain-text body, and the attachments.
