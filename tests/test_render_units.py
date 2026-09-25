@@ -2159,3 +2159,22 @@ class TestAMissingFigureIsNotAFlatSession(unittest.TestCase):
         self.assertEqual(missing_word("—"), "—")
         self.assertEqual(missing_word("not available"), "n/a")
         self.assertEqual(missing_word(""), "n/a")
+
+
+class TestATileTakesANumberAsMoney(unittest.TestCase):
+    """The tiles are money tiles, so a bare number arriving in one is money.
+
+    A run that hands over 1234.5 instead of "$1,234.50 USD" used to have it
+    printed raw, next to figures that all carry a currency and two decimals.
+    """
+
+    def test_a_float_is_formatted_like_every_other_money_figure(self):
+        from brief.render import tile_amount
+        self.assertEqual(tile_amount(1234.5), ("$1,234.50", "USD"))
+        self.assertEqual(tile_amount(0.0), ("$0.00", "USD"))
+        self.assertEqual(tile_amount(9999.0), ("$9,999.00", "USD"))
+
+    def test_a_formatted_string_is_left_exactly_as_it_came(self):
+        from brief.render import tile_amount
+        self.assertEqual(tile_amount("MX$10,200.00 MXN"), ("MX$10,200.00", "MXN"))
+        self.assertEqual(tile_amount("$1,294.65 USD"), ("$1,294.65", "USD"))

@@ -1148,7 +1148,12 @@ def tile_amount(value):
     The currency is set quietly beside the amount rather than inside it, so the
     number stays the thing the eye lands on.
 
+    A run that hands over a bare number instead of a formatted string used to
+    have it printed raw - "1234.5" where every other money figure in the brief
+    reads "$1,234.50". The tile is a money tile; a number in it is money.
     """
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        value = usd_str(float(value))
     v = str(value).strip()
     m = _re.match(r"^(.*?)(?:\s+([A-Z]{3}))$", v)
     if m:
