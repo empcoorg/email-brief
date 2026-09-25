@@ -571,13 +571,20 @@ h3{{font-size:14.5px;font-weight:600;margin:16px 0 6px;color:var(--ink-2)}}
 .nothing{{color:var(--ink-3);font-style:italic;padding:8px 0}}
 /* Section 1's rows carry the action bar's severity stripe, so one item reads
    as one item in both places. */
-/* The severity stripe is drawn INSIDE the cell, with a gap top and bottom, so
-   two rows of the same severity do not fuse into one long bar. */
+/* The severity stripe is drawn INSIDE the cell as its own mark, held clear
+   of the row above and below.
+
+   One item is one stripe. This was a 1px inset, which is not a gap at any
+   real viewing size: two adjacent rows of the same severity fused into a
+   single column of colour and the section read as two groups instead of four
+   items. The owner asked for padding between the bars, so the seam became a
+   gap you can actually see.
+
+   The ends stay square - that is a separate decision, made separately. The
+   last stripe no longer stretches into the wrapper's corner either: with a
+   gap above it and none below, it was the one mark taller than its row. */
 tr.hp>td:first-child{{position:relative;padding-left:18px;--sev:var(--line-strong)}}
-tr.hp>td:first-child::before{{content:"";position:absolute;left:0;top:1px;bottom:1px;width:6px;background:var(--sev)}}
-/* the last stripe follows the wrapper's own corner, so the column of
-   colour ends where the table does rather than stopping short of it */
-tr.hp:last-child>td:first-child::before{{bottom:0;border-bottom-left-radius:9px}}
+tr.hp>td:first-child::before{{content:"";position:absolute;left:0;top:6px;bottom:6px;width:6px;background:var(--sev)}}
 tr.hp.warn>td:first-child{{--sev:var(--warning)}}
 tr.hp.neg>td:first-child{{--sev:var(--negative)}}
 tr.hp.info>td:first-child{{--sev:var(--accent)}}

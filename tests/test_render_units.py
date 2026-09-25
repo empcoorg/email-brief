@@ -1869,18 +1869,23 @@ class TestThePageDeclaresItsEncoding(unittest.TestCase):
 
 
 class TestSeverityStripeIsOneBarPerRow(unittest.TestCase):
-    def test_the_stripe_has_square_ends_and_does_not_touch_the_row_edge(self):
+    def test_the_stripe_has_square_ends_and_is_padded_clear_of_its_row(self):
+        """Square ends, and a gap big enough to read as padding.
+
+        The inset was 1px, which is a seam rather than a gap: two adjacent
+        rows of one severity fused into a single column of colour. The owner
+        asked for padding between the bars. The ENDS are a separate decision
+        and stay square.
+        """
         f, _em, _tx = render_all(payload())
         css = f.split("<style>")[1].split("</style>")[0]
         rule = [r for r in css.split("}") if "tr.hp>td:first-child::before" in r][0]
         self.assertNotIn("border-radius", rule, "square ends, not rounded")
-        self.assertIn("top:1px", rule)
-        self.assertIn("bottom:1px", rule)
-        # and the last one follows the wrapper's own corner rather than
-        # stopping short of it
-        css_last = [r for r in css.split("}") if "tr.hp:last-child>td:first-child::before" in r][0]
-        self.assertIn("bottom:0", css_last)
-        self.assertIn("border-bottom-left-radius:9px", css_last)
+        self.assertIn("top:6px", rule)
+        self.assertIn("bottom:6px", rule)
+        # no stripe is stretched to the wrapper's corner: with a gap above and
+        # none below, the last one was the only mark taller than its own row
+        self.assertNotIn("tr.hp:last-child", css)
 
     def test_the_line_pins_its_zero_and_the_name_is_measured_over_the_line(self):
         """Two different questions. A bar is read against the zero, so the

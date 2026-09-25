@@ -616,7 +616,12 @@ class TestTrendReadoutInTheBrowser(_BrowserCase):
         pg.close()
 
     def test_a_severity_stripe_does_not_touch_the_one_below_it(self):
-        """Two rows of the same severity fused into one long bar."""
+        """Two rows of the same severity fused into one long bar.
+
+        Measured in the browser rather than read off the CSS, because what
+        matters is the distance between the drawn marks. The bound was once
+        1.5-6px, deliberately a seam; the owner asked for padding instead.
+        """
         pg = self._page(1200)
         gaps = pg.evaluate("""() => {
           const rows = [...document.querySelectorAll('tr.hp')];
@@ -633,8 +638,8 @@ class TestTrendReadoutInTheBrowser(_BrowserCase):
         }""")
         self.assertTrue(gaps, "no high-priority rows to measure")
         for gap in gaps:
-            self.assertGreaterEqual(gap, 1.5,
-                                    f"stripes are {gap:.1f}px apart — they read as one bar")
-            self.assertLessEqual(gap, 6,
-                                 f"stripes are {gap:.1f}px apart — that reads as a break, not a seam")
+            self.assertGreaterEqual(gap, 8,
+                                    f"stripes are {gap:.1f}px apart — that is a seam, not padding")
+            self.assertLessEqual(gap, 16,
+                                 f"stripes are {gap:.1f}px apart — the column stops reading as a column")
         pg.close()
