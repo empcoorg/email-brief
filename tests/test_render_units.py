@@ -2095,3 +2095,67 @@ class TestFlightColumnsAreColoured(unittest.TestCase):
         from brief.theme import L
         self.assertIn(blend(L["pos"], L["surface"], 0.7), em,
                       "the email cannot do opacity, so the colour is mixed instead")
+
+
+class TestAMissingFigureIsNotAFlatSession(unittest.TestCase):
+    """A window the run could not price must not be drawn as one that did not move.
+
+    When a source is down the run writes "n/a" into the amount and, having no
+    change to report, 0.0 into the percentage. Taken at face value that renders
+    as a green up arrow at +0.00% over a bar sitting on the zero - a brief that
+    states a flat session where it actually knows nothing. The reader cannot
+    tell the two apart, and the wrong one is the one they act on.
+    """
+
+    def _funds_with_a_gap(self):
+        p = payload()
+        p["FUNDS"] = [list(r) for r in p["FUNDS"]]
+        p["FUNDS"][0][5], p["FUNDS"][0][6] = "n/a", 0.0      # the 1W window
+        return p
+
+    def test_the_test_is_whether_there_is_a_digit_in_it(self):
+        from brief.render import no_figure
+        for gap in ("n/a", "N/A", "—", "", "  ", None, "not available"):
+            self.assertTrue(no_figure(gap), gap)
+        for figure in ("+$1.58", "−0.42", "0.00", "+0.00%"):
+            self.assertFalse(no_figure(figure), figure)
+
+    def test_the_page_prints_the_word_and_draws_nothing(self):
+        import brief.render as R
+        R.render_all(payload())          # the axes are bound by a render
+        cell = R.horizon_cell_file("n/a", 0.0, R.FUND_1W)
+        self.assertIn(">n/a<", cell)
+        self.assertNotIn("▲", cell)
+        self.assertNotIn("▼", cell)
+        self.assertNotIn("dbar", cell)
+        self.assertNotIn("+0.00%", cell)
+
+    def test_the_email_prints_the_word_and_draws_nothing(self):
+        import brief.render as R
+        from brief.theme import L
+        R.render_all(payload())          # the axes are bound by a render
+        cell = R.em_horizon("n/a", 0.0, R.FUND_1W)
+        self.assertIn(">n/a<", cell)
+        self.assertNotIn("▲", cell)
+        self.assertIn(L["ink3"], cell, "it reads as absent, not as a figure")
+
+    def test_a_real_figure_still_gets_its_arrow_and_bar_in_both(self):
+        import brief.render as R
+        R.render_all(payload())          # the axes are bound by a render
+        for cell in (R.horizon_cell_file("+$1.58", 1.21, R.FUND_1W),
+                     R.em_horizon("+$1.58", 1.21, R.FUND_1W)):
+            self.assertIn("▲", cell)
+            self.assertIn("+1.21%", cell)
+
+    def test_the_gap_survives_a_whole_render_of_both_bodies(self):
+        from brief.render import render_all
+        page, email, _text = render_all(self._funds_with_a_gap())
+        self.assertIn('<span class="c na">n/a</span>', page)
+        self.assertIn(">n/a<", email)
+
+    def test_the_word_is_capped_so_it_cannot_widen_the_column(self):
+        from brief.render import missing_word
+        self.assertEqual(missing_word("n/a"), "n/a")
+        self.assertEqual(missing_word("—"), "—")
+        self.assertEqual(missing_word("not available"), "n/a")
+        self.assertEqual(missing_word(""), "n/a")

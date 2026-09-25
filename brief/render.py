@@ -273,6 +273,24 @@ def detail_html_email(detail):
     return "<br>".join(out)
 
 
+def no_figure(amount):
+    """True when a horizon's amount is not a figure at all.
+
+    A run that cannot get a number for one window writes "n/a" (or "\u2014", or
+    "not available") into the amount and, having no change to report, 0.0 into
+    the percentage. Taken at face value that renders as a green \u25b2 at +0.00%
+    over a zero-width bar: the brief states a flat session where it actually
+    knows nothing. Missing is not unchanged, and the two must not look alike.
+    """
+    return not _re.search(r"\d", str(amount or ""))
+
+
+def missing_word(amount):
+    """What to print in place of the figure. Short, because the column is."""
+    word = str(amount or "").strip()
+    return word if 0 < len(word) <= 12 else "n/a"
+
+
 def horizon_cell_file(amount, pct, axis, unit="", reverse=False):
     """One horizon's figure, with the direction arrow ON the axis's zero.
 
@@ -285,6 +303,9 @@ def horizon_cell_file(amount, pct, axis, unit="", reverse=False):
     `reverse` puts the percentage first, which reads better where the absolute
     move is a price delta rather than index points.
     """
+    if no_figure(amount):
+        return ('<span class="barfig trio mono">'
+                f'<span class="c na">{e(missing_word(amount))}</span></span>')
     cls = "dir-pos" if pct >= 0 else "dir-neg"
     left = f"{pct_str(pct)}" if reverse else f"{e(amount)}{' ' + unit if unit else ''}"
     right = f"{e(amount)}" if reverse else f"{pct_str(pct)}"
@@ -642,6 +663,7 @@ td.num{{text-align:right;white-space:nowrap}}
 .barfig.trio span{{position:absolute;top:0;white-space:nowrap}}
 .barfig.trio .l{{right:50%;margin-right:11px}}
 .barfig.trio .c{{left:50%;transform:translateX(-50%);font-size:.82em;opacity:.7}}
+.barfig.trio .c.na{{font-size:1em;opacity:.55;font-weight:400;letter-spacing:.02em}}
 .barfig.trio .r{{left:50%;margin-left:11px}}
 tr.sum>td{{border-top:2px solid var(--line-strong);background:var(--surface-2);font-weight:700}}
 tr.sum .meta{{font-weight:400}}
@@ -1125,6 +1147,7 @@ def tile_amount(value):
 
     The currency is set quietly beside the amount rather than inside it, so the
     number stays the thing the eye lands on.
+
     """
     v = str(value).strip()
     m = _re.match(r"^(.*?)(?:\s+([A-Z]{3}))$", v)
@@ -1498,8 +1521,8 @@ def large_caps_email():
         ky = L["pos"] if vy >= 0 else L["neg"]
         dircol = L["pos"] if v1 >= 0 else L["neg"]
         rws.append([td(f'{lead(tk)}<br>{quote_cell_email(pr, v1, asof)}<br>{sp(f"YTD {pct_str(vy)} {arrow(vy)}", ky)}{spark_row_email(tk, dircol)}', mono=True),
-                    td(em_trio(e(a1), v1, pct_str(v1), L["pos"] if v1 >= 0 else L["neg"]) + em_bar_div(v1, STK_1D), mono=True),
-                    td(em_trio(e(a7), v7, pct_str(v7), L["pos"] if v7 >= 0 else L["neg"]) + em_bar_div(v7, STK_1W), mono=True)])
+                    td(em_horizon(a1, v1, STK_1D), mono=True),
+                    td(em_horizon(a7, v7, STK_1W), mono=True)])
     return h3("Large caps") + tbl([f'Ticker {DOT} {quote_head_line("price", "stocks")} {DOT} YTD',
                                    th_axis("1D", pct_labels(STK_1D)), th_axis("1W", pct_labels(STK_1W))],
                                   rws, ["30%", "35%", "35%"])
@@ -2284,6 +2307,24 @@ def em_trio(left, pct, right, colour):
             f'<td width="42%" align="left" style="{c}">{right}</td></tr></table>')
 
 
+def em_horizon(amount, pct, axis, unit="", reverse=False):
+    """The email's whole horizon cell: figure, arrow, bar - or the fact that
+    there is no figure.
+
+    The counterpart of `horizon_cell_file`, and it answers the same question
+    first: an amount with no digits in it is a window the run could not price,
+    so it prints the word and stops. Drawing an arrow and a bar for it would
+    invent a flat session out of a gap in the data.
+    """
+    if no_figure(amount):
+        return (f'<div align="center" style="color:{L["ink3"]};font-weight:400">'
+                f'{e(missing_word(amount))}</div>')
+    colour = L["pos"] if pct >= 0 else L["neg"]
+    figure = f"{e(amount)}{' ' + unit if unit else ''}"
+    left, right = ((pct_str(pct), figure) if reverse else (figure, pct_str(pct)))
+    return em_trio(left, pct, right, colour) + em_bar_div(pct, axis)
+
+
 def em_bar_money(amt, dirw, sign="", axis=None):
     side, cls = money_side(dirw, sign)
     col = {"pos": L["pos"], "neg": L["neg"], "neu": L["ink3"]}[cls]
@@ -2812,8 +2853,8 @@ def email_html(budget=None):
                 ky = L["pos"] if vy >= 0 else L["neg"]
                 dircol = L["pos"] if v1 >= 0 else L["neg"]
                 rws.append([td(f'{lead(n)}<br>{quote_cell_email(c, v1, asof)}<br>{sp(f"YTD {pct_str(vy)} {arrow(vy)}", ky)}{spark_row_email(n, dircol)}', mono=True),
-                            td(em_trio(f"{e(p1)} pts", v1, pct_str(v1), L["pos"] if v1 >= 0 else L["neg"]) + em_bar_div(v1, MKT_24), mono=True),
-                            td(em_trio(f"{e(p7)} pts", v7, pct_str(v7), L["pos"] if v7 >= 0 else L["neg"]) + em_bar_div(v7, MKT_7D), mono=True)])
+                            td(em_horizon(p1, v1, MKT_24, "pts"), mono=True),
+                            td(em_horizon(p7, v7, MKT_7D, "pts"), mono=True)])
             inner += tbl([f'Index · {quote_head_line(quote_word().lower(), "indexes")} · YTD', th_axis("1D", pct_labels(MKT_24)), th_axis("1W", pct_labels(MKT_7D))], rws, ["30%", "35%", "35%"]) + cap(f"1D = close → close vs the prior session; 1W = trailing 5 sessions; YTD = since the previous year-end, shown as a figure because the email is capped at three columns. {axis_note(MKT_24, '1D axis')}; {axis_note(MKT_7D, '1W axis')}.")
         if FUNDS:
             rws = []
@@ -2822,8 +2863,8 @@ def email_html(budget=None):
                 ky = L["pos"] if vy >= 0 else L["neg"]
                 dircol = L["pos"] if v1 >= 0 else L["neg"]
                 rws.append([td(f'{lead(tk)}<br>{quote_cell_email(nav, v1, asof)}<br>{sp(f"YTD {pct_str(vy)} {arrow(vy)}", ky)}{spark_row_email(tk, dircol)}', mono=True),
-                            td(em_trio(e(a1), v1, pct_str(v1), L["pos"] if v1 >= 0 else L["neg"]) + em_bar_div(v1, FUND_1D), mono=True),
-                            td(em_trio(e(a7), v7, pct_str(v7), L["pos"] if v7 >= 0 else L["neg"]) + em_bar_div(v7, FUND_1W), mono=True)])
+                            td(em_horizon(a1, v1, FUND_1D), mono=True),
+                            td(em_horizon(a7, v7, FUND_1W), mono=True)])
             inner += h3("Vanguard funds") + tbl([f'Fund · {quote_head_line("NAV", "funds")} · YTD', th_axis("1D", pct_labels(FUND_1D)), th_axis("1W", pct_labels(FUND_1W))], rws, ["30%", "35%", "35%"]) + cap("Change from the prior published NAV (1D), over one trading week (1W), and since the previous year-end (YTD). " + " ".join(f"{tk}: {note}" for tk, nm, nav, a1, v1, a7, v7, ay, vy, asof, note in FUNDS))
         if STOCKS:
             inner += large_caps_email()
@@ -2840,8 +2881,8 @@ def email_html(budget=None):
                 ky = L["pos"] if vy >= 0 else L["neg"]
                 dircol = L["pos"] if v1 >= 0 else L["neg"]
                 rws.append([td(f'{lead(n)}<br>{quote_cell_email(pr, v1, asof)}<br>{sp(f"YTD {pct_str(vy)} {arrow(vy)}", ky)}{spark_row_email(n, dircol)}', mono=True),
-                            td(em_trio(pct_str(v1), v1, e(a1), L["pos"] if v1 >= 0 else L["neg"]) + em_bar_div(v1, CRY_24), mono=True),
-                            td(em_trio(pct_str(v7), v7, e(a7), L["pos"] if v7 >= 0 else L["neg"]) + em_bar_div(v7, CRY_7D), mono=True)])
+                            td(em_horizon(a1, v1, CRY_24, reverse=True), mono=True),
+                            td(em_horizon(a7, v7, CRY_7D, reverse=True), mono=True)])
             inner += tbl([f'Asset · {quote_head_line("price", "crypto")} · YTD', th_axis("1D", pct_labels(CRY_24)), th_axis("1W", pct_labels(CRY_7D))], rws, ["30%", "35%", "35%"]) + cap(f"1D = rolling 24 h; 1W = rolling 7 days; YTD = since the previous year-end — crypto trades continuously, so every window runs back from the quote time. {axis_note(CRY_24, '1D axis')}; {axis_note(CRY_7D, '1W axis')}. {CRYPTO_NOTE}")
         if CRYPTO_BULLETS:
             inner += '<ul style="margin:8px 0 0;padding-left:20px">' + "".join(em_li(b) for b in CRYPTO_BULLETS) + "</ul>"
