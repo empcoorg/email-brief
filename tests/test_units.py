@@ -794,3 +794,62 @@ class TestADraftIsCheckedBeforeItIsSent(unittest.TestCase):
         self.assertIn("verify-sent", fence)
         self.assertIn("DO NOT SEND A DRAFT THAT FAILS THIS", fence)
         self.assertIn("never send the text copy as the body", fence)
+
+
+class TestAGateNeedsAFloor(unittest.TestCase):
+    """Refusing a scan must never turn into refusing the brief.
+
+    2026-09-26: a run researched and rendered the whole brief, could not retype
+    a USPS scan's base64 without an error, and — obeying "do not send a draft
+    that fails this", with nothing saying what to do when retrying kept failing
+    — deleted the draft and delivered nothing. Every check worked. There was no
+    rung beneath them, so the compliant outcome was silence.
+    """
+
+    def _compare(self, source_bytes, readback_bytes, attempt=1):
+        import subprocess, tempfile
+        d = tempfile.mkdtemp()
+        a_, b_ = os.path.join(d, "scan.jpg"), os.path.join(d, "back.jpg")
+        with open(a_, "wb") as fh:
+            fh.write(source_bytes)
+        with open(b_, "wb") as fh:
+            fh.write(readback_bytes)
+        r = subprocess.run([sys.executable, "-m", "brief", "verify", a_, b_,
+                            "--attempt", str(attempt)],
+                           cwd=ROOT, capture_output=True, text=True)
+        return r.returncode, r.stdout + r.stderr
+
+    def test_every_failure_says_the_brief_still_ships(self):
+        for source, back in ((b"abcdefghij", b"abcXefghij"),   # mistyped
+                             (b"abcdefghij", b"abcde"),        # truncated
+                             (b"abcdefghij", b"abcdefghijXX")):  # re-encoded
+            code, out = self._compare(source, back)
+            self.assertEqual(code, 5)
+            self.assertIn("THE BRIEF SHIPS EITHER WAY", out)
+            self.assertIn("WITHOUT --scans", out)
+            self.assertIn("Never delete the draft", out)
+
+    def test_the_second_attempt_stops_asking_for_a_third(self):
+        """"Retype it" is what already failed; repeating it is how a run loops
+        until it gives up on the whole brief."""
+        _code, first = self._compare(b"abcdefghij", b"abcXefghij", attempt=1)
+        self.assertIn("re-transcribed", first)
+        _code, second = self._compare(b"abcdefghij", b"abcXefghij", attempt=2)
+        self.assertIn("STOP retrying", second)
+        self.assertNotIn("must rewrite the draft", second)
+
+    def test_a_good_attachment_is_still_just_fine(self):
+        code, out = self._compare(b"abcdefghij", b"abcdefghij")
+        self.assertEqual(code, 0)
+        self.assertIn("byte identical", out)
+        self.assertNotIn("THE BRIEF SHIPS EITHER WAY", out)
+
+    def test_the_prompt_carries_the_same_floor(self):
+        """The decision is made by the run, so the rule has to be where it is."""
+        prompt = open(os.path.join(ROOT, "ROUTINE_PROMPT.template.md"),
+                      encoding="utf-8").read()
+        self.assertIn("THE BRIEF SHIPS EITHER WAY", prompt)
+        self.assertIn("NEVER DELETE THE DRAFT", prompt)
+        self.assertIn("at most ONCE", prompt)
+        self.assertNotIn("rewrite the draft as many times as it takes", prompt,
+                         "unbounded retries are what produced the silent day")

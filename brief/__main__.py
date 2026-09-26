@@ -279,7 +279,30 @@ def _build_marker(html):
     return m.group(0) if m else ""
 
 
-def _verify(source, readback):
+# THE FLOOR. A scan is a nice-to-have; the brief is not.
+#
+# 2026-09-26: a run rendered the whole brief, could not retype the USPS scan's
+# base64 without an error, and — following these rules exactly — deleted the
+# draft and delivered NOTHING. Every gate here worked. There was simply no rung
+# beneath "do not send a draft that fails this", so refusing the scan meant
+# refusing the brief, and the owner got silence on a day the brief had already
+# been written.
+#
+# A gate needs a floor. Re-transcribing is worth one retry; after that the scan
+# goes to the page and the brief goes out. The standalone page always carries
+# every scan, so dropping the attachment costs a click, not a fact.
+SCAN_FLOOR = (
+    "THE BRIEF SHIPS EITHER WAY. Re-transcribe at most ONCE. If the compare "
+    "fails again, stop retrying and drop the scan:\n"
+    "  re-render WITHOUT --scans (keeping --full-url), which stops the email "
+    "claiming an attachment and links each scan to its figure on the page,\n"
+    "  re-run verify-sent on the new draft, then send it.\n"
+    "Never delete the draft, and never end a run with an unsent brief because "
+    "of an attachment. A brief without its scan beats no brief at all."
+)
+
+
+def _verify(source, readback, attempt=1):
     """Compare an attachment against what came back out of the message.
 
     Size alone is not enough. The failure that shipped was byte-identical in
@@ -322,9 +345,14 @@ def _verify(source, readback):
             "AND diverges before its end, so it was re-encoded or re-wrapped "
             "rather than simply cut. Rebuild the draft from the source file — "
             "do not retype the read-back — and do NOT send this draft.")
+    if attempt > 1 and kind == "CORRUPTED":
+        # retyping it is what already failed; saying "retype it" again is how a
+        # run loops until it gives up on the whole brief
+        advice = ("Re-transcribing has already been tried and failed again. "
+                  "STOP retrying this attachment.")
     print(f"{kind}: {os.path.basename(source)} is {len(a_):,} B, read back "
-          f"{len(b_):,} B, first difference at offset {where:,}.\n" + advice + "\n",
-          file=sys.stderr)
+          f"{len(b_):,} B, first difference at offset {where:,}.\n" + advice + "\n\n"
+          + SCAN_FLOOR + "\n", file=sys.stderr)
     return 5
 
 
@@ -429,6 +457,10 @@ def main(argv=None):
     vf.add_argument("source", help="the file as it exists on disk")
     vf.add_argument("readback", help="the same file decoded out of the draft "
                                      "or sent message")
+    vf.add_argument("--attempt", type=int, default=1, metavar="N",
+                    help="which transcription attempt this is. From 2 on, a "
+                         "corrupted attachment stops being something to retype "
+                         "and becomes something to drop, so the brief still goes")
 
     vs = sub.add_parser("verify-sent",
                         help="is the draft the BRIEF or only its text fallback? "
@@ -498,7 +530,7 @@ def main(argv=None):
     if a.cmd == "verify-sent":
         return _verify_sent(a.raw, a.html, a.text)
     if a.cmd == "verify":
-        return _verify(a.source, a.readback)
+        return _verify(a.source, a.readback, a.attempt)
 
     if a.cmd == "extract-payload":
         return _extract(a.page, a.out)

@@ -349,6 +349,19 @@ free and repeatable — the one-send rule binds *sending*, not drafting.
 | shorter, a clean prefix | the call ran out of room | make the message smaller |
 | same length, differing byte | the base64 was mistyped | rewrite the draft, same size |
 
+**And there is a floor under all of it.** A scan is a nice-to-have; the brief is
+not. On 2026-09-26 a run researched and rendered the entire brief, could not
+retype a scan's base64 without an error, and — obeying "do not send a draft that
+fails this", with nothing saying what to do when retrying kept failing — deleted
+the draft and delivered nothing. Every check worked exactly as designed, and the
+owner got silence on a day the brief had already been written.
+
+So a corrupted scan is retyped **once**. `brief verify --attempt 2` stops asking
+for a third try and says to drop the scan instead: re-render without `--scans`,
+which stops the email claiming an attachment and links each scan to its figure on
+the published page, then send. The draft is never deleted, and no attachment is
+ever a reason to end a run with the brief undelivered.
+
 ### Delivery — how an 85 KB HTML body reaches the inbox
 
 A Routine holds an email **connector**, not API credentials, and a connector's
