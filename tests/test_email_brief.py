@@ -512,14 +512,23 @@ class TestTemplate(unittest.TestCase):
         wrong = [w for n, w in words.items() if n != len(buckets) and f"{w} buckets" in self.fence]
         self.assertEqual(wrong, [], "prompt still states a stale bucket count")
 
-    def test_scans_are_never_omitted_silently(self):
-        """Dropping a scan for size must be announced; that rule was lost once.
+    def test_the_prompt_never_asks_a_run_to_attach_anything(self):
+        """The attachment path is gone, not merely discouraged.
 
-        Rewriting the attachment bullet removed the omission paragraph along
-        with the text it replaced, so nothing required a warning when a scan
-        was left out. The rule is small and easy to cut by accident.
+        A scan's base64 is the one thing a run has to retype by hand, and it
+        failed three separate ways: truncated to the top of the image; the
+        right length with one wrong byte at offset 218; and on 2026-09-26 not
+        at all, where the run correctly refused to ship a corrupt image and so
+        sent nothing, costing the whole day's brief. Every one of those was a
+        transcription. The page embeds each scan with no transcription at all.
         """
-        self.assertIn("Never omit silently", self.fence)
+        self.assertIn("THE EMAIL ATTACHES NOTHING", self.fence)
+        self.assertNotIn("ATTACH each", self.fence)
+        self.assertNotIn("attach as many as fit", self.fence.lower())
+        for gone in ("MAILPIECE SCANS GO THROUGH THE SAME DRAFT",
+                     "python3 -m brief verify /path/to/usps"):
+            self.assertNotIn(gone, self.fence,
+                             "the attachment procedure must be gone, not softened")
 
     def test_every_optional_section_is_something_setup_asks_about(self):
         """A new user is walked through the whole template, not most of it.
@@ -616,8 +625,12 @@ class TestTemplate(unittest.TestCase):
             "renumber the remaining sections consecutively",
             # delivery
             "Delivery beats completeness",
-            "python3 -m brief attachment",        # check before sending
-            "truncates an oversized attachment SILENTLY",
+            # The email attaches nothing: retyping a scan's base64 by hand is
+            # the one step no check could make reliable, and it failed three
+            # ways — truncated, one wrong byte, and finally not at all, which
+            # cost a whole day's brief. The page carries every scan instead.
+            "THE EMAIL ATTACHES NOTHING",
+            "DO NOT PASS `--scans`",
         ):
             self.assertIn(phrase, self.fence, f"template lost invariant: {phrase!r}")
 

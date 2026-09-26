@@ -444,8 +444,7 @@ def main(argv=None):
                         "the email's masthead, beside each mailpiece scan, and "
                         "last in the text copy")
     r.add_argument("--scans", nargs="*", default=[], metavar="JPG",
-                   help="mailpiece scans that will ride along in the same send "
-                        "call; the email body budget shrinks to make room")
+                   help=argparse.SUPPRESS)   # accepted and ignored; see _render
     v = sub.add_parser("validate", help="check a payload without rendering")
     v.add_argument("payload")
     g = sub.add_parser("significant",
@@ -586,15 +585,20 @@ def main(argv=None):
     # --clip-guard to shed for it instead.
     from .attachments import call_bytes, call_limit, html_room
     from .render import TEXT_BUDGET_BYTES, plain_text
-    sizes = [os.path.getsize(s_) for s_ in a.scans]
-    limit = call_limit(len(sizes), a.send_budget or None, a.connector)
+    # THE EMAIL ATTACHES NOTHING. Scans live on the published page, which
+    # embeds them without anyone retyping a byte. --scans is still accepted so
+    # an older prompt keeps working, but it no longer reserves room, because
+    # nothing rides along to need it.
+    if a.scans:
+        print("note: --scans is ignored — the email no longer attaches scans; "
+              "each one is linked to its figure on the published page.",
+              file=sys.stderr)
+    sizes = []
+    limit = call_limit(0, a.send_budget or None, a.connector)
     cap = a.email_budget or (EMAIL_BUDGET if a.clip_guard else None)
-    # Only a run that passes --scans says how many ride along; without it the
-    # count is unknown, and the email keeps saying each scan is attached.
-    attached = len(a.scans) if a.scans else None
     stamp = a.date or payload["MAST"].get("file_date") or "brief"
     try:
-        fh, eh, pt = render_all(payload, cap, a.text_budget, a.full_url, attached, stamp)
+        fh, eh, pt = render_all(payload, cap, a.text_budget, a.full_url, stamp)
     except ValueError as ex:
         print(f"cannot render: {ex}", file=sys.stderr)
         return 2
@@ -607,7 +611,7 @@ def main(argv=None):
         # is cut and long before a card is shed.
         from .render import draw_email_sparks
         draw_email_sparks(False)
-        fh, eh, pt = render_all(payload, cap, a.text_budget, a.full_url, attached, stamp)
+        fh, eh, pt = render_all(payload, cap, a.text_budget, a.full_url, stamp)
         draw_email_sparks(True)
         shrunk = call_bytes(len(eh.encode("utf-8")), len(pt.encode("utf-8")), sizes)
         if shrunk < total:
@@ -629,7 +633,7 @@ def main(argv=None):
         if cap:
             room = min(room, cap)
         print(f"still {total:,} B of {limit:,}; the HTML must shed to {room:,} B.")
-        _, eh, _ = render_all(payload, room, a.text_budget, a.full_url, attached, stamp)
+        _, eh, _ = render_all(payload, room, a.text_budget, a.full_url, stamp)
         # The HTML just got smaller, so the text gets its room back: it was
         # trimmed a moment ago against the LARGER html, and leaving it that way
         # spent the saving on nothing. (The email's decoration is shed before

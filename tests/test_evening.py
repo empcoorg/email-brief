@@ -90,7 +90,7 @@ class TestFullPageLink(unittest.TestCase):
             self.assertIn(f'href="{URL}#usps-scan-{i}"', usps)
             self.assertIn(f'id="usps-scan-{i}"', fh, "the link must land on a real figure")
             self.assertIn(f"{URL}#usps-scan-{i}", tx)
-        self.assertIn("attached at the end of this email", usps)
+        self.assertNotIn("attached", usps, "the email attaches nothing")
         self.assertNotIn("<img", em)
 
     def test_a_fragment_already_on_the_page_address_is_replaced(self):
@@ -98,18 +98,23 @@ class TestFullPageLink(unittest.TestCase):
         self.assertIn(f'href="{URL}#usps-scan-1"', em)
         self.assertNotIn("#top#", em + tx)
 
-    def test_a_scan_that_did_not_fit_is_never_called_attached(self):
-        """A run may drop scans to fit the send call; the brief must not say they are attached."""
-        _, em, tx = R.render_all(payload(), None, None, URL, attached_scans=0)
-        usps = em[em.find("USPS Informed Delivery"):]
-        self.assertNotIn("attached at the end of this email", usps)
-        self.assertIn("not attached", usps)
-        self.assertIn(f'href="{URL}#usps-scan-1"', usps, "the page is then the only route to it")
-        self.assertIn("not attached", tx)
-        _, em, _ = R.render_all(payload(), None, None, URL, attached_scans=1)
-        self.assertIn("attached at the end of this email", em)
+    def test_the_email_never_claims_an_attachment(self):
+        """The email attaches nothing at all, so it must never say otherwise.
 
-    def test_render_cli_counts_the_scans_it_is_given(self):
+        Retyping a scan's base64 into a tool call is the one step of the run
+        that no check can make reliable, and it failed three ways: truncated,
+        one wrong byte at offset 218, and — on 2026-09-26 — not at all, which
+        cost the whole brief. The page embeds every scan without transcription,
+        so that is where they live.
+        """
+        _, em, tx = R.render_all(payload(), None, None, URL)
+        usps = em[em.find("USPS Informed Delivery"):]
+        self.assertNotIn("attached", usps)
+        self.assertNotIn("attached", tx[tx.find("USPS"):])
+        self.assertIn(f'href="{URL}#usps-scan-1"', usps, "the page is the route to it")
+
+    def test_the_render_cli_ignores_scans_and_says_so(self):
+        """--scans is still accepted so an older prompt keeps working."""
         with tempfile.TemporaryDirectory() as d:
             scan = os.path.join(d, "usps-2026-03-03-1.jpg")
             with open(scan, "wb") as fh:
@@ -118,16 +123,17 @@ class TestFullPageLink(unittest.TestCase):
                                   "--date", "2026-09-13", "--full-url", URL, "--scans", scan],
                                  cwd=ROOT, capture_output=True, text=True)
             self.assertEqual(res.returncode, 0, res.stderr)
+            self.assertIn("--scans is ignored", res.stderr)
             with open(os.path.join(d, "email.html"), encoding="utf-8") as fh:
                 em = fh.read()
-        self.assertIn("attached at the end of this email", em)
-        self.assertNotIn("not attached", em)
+        self.assertNotIn("attached", em[em.find("USPS Informed Delivery"):])
 
-    def test_without_a_page_the_scan_still_points_at_its_attachment(self):
+    def test_without_a_page_the_scan_points_at_the_full_brief(self):
         _, em, _ = R.render_all(payload())
         usps = em[em.find("USPS Informed Delivery"):]
         self.assertIn("Mailpiece scan 1:", usps)
-        self.assertIn("attached at the end of this email", usps)
+        self.assertIn("in the full brief", usps)
+        self.assertNotIn("attached", usps)
         self.assertNotIn("view on claude.ai", em)
 
     def test_no_scan_line_when_there_is_no_scan(self):

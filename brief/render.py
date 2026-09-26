@@ -79,13 +79,13 @@ def _derive():
 
 
 def render_all(payload, email_budget=None, text_budget=None, full_url=None,
-               attached_scans=None, stamp=None):
+               stamp=None):
     """Bind a validated payload and render all three outputs.
 
     `email_budget` overrides EMAIL_BUDGET_BYTES for the email only. The send is
-    ONE tool call carrying the HTML, the text and every attachment inline, so
-    scans eat into the room the body has; `brief render --scans` computes what
-    is left and passes it here rather than letting the send fail at 6am.
+    ONE tool call carrying the HTML and the text inline, and nothing else: the
+    email no longer attaches mailpiece scans (see `scan_links_html`), so the
+    body has the whole call to itself.
 
     `full_url` is the address of the complete page, published privately by the
     run. When given, it sits in the email's masthead, each mailpiece scan links
@@ -94,10 +94,6 @@ def render_all(payload, email_budget=None, text_budget=None, full_url=None,
 
     `stamp` is the date the standalone file is written under; the email names
     that file, so the name has to be the real one.
-
-    `attached_scans` is how many scan JPGs ride along in the send, when known.
-    The email never claims a scan is attached unless it is: a run allowed to
-    drop scans to fit the send call must not leave the brief saying otherwise.
 
     Returns (file_html, email_html, plain_text).
     """
@@ -121,7 +117,6 @@ def render_all(payload, email_budget=None, text_budget=None, full_url=None,
         # outright and let the run see why, instead of shipping a dead link.
         raise ValueError(f"--full-url must be an http(s) address, got {full_url!r}")
     globals()["FULL_URL"] = full_url or ""
-    globals()["ATTACHED_SCANS"] = attached_scans
     globals()["FILE_STAMP"] = stamp or payload["MAST"].get("file_date") or "brief"
     globals().update(payload)
     globals()["BUILD"] = build_marker(payload)
@@ -2523,32 +2518,38 @@ def scan_url(n):
     return FULL_URL.split("#", 1)[0] + "#" + scan_anchor(n)
 
 
-def scan_attached(n):
-    """Is the n-th scan attached to this send? Unknown counts count as attached."""
-    return ATTACHED_SCANS is None or n <= ATTACHED_SCANS
-
-
 def scan_links_html():
     """Where the email's reader finds each mailpiece scan.
 
-    The email cannot show the scan itself: the Gmail send path strips every
-    <img> - data: URI, cid: inline attachment and remote URL alike (verified by
-    reading a sent test message back in RAW form). So each scan is named,
-    linked to its figure on the private full page when there is one, and
-    pointed at the JPG attached to the end of the email when it is attached.
+    On the page. Never attached to the email.
+
+    The email cannot show the scan itself in any case: the Gmail send path
+    strips every <img> - data: URI, cid: inline attachment and remote URL alike
+    (verified by reading a sent test message back in RAW form). So the scan was
+    only ever a JPG bolted to the end of the message, and getting it there meant
+    the run retyping its base64 by hand into a tool call. That is the single
+    most fragile step in the whole pipeline, and it has now failed three ways:
+
+        2026-09-11  a scan arrived truncated - top of the image, grey below
+        (earlier)   a scan arrived the right length with one wrong byte at 218
+        2026-09-26  a scan could not be retyped at all, and rather than ship a
+                    corrupt image the run sent NOTHING - no brief that day
+
+    Two of those corrupted the picture and one cost the whole brief. The page
+    has always carried every scan, at full size, with no transcription: the
+    renderer embeds it as a data: URI and no model retypes a byte of it. So
+    that is where the scan lives, and the email links to it.
     """
     if not USPS_SCANS:
         return ""
     rows = []
     for n, _ in enumerate(USPS_SCANS, 1):
-        parts = []
         if FULL_URL:
-            parts.append(f' <a href="{url(scan_url(n))}" style="color:{L["accent"]};font-weight:600">'
-                         'view on claude.ai</a> (sign-in required)')
-        parts.append(" attached at the end of this email" if scan_attached(n)
-                     else " not attached \u2014 it did not fit in this email")
-        joined = " \u00b7".join(parts)   # a backslash may not sit inside an f-string's braces before 3.12
-        rows.append(f'<div>{sp(f"Mailpiece scan {n}:", L["ink"])}{joined}</div>')
+            where = (f' <a href="{url(scan_url(n))}" style="color:{L["accent"]};font-weight:600">'
+                     'view on claude.ai</a> (sign-in required)')
+        else:
+            where = " in the full brief"
+        rows.append(f'<div>{sp(f"Mailpiece scan {n}:", L["ink"])}{where}</div>')
     return f'<div style="margin-top:8px;font-size:{BODY_FS};color:{L["ink2"]}">' + "".join(rows) + '</div>'
 
 
@@ -2564,8 +2565,8 @@ def _assemble_email(parts, droppable, budget=None):
     # Say which limit actually bit. When scans ride along they take their room
     # out of the body, and blaming Gmail for that sends the reader looking in
     # the wrong place - and hides the lever that would have kept the cards.
-    why = ("The whole message had to fit one send, and the attached scans took "
-           "part of the room." if budget and budget < EMAIL_BUDGET_BYTES
+    why = ("The whole message had to fit one send call."
+           if budget and budget < EMAIL_BUDGET_BYTES
            else "Gmail clips a message past ~102 KB.")
     # None means DO NOT SHED. The brief outranks the Gmail-clip threshold: a
     # clip is a link the reader can follow, a shed card is gone. The caller
@@ -3141,8 +3142,8 @@ def plain_text(budget=None):
     for d_, s_, a_, ty in USPS["pieces"]: A(f"  - {d_} · {s_} · addressed to {a_} · {ty}")
     for n, _ in enumerate(USPS_SCANS, 1):
         A(f"  Mailpiece scan {n}: "
-          + ("attached at the end of this email" if scan_attached(n) else "not attached (did not fit in this email)")
-          + (f"; also at {scan_url(n)} (claude.ai sign-in required)" if FULL_URL else ""))
+          + (f"{scan_url(n)} (claude.ai sign-in required)" if FULL_URL
+             else "in the full brief"))
     if USPS["pieces"] and not USPS_SCANS: A("  " + SCAN_MISSING)
     if USPS["counts"].strip(): A("  " + USPS["counts"])
     if USPS["note"].strip(): A("  Note: " + USPS["note"])

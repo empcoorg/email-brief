@@ -191,12 +191,9 @@ is refused or asks for confirmation can never cost that day's brief.
 **Mailpiece scans in the email.** The Gmail send path strips every `<img>` —
 data: URI, `cid:` inline attachment and remote URL alike, verified by reading a
 sent test message back raw — so the email cannot show a scan. Instead the USPS
-section names each scan, links it to its figure on the private page
-(`#usps-scan-<n>`), and says the JPG is attached at the end of the email, where
-the draft-verified attachments have always gone. It says so only when it is
-true: `render --scans` tells the renderer how many JPGs ride along, and a scan
-that had to be left out to fit the send call is marked "not attached", with the
-page as the route to it.
+section names each scan and links it to its figure on the private page
+(`#usps-scan-<n>`). The email attaches nothing — see **The email attaches
+nothing** below.
 
 `render --full-url URL` adds the link. Each render also writes:
 
@@ -330,37 +327,38 @@ forward, so it is added once and then lives inside the carried total.
 `AI_SPEND` is an **optional** payload key: a run written against an older prompt
 renders exactly as before, without the table.
 
-### Attachments go through a draft
+### The email attaches nothing
+
+It used to attach mailpiece scans, and that was the least reliable thing the
+project did.
 
 An attachment's base64 is an inline string argument like everything else, so the
-run has to retype it. Base64 carries no redundancy: **one wrong character out of
-13,568 destroys the image**, and it does so at exactly the right length, where no
-size check can see it. That shipped — a scan with one wrong byte at offset 218.
+run has to **retype it**, by hand, into a tool call. Base64 carries no
+redundancy: one wrong character out of 13,568 destroys the image, and it does so
+at exactly the right length, where no size check can see it. Three failures came
+out of that one step:
 
-So scans are drafted, not sent: `create_draft`, then `get_draft` with
-`messageFormat: RAW`, decode each attachment and compare it with
-`brief verify`, and only then `send_message` with the `draftId`. Drafting is
-free and repeatable — the one-send rule binds *sending*, not drafting.
+| when | what arrived |
+|---|---|
+| 2026-09-11 | a scan truncated — top of the image, solid grey below, no error anywhere |
+| earlier | a scan the right length with one wrong byte at offset 218; it would not decode |
+| 2026-09-26 | nothing at all — the scan could not be retyped, the run correctly refused to ship a corrupt image, and **the whole brief went undelivered** |
 
-`brief verify` separates the two failures, because they need opposite fixes:
+Each fix made the checks stricter, and the third failure was the result: by then
+the run had a gate for every way an attachment could be wrong, and no way to
+proceed without one. Refusing the scan had become refusing the brief.
 
-| read-back | meaning | fix |
-|---|---|---|
-| shorter, a clean prefix | the call ran out of room | make the message smaller |
-| same length, differing byte | the base64 was mistyped | rewrite the draft, same size |
+So the email no longer attaches anything. The page has always embedded every
+scan at full size, as a `data:` URI written by the renderer, which **no model
+retypes a byte of** — the failure mode was never in the image, it was in the
+transcription. The email names each scan and links to it. `--scans` is still
+accepted by `brief render` so an older prompt keeps working, but it is ignored
+and says so.
 
-**And there is a floor under all of it.** A scan is a nice-to-have; the brief is
-not. On 2026-09-26 a run researched and rendered the entire brief, could not
-retype a scan's base64 without an error, and — obeying "do not send a draft that
-fails this", with nothing saying what to do when retrying kept failing — deleted
-the draft and delivered nothing. Every check worked exactly as designed, and the
-owner got silence on a day the brief had already been written.
-
-So a corrupted scan is retyped **once**. `brief verify --attempt 2` stops asking
-for a third try and says to drop the scan instead: re-render without `--scans`,
-which stops the email claiming an attachment and links each scan to its figure on
-the published page, then send. The draft is never deleted, and no attachment is
-ever a reason to end a run with the brief undelivered.
+`brief verify` and `brief attachment` remain, because they are still the right
+tools if anything is ever attached again, and `brief verify --attempt 2` stops
+asking for a retype and says to drop the file instead. Nothing in the daily path
+calls them any more.
 
 ### Delivery — how an 85 KB HTML body reaches the inbox
 
