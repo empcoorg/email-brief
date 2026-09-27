@@ -302,16 +302,27 @@ class TestRendering(_BrowserCase):
                     const n = r.getBoundingClientRect();
                     const box = th.getBoundingClientRect();
                     const pad = parseFloat(getComputedStyle(th).paddingLeft) || 0;
+                    const mid = cells[1].getBoundingClientRect();
                     out.push({name: name.textContent.trim(),
-                              d: n.left - (box.left + pad)});
+                              d: n.left - (box.left + pad),
+                              dc: (n.left + n.width / 2) - (mid.left + mid.width / 2)});
                 }
                 return out;
             }""")
             self.assertGreaterEqual(len(lefts), 4,
                                     f"expected axis headings @{width}px, saw {len(lefts)}")
+            captions = [h for h in lefts if h["name"] == "New this window"]
+            self.assertTrue(captions, "the AI money caption must be among them")
             for h in lefts:
-                self.assertLessEqual(abs(h["d"]), 2.0,
-                                     f"{h['name']!r} is {h['d']:.1f}px from the column's left edge")
+                if h in captions:
+                    # a caption for a whole diverging scale, not a column label:
+                    # from the left edge it reads as a heading for the negative
+                    # half, so it sits on the middle cell, over the zero
+                    self.assertLessEqual(abs(h["dc"]), 2.0,
+                                         f"{h['name']!r} is {h['dc']:.1f}px off the zero")
+                else:
+                    self.assertLessEqual(abs(h["d"]), 2.0,
+                                         f"{h['name']!r} is {h['d']:.1f}px from the column's left edge")
             pg.close()
 
     def test_severity_chips_never_wrap_in_the_email(self):

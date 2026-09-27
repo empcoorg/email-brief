@@ -661,7 +661,7 @@ td.num{{text-align:right;white-space:nowrap}}
 .barfig{{display:block;text-align:center;margin-bottom:2px}}
 /* and its ARROW is what sits on the zero: the mark that says which way belongs
    on the line the bar grows from, not at the end of the text. */
-.barfig.trio{{position:relative;height:19px;width:100%;min-width:150px;max-width:280px;margin:0 auto 2px}}
+.barfig.trio{{position:relative;height:19px;width:100%;min-width:150px;max-width:280px;margin:0 auto 2px;font-size:13px}}
 .barfig.trio span{{position:absolute;top:0;white-space:nowrap}}
 .barfig.trio .l{{right:50%;margin-right:11px}}
 .barfig.trio .c{{left:50%;transform:translateX(-50%);font-size:.82em;opacity:.7}}
@@ -682,6 +682,14 @@ ul{{margin:8px 0 0;padding-left:20px}} li{{margin:9px 0;line-height:1.55}}
 .grid3 .card.wide{{grid-column:1/-1}}
 .grid3 .card.wide .tbl-wrap table{{font-size:14px}} .grid3 .card.wide th,.grid3 .card.wide td{{padding:9px 10px}}
 .grid3 .card.wide .dbar,.grid3 .card.wide .daxis{{width:100%;min-width:120px;max-width:none}}
+/* A horizon figure is one nowrap line pinned either side of the bar's zero,
+   so a wide number ("+3,286.69 pts") grows OUT of its cell and paints over
+   the column beside it. Shrinking the type only moves the width at which
+   that happens; the three horizon columns need about 1000px between them,
+   so below that the table scrolls inside its own wrapper the way every
+   other table here already does. Nothing is clipped and no digit is lost.
+   Not inside the phone breakpoint, where the table is not a table. */
+@media (min-width:601px){{.grid3 .card.wide .tbl-wrap table{{min-width:1000px}}}}
 .hp .t{{font-weight:600;font-family:Archivo,sans-serif}} .hp.warn .t{{color:var(--warning)}} .hp.ok .t{{color:var(--positive)}} .hp.info .t{{color:var(--accent)}}
 details{{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 16px;margin-top:18px}} summary{{cursor:pointer;font-family:Archivo,sans-serif;font-weight:600;font-size:14px}}
 .allow p{{font-size:12.5px;margin:6px 0}} .allow b{{color:var(--ink-2)}}
@@ -2154,7 +2162,7 @@ def card(inner): return f'<table width="100%" cellpadding="0" cellspacing="0" st
 class Raw(str):
     """A header string that is already HTML and must not be escaped."""
 def th(t, w=None): return f'<th align="left"{f" width={chr(34)}{w}{chr(34)}" if w else ""} style="font:600 10.5px {F_H};text-transform:uppercase;color:{L["ink3"]};padding:8px 8px;border-bottom:2px solid {L["lineS"]}">{t if isinstance(t, Raw) else e(t)}</th>'
-def th_axis(name, labels):
+def th_axis(name, labels, over_zero=False):
     """Two lines: the column name, then its axis.
 
     The axis is laid out as three equal cells rather than a run of text, so the
@@ -2164,16 +2172,21 @@ def th_axis(name, labels):
     geometry it describes. The email cannot position elements, but equal-width
     table cells with align= give the same result, and both survive the sanitizer.
 
-    THE NAME IS CENTRED FOR THE SAME REASON. Left-aligned, "Direction · amount"
-    began at the far end of a diverging track and read as a heading for the
-    negative half; the zero it describes is at the middle cell, i.e. the middle
-    of the column, so the name sits there too.
+    `over_zero` centres the NAME on that same middle cell. It is for a caption
+    that describes the whole diverging scale — "New this window" over an
+    Out ← 0 → In axis — which reads as a heading for the negative half when it
+    starts at the left edge, the page's `dot_head` case. It is NOT for "1D",
+    "1W" or "YTD": those name their column rather than caption a scale, and
+    they are left-aligned on purpose.
     """
     lo, mid, hi = labels
     cell = f"font:400 10px {F_M};text-transform:none;letter-spacing:0;color:{L['ink3']};padding:0"
+    # align= rather than a style, because the sanitizer keeps attributes and
+    # strips text-align from a <div> often enough not to rely on it. The name
+    # centres on 50%, which is where the middle cell below centres its "0".
     return Raw(
-        f'<div>{e(name)}</div>'
-        f'<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:1px">'
+        (f'<div align="center">{e(name)}</div>' if over_zero else f'<div>{e(name)}</div>')
+        + f'<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:1px">'
         f'<tr><td width="33%" align="left" style="{cell}">{e(lo)}</td>'
         f'<td width="34%" align="center" style="{cell}">{e(mid)}</td>'
         f'<td width="33%" align="right" style="{cell}">{e(hi)}</td></tr></table>')
@@ -2746,7 +2759,7 @@ def email_html(budget=None):
                     + '</td>'])
         inner += h3("AI services — billed year to date") + tbl(
             [f'Service · share AI spend {AI_SPEND["year"]}', f'Billed {AI_SPEND["year"]}',
-             th_axis("New this window", money_labels(AI_AXIS))],
+             th_axis("New this window", money_labels(AI_AXIS), over_zero=True)],
             rws, ["40%", "22%", "38%"]) + cap(ai_spend_caption())
     if FIN_INTERNAL:
         inner += h3("Transfers between your own accounts") + f'<div style="color:{L["ink3"]};font-style:italic">{e(FIN_INTERNAL)}</div>'

@@ -853,3 +853,51 @@ class TestAGateNeedsAFloor(unittest.TestCase):
         self.assertIn("at most ONCE", prompt)
         self.assertNotIn("rewrite the draft as many times as it takes", prompt,
                          "unbounded retries are what produced the silent day")
+
+
+class TestASilentlyMissingTrendIsLoud(unittest.TestCase):
+    """The TREND column never disappears, so its absence has to be announced.
+
+    An absent series draws an em dash and the table keeps its shape, which is
+    the right rendering and the wrong silence: on 2026-09-26 a brief shipped
+    with SPARKS missing entirely, every row reading "—", and nothing said so.
+    The run did not know it had dropped the feature and neither did the reader.
+    """
+
+    def _render(self, payload_obj):
+        import subprocess, tempfile
+        d = tempfile.mkdtemp()
+        f = os.path.join(d, "p.json")
+        with open(f, "w", encoding="utf-8") as fh:
+            json.dump(payload_obj, fh)
+        r = subprocess.run([sys.executable, "-m", "brief", "render", f,
+                            "--out-dir", d, "--date", "2026-03-03"],
+                           cwd=ROOT, capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return r.stderr
+
+    def test_a_payload_with_no_sparks_at_all_says_so_by_name(self):
+        p = json.load(open(SAMPLE, encoding="utf-8"))
+        p.pop("SPARKS", None)
+        err = self._render(p)
+        self.assertIn("no trend series", err)
+        self.assertIn("SPARKS is absent entirely", err)
+        self.assertIn(p["MKT_ROWS"][0][0], err, "it names the rows that lost their trend")
+
+    def test_a_partial_payload_counts_what_is_missing(self):
+        p = json.load(open(SAMPLE, encoding="utf-8"))
+        rows = [r[0] for r in p["MKT_ROWS"]] + [r[0] for r in p["FUNDS"]]
+        self.assertGreater(len(rows), 1)
+        p["SPARKS"] = {rows[0]: {"series": [1.0, 2.0, 3.0], "window": "09:30 → 09:55 ET"}}
+        err = self._render(p)
+        self.assertIn("no trend series", err)
+        self.assertNotIn("absent entirely", err)
+        self.assertNotIn(f" {rows[0]},", err, "the row that HAS a series is not listed")
+
+    def test_a_complete_payload_says_nothing(self):
+        p = json.load(open(SAMPLE, encoding="utf-8"))
+        names = ([r[0] for r in p["MKT_ROWS"]] + [r[0] for r in p["FUNDS"]]
+                 + [r[0] for r in p["STOCKS"]] + [r[0] for r in p["CRYPTO_ROWS"]])
+        p["SPARKS"] = {n: {"series": [1.0, 2.0, 3.0], "window": "09:30 → 09:55 ET"}
+                       for n in names}
+        self.assertNotIn("no trend series", self._render(p))

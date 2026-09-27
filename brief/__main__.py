@@ -356,6 +356,39 @@ def _verify(source, readback, attempt=1):
     return 5
 
 
+def _warn_missing_sparks(payload):
+    """Say which quote rows have no trend series, loudly, by name.
+
+    The TREND column never disappears — an absent series draws an em dash, so
+    the table keeps its shape whatever the run managed to gather. The cost of
+    that is silence: on 2026-09-26 a brief shipped with SPARKS missing
+    ENTIRELY, every row reading "—", and nothing anywhere said so. The run
+    did not know it had dropped the feature and neither did the reader.
+
+    A drawing nobody asked for is a nice-to-have. A drawing that was asked for
+    and is quietly absent is a defect, and this is what makes it visible while
+    the run can still go back for the data.
+    """
+    sparks = payload.get("SPARKS") or {}
+    wanted = []
+    for key, idx in (("MKT_ROWS", 0), ("FUNDS", 0), ("STOCKS", 0), ("CRYPTO_ROWS", 0)):
+        for row in payload.get(key) or []:
+            if row and str(row[idx]).strip():
+                wanted.append(str(row[idx]).strip())
+    if not wanted:
+        return
+    missing = [n for n in wanted if not (sparks.get(n) or {}).get("series")]
+    if not missing:
+        return
+    where = "SPARKS is absent entirely" if not sparks else f"{len(missing)} of {len(wanted)} rows"
+    print(f"WARNING: no trend series for {where} — the TREND column will draw "
+          f'"—" for: {", ".join(missing[:8])}'
+          + (f" (+{len(missing) - 8} more)" if len(missing) > 8 else "")
+          + "\n  The column is never removed, so a brief with no series still "
+            "renders; it just says nothing. If the series were meant to be "
+            "gathered, gather them and render again.", file=sys.stderr)
+
+
 def _check_attachments(paths, out_dir=None, connector=None):
     """Are the files within the size limits, and does the WHOLE call fit?
 
@@ -683,6 +716,7 @@ def main(argv=None):
           f"do not read {os.path.basename(email)} itself, it exceeds the read cap.")
     print(f"build {marker} — this marker appears in all three outputs. Quote it "
           "when you report the run; a brief without it did not come from here.")
+    _warn_missing_sparks(payload)
     if size > EMAIL_BUDGET:
         print(f"NOTE: the body is {size - EMAIL_BUDGET:,} B over Gmail's clip "
               f"threshold, so Gmail will show \"[Message clipped] View entire "
