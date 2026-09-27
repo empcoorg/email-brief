@@ -134,7 +134,7 @@ LARGE CAPS — ALWAYS include a Large caps table for {{LARGE_CAPS}}: one row per
 ALWAYS state the source and the as-of date next to the figure. If EVERY source in the chain fails, write "not verified" and give the fund's last known NAV with its date — never a guess, and never a figure without a source. Record any newly-blocked domain in the allowlist block so the weekly probe picks it up.
 FUND ROWS CARRY A 1D CHANGE BAR on the same diverging even axis as the index and crypto tables, so the change must reach the payload as a NUMBER (percent), alongside the $ amount.
 For FOMC meeting odds use investing.com/central-banks/fed-rate-monitor (static page, stamped) rather than CME FedWatch (JS-only, unreadable).
-- CRYPTOCURRENCY — research the web. Major price moves, regulatory developments, significant protocol or exchange events. The price table ALWAYS includes BTC, ETH, SOL, XRP, BNB and DOGE (customize this list) with price, 24 h and 7 d change — every % change paired with the absolute $ move; if one source lacks a field, take it from coingecko.com and say so in the caption.
+- CRYPTOCURRENCY — research the web for what MOVED and WHY: major price moves, regulatory developments, significant protocol or exchange events. The price table itself comes from STEP 2b, not from searching — pass a --crypto for each coin you want.
 EVERY RESEARCHED ROW'S LINK GOES TO THE SOURCE ITSELF, not to a search result or an aggregator: the renderer names the link after its host ("arXiv", "The Register", "GitHub"), so a link to a search page tells the reader the source was a search page.
 - AI & PROGRAMMING TRENDS — research the web. Significant model releases, tooling and framework news, notable technical developments. Substance over hype; skip routine product announcements.
 JOURNAL ROWS MAY CARRY A 7TH FIELD: the first author's INSTITUTION, which is what a reader recognises. Give the first author's affiliation; if the author list cannot be read, give the last author's (the PI's) institution; if you have an institution but no readable authors, give the institution alone and leave the authors field empty. NEVER write "not captured (et al.)" or any other apology - a row's worth of space spent saying nothing. The renderer prints "Okafor et al. · Cascade Institute of Marine Science", or whichever half it was given, or nothing at all.
@@ -203,6 +203,8 @@ EVERY clock time shown anywhere in the brief ends with its timezone abbreviation
 
 DO NOT hand-write HTML, and do not invent a layout. Every visual decision — colors, fonts, section order, tables, bars, axes, the email's sanitizer-safe markup — is CODE in the email-brief repo, and the code is the single source of truth. Your job is to gather the facts and hand them over as data.
 
+EACH TOPIC IS RESEARCHED EXACTLY ONCE, BY ONE WORKER. If you delegate the web research to a subagent, delegate ALL of it and do none yourself: on 2026-09-25 the main session searched indexes, funds, stocks, crypto and the Fed while a research subagent searched the same topics, and the run paid twice for one set of answers. Decide up front which topics are delegated, hand over the whole list, and then WAIT for the result rather than gathering it again in parallel. Two workers researching one topic do not produce a better brief; they produce the same brief and a bigger bill.
+
 STEP 1 — get the renderer (once per run, in Bash):
   git clone --depth 1 https://github.com/empcoorg/email-brief /tmp/eb
 It is pure Python standard library: nothing to install, no API key, no network access needed after the clone.
@@ -219,11 +221,24 @@ STEP 2 — write ONE payload file, /tmp/eb/payload.json, holding everything you 
   * VOIP carries "messages" (rows of when, from, to, type, text) and "notes"; RETAIL carries "items" (rows of store, offer, dates/caveats) alongside its rewards line. Both render as tables, so give them rows rather than prose paragraphs.
   * PACKAGE TRACKING: keep a shipment in the payload until the carrier reports it delivered — a package in flight must not vanish between briefs. When there are no shipments at all, send an empty list and the renderer omits the section and renumbers the rest.
 
+STEP 2b — FETCH the index, crypto and trend numbers; do NOT search for them:
+  cd /tmp/eb && python3 -m brief markets --into payload.json \
+      --index "S&P 500=^GSPC" --index "Dow=^DJI" --index "Nasdaq=^IXIC" \
+      --index "Russell 2000=^RUT" --index "NYSE Composite=^NYA" \
+      --crypto "Bitcoin=bitcoin" --crypto "Ethereum=ethereum" \
+      --series "VOO=VOO"
+  It writes MKT_ROWS, CRYPTO_ROWS and SPARKS straight into the payload, from two JSON endpoints already on the allowlist. This REPLACES searching for index levels, percentage moves and intraday series — roughly a hundred searches and fetches, every number arriving through a model reading a rendered page, which is wrong in a way nothing downstream can detect because a misread digit validates perfectly.
+  --series is for rows this command does not build: pass one for any exchange-traded fund or large cap in your tables, named EXACTLY as the row names it. A mutual fund has no intraday series — its NAV is struck once a day — so it will report "fewer than 3 points" and simply have no trend drawing. That is correct, not an error.
+  Exit 7 means some sources could not be read. They are ABSENT from the payload, never guessed at: say which in the brief and leave the row out. Do NOT fill a missing row in by hand.
+  You still research what the numbers MEAN — Fed and CPI events, earnings, regulatory news, the bullets and the sourcing caption. You no longer look up the numbers themselves.
+
 STEP 3 — render and check:
   cd /tmp/eb && python3 -m brief render payload.json --out-dir /mnt/user-data/outputs --date YYYY-MM-DD
   PASS THE CONNECTOR YOU SEND FROM: `--connector {{CONNECTOR_FLAG}}`. The whole message — body and plain-text part, and nothing else — is allowed up to 98% of that connector's send limit, and up to what one send call can carry, whichever is smaller. Without the flag the renderer assumes the lowest ceiling it knows.
   DO NOT PASS `--scans`, AND DO NOT ATTACH ANYTHING. The email attaches nothing at all. Mailpiece scans live on the published page, which embeds each one at full size with no transcription; the email links to them. The whole send call is the body.
   It writes morning-brief-<date>.html, email.html and email.txt, prints the email's size against the 85 KB send budget, and prints a BUILD MARKER of the form brief-xxxxxxxxxxxx.
+  READ THE SIZE LINE BEFORE YOU DRAFT ANYTHING. If the render says the send call is over budget, re-render with --clip-guard NOW and draft once, from the result. A draft is the most expensive step of the run; writing it three times to discover what the render already told you costs more than the brief does. Never draft in order to find out whether it fits.
+  Do NOT pass --clip-guard when the render fits: it sheds whole cards, and a clipped message is a link the reader can follow while a shed card is simply gone.
   QUOTE THAT MARKER in your chat reply. It is embedded in all three outputs, so it is the proof the renderer produced what you sent. If your reply has no marker, you hand-wrote HTML instead of rendering it — which silently breaks section order, escaping and link handling in ways the repo's tests cannot catch, because they test the renderer and a hand-written document never reaches it. Redo the run through the renderer. If it exits non-zero, READ THE ERROR — it names the key and row that is wrong — fix the payload and run it again. Never work around a validation error by hand-writing HTML.
 
 STEP 3b — publish the full page, then put its link in the email:
@@ -268,6 +283,7 @@ On an evening run, everything above still applies, with these differences:
   5. DECIDE AND MERGE, in code:
        cd /tmp/eb && python3 -m brief evening --evening evening.json --morning-page morning-page.html --record morning.txt --from "<the morning brief's run stamp>" -o evening.merged.json
      Exit 3 = SKIP: nothing important since the morning and nothing it left out. Send NO email, publish nothing, say "Evening update skipped" and why in the chat reply, and stop.
+     RUN THIS FIRST, BEFORE ANY RESEARCH OR GATHERING. It is the whole point of the check: an evening that has nothing to add should cost a significance test, not a second full run. On exit 3 (SKIP) stop immediately — send nothing, publish nothing, gather nothing.
      Exit 0 = SEND: render evening.merged.json (STEP 3), publish its page (STEP 3b), and deliver per STEP 4 with the subject "Evening Update — <Day Mon D, YYYY> ({{EVENING_RUN_TIME}} run)". Every section carried from the morning is labelled as such by the renderer; do not relabel it.
      Exit 2 = the merge could not be done — it names the reason. Fix what it names if you can; otherwise send the evening update WITHOUT carried sections and say which ones could not be carried.
 

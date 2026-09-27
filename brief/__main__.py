@@ -389,6 +389,79 @@ def _warn_missing_sparks(payload):
             "gathered, gather them and render again.", file=sys.stderr)
 
 
+def _name_id_pairs(items, flag):
+    """Parse NAME=ID arguments, keeping the name exactly as the owner wrote it.
+
+    NOT _pairs: that name is already taken by the money parser above, and
+    defining it twice silently replaced it — ai-spend kept working but lost
+    the advice in its own error message. A module-level name is a namespace.
+
+    The name is the join key: it is what the payload row carries and what
+    SPARKS is keyed by, so "S&P 500" here must be "S&P 500" there or the
+    drawing silently detaches from its row.
+    """
+    out = []
+    for item in items:
+        if "=" not in item:
+            raise ValueError(f'{flag} wants NAME=ID, got {item!r}')
+        name, _, ident = item.partition("=")
+        if not name.strip() or not ident.strip():
+            raise ValueError(f'{flag} wants NAME=ID, got {item!r}')
+        out.append((name.strip(), ident.strip()))
+    return out
+
+
+def _markets(a):
+    """Fetch the quote tables instead of reading them off a hundred web pages."""
+    from .markets import build
+    try:
+        indexes = _name_id_pairs(a.index, "--index")
+        cryptos = _name_id_pairs(a.crypto, "--crypto")
+        extra = _name_id_pairs(a.series, "--series")
+    except ValueError as ex:
+        print(str(ex), file=sys.stderr)
+        return 2
+    if not indexes and not cryptos and not extra:
+        print("nothing to fetch: pass --index, --crypto and/or --series",
+              file=sys.stderr)
+        return 2
+    frag, failed = build(indexes, cryptos, extra)
+
+    if a.into:
+        try:
+            with open(a.into, encoding="utf-8") as fh:
+                payload = json.load(fh)
+        except (OSError, ValueError) as ex:
+            print(f"cannot read {a.into}: {ex}", file=sys.stderr)
+            return 2
+        for key in ("MKT_ROWS", "CRYPTO_ROWS"):
+            if frag[key]:
+                payload[key] = frag[key]
+        if frag["SPARKS"]:
+            merged = dict(payload.get("SPARKS") or {})
+            merged.update(frag["SPARKS"])
+            payload["SPARKS"] = merged
+        with open(a.into, "w", encoding="utf-8") as fh:
+            json.dump(payload, fh, ensure_ascii=False, indent=1)
+        print(f"merged into {a.into}")
+    if a.out or not a.into:
+        dest = a.out or "markets.json"
+        with open(dest, "w", encoding="utf-8") as fh:
+            json.dump(frag, fh, ensure_ascii=False, indent=1)
+        print(f"wrote {dest}")
+
+    print(f"{len(frag['MKT_ROWS'])} index row(s), {len(frag['CRYPTO_ROWS'])} "
+          f"crypto row(s), {len(frag['SPARKS'])} trend series")
+    if failed:
+        for name, why in failed:
+            print(f"FAILED {name}: {why}", file=sys.stderr)
+        print(f"{len(failed)} source(s) could not be read. They are ABSENT from "
+              "the fragment, not guessed at — say so in the brief rather than "
+              "filling the row in by hand.", file=sys.stderr)
+        return 7
+    return 0
+
+
 def _check_attachments(paths, out_dir=None, connector=None):
     """Are the files within the size limits, and does the WHOLE call fit?
 
@@ -517,6 +590,25 @@ def main(argv=None):
                     help="the morning run stamp, shown on every carried section")
     ev.add_argument("-o", "--out", required=True, help="where to write the merged payload")
 
+    mk = sub.add_parser("markets",
+                        help="fetch index and crypto quotes WITH their trend "
+                             "series; writes MKT_ROWS, CRYPTO_ROWS and SPARKS "
+                             "(exit 0 all sources read, 7 some failed)")
+    mk.add_argument("--index", action="append", default=[], metavar="NAME=SYMBOL",
+                    help='an index or equity, e.g. "S&P 500=^GSPC" (repeatable)')
+    mk.add_argument("--crypto", action="append", default=[], metavar="NAME=COIN_ID",
+                    help='a coin by CoinGecko id, e.g. "Bitcoin=bitcoin" (repeatable)')
+    mk.add_argument("--series", action="append", default=[], metavar="NAME=SYMBOL",
+                    help="fetch ONLY the trend series for a row this command "
+                         'does not build, e.g. "VFIAX=VFIAX" or "Apple=AAPL" '
+                         "(repeatable). The name must match the row's name in "
+                         "the payload exactly, or the drawing detaches from it")
+    mk.add_argument("-o", "--out", help="write the payload fragment here")
+    mk.add_argument("--into", metavar="PAYLOAD",
+                    help="merge the fragment straight into this payload file, "
+                         "replacing MKT_ROWS/CRYPTO_ROWS and adding to SPARKS. "
+                         "Merging here rather than by hand is the point: a "
+                         "series retyped into a payload is a series mistyped")
     at = sub.add_parser("attachment",
                         help="is this file within the send-path size limits? "
                              "exit 0 yes, 4 no (size only, not proof of delivery)")
@@ -576,6 +668,8 @@ def main(argv=None):
     if a.cmd == "expired":
         return _expired(a.sources, a.today)
 
+    if a.cmd == "markets":
+        return _markets(a)
     if a.cmd == "attachment":
         return _check_attachments(a.files, a.out_dir, a.connector)
 
