@@ -575,15 +575,15 @@ h3{{font-size:14.5px;font-weight:600;margin:16px 0 6px;color:var(--ink-2)}}
    not have to wonder whether a different shape means something.
 
    These are the action bar's own numbers, measured rather than guessed:
-   6px wide, 3px radius, and 16px of clear space between one stripe and the
-   next. The bar gets that 16px from the grid gap between its cards; a table
-   row has no gap of its own, so the whole 16 comes out of the two insets.
+   6px wide, 3px radius, a 3px inset, and 16px of clear space between one
+   stripe and the next. The row gets that spacing the same way the bar does -
+   see .hptab below, where each row is a card with real space around it.
 
    It was a 1px inset once, which is not a gap at any real viewing size: two
    adjacent rows of one severity fused into a single column of colour and the
    section read as two groups instead of four items. */
 tr.hp>td:first-child{{position:relative;padding-left:18px;--sev:var(--line-strong)}}
-tr.hp>td:first-child::before{{content:"";position:absolute;left:0;top:8px;bottom:8px;width:6px;border-radius:3px;background:var(--sev)}}
+tr.hp>td:first-child::before{{content:"";position:absolute;left:0;top:3px;bottom:3px;width:6px;border-radius:3px;background:var(--sev)}}
 tr.hp.warn>td:first-child{{--sev:var(--warning)}}
 tr.hp.neg>td:first-child{{--sev:var(--negative)}}
 tr.hp.info>td:first-child{{--sev:var(--accent)}}
@@ -595,6 +595,19 @@ tr.hp.ok>td:first-child{{--sev:var(--positive)}}
 .tile .cur{{font-size:13px;font-weight:400;color:var(--ink-3)}}
 .lead{{color:var(--accent);font-weight:600}}
 .tbl-wrap{{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface)}}
+/* SECTION 1'S ROWS ARE CARDS, because the action bar's items are.
+   The two carry the same severity for the same item, so the whole frame has
+   to agree, not just the stripe: one box divided by hairlines reads as a
+   list, four closed cards read as four things to do. border-spacing is what
+   gives a table real gaps between rows - a collapsed border cannot - and the
+   first and last cells carry the rounded ends, so the row closes like a card
+   while the two columns stay a table and keep their alignment. */
+.hpwrap{{border:0;background:transparent}}
+.hptab{{border-collapse:separate;border-spacing:0 8px}}
+.hptab thead th{{background:transparent;border-bottom:0;padding-bottom:2px}}
+.hptab tr.hp>td{{background:var(--surface);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}}
+.hptab tr.hp>td:first-child{{border-left:1px solid var(--line);border-top-left-radius:10px;border-bottom-left-radius:10px}}
+.hptab tr.hp>td:last-child{{border-right:1px solid var(--line);border-top-right-radius:10px;border-bottom-right-radius:10px}}
 table{{border-collapse:collapse;width:100%;min-width:640px;font-size:14px}}
 th{{text-align:left;font-family:Archivo,sans-serif;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);font-weight:600;padding:10px 12px;border-bottom:1px solid var(--line-strong);background:var(--surface-2)}}
 th .qh,td.stamp[data-l]::before{{text-transform:none;letter-spacing:.01em;font-size:10px}}
@@ -750,7 +763,8 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
     if not HIPRI:
         o.append(f'<div class="nothing">{e(nothing_new())}</div>')
     else:
-        o.append('<div class="tbl-wrap"><table><thead><tr><th>What needs attention</th><th>Detail</th></tr></thead><tbody>')
+        o.append('<div class="tbl-wrap hpwrap"><table class="hptab"><thead><tr>'
+                 '<th>What needs attention</th><th>Detail</th></tr></thead><tbody>')
     for sev, t, items in HIPRI:
         detail = "<br>".join(lead_inner(i) for i in items)
         # the chip rides WITH the title rather than in a column of its own: a

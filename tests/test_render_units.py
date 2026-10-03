@@ -1884,11 +1884,18 @@ class TestSeverityStripeIsOneBarPerRow(unittest.TestCase):
         css = f.split("<style>")[1].split("</style>")[0]
         rule = [r for r in css.split("}") if "tr.hp>td:first-child::before" in r][0]
         bar = [r for r in css.split("}") if ".act .stripe{" in r][0]
+        bar_gap = lambda c: [r for r in c.split("}") if ".actions{" in r][0]
         self.assertIn("border-radius:3px", rule)
         self.assertIn("border-radius:3px", bar, "the reference is the action bar")
         self.assertIn("width:6px", rule)
-        self.assertIn("top:8px", rule)
-        self.assertIn("bottom:8px", rule)
+        self.assertIn("top:3px", rule)
+        self.assertIn("bottom:3px", rule)
+        # and the FRAME agrees too: each row is a closed card, like an action
+        # item, not a band in a box divided by hairlines
+        self.assertIn(".hptab{border-collapse:separate;border-spacing:0 8px}", css)
+        self.assertIn("gap:8px", bar_gap(css), "the action bar's own row gap")
+        for corner in ("border-top-left-radius:10px", "border-top-right-radius:10px"):
+            self.assertIn(corner, css, "a row closes like a card")
         # no stripe is stretched to the wrapper's corner: with a gap above and
         # none below, the last one was the only mark taller than its own row
         self.assertNotIn("tr.hp:last-child", css)

@@ -641,9 +641,14 @@ class TestTrendReadoutInTheBrowser(_BrowserCase):
           const boxes = rows.map(r => {
             const td = r.querySelector('td');
             const cs = getComputedStyle(td, '::before');
+            const own = getComputedStyle(td);
             const rect = td.getBoundingClientRect();
-            return {top: rect.top + parseFloat(cs.top || 0),
-                    bottom: rect.bottom - parseFloat(cs.bottom || 0)};
+            // the stripe is positioned against the cell's PADDING box, so the
+            // cell's own border sits between it and the rectangle measured here
+            return {top: rect.top + parseFloat(own.borderTopWidth || 0)
+                         + parseFloat(cs.top || 0),
+                    bottom: rect.bottom - parseFloat(own.borderBottomWidth || 0)
+                            - parseFloat(cs.bottom || 0)};
           });
           const out = [];
           for (let i = 1; i < boxes.length; i++) out.push(boxes[i].top - boxes[i - 1].bottom);
