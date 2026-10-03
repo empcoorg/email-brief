@@ -569,17 +569,21 @@ h3{{font-size:14.5px;font-weight:600;margin:16px 0 6px;color:var(--ink-2)}}
 /* The severity stripe is drawn INSIDE the cell as its own mark, held clear
    of the row above and below.
 
-   One item is one stripe. This was a 1px inset, which is not a gap at any
-   real viewing size: two adjacent rows of the same severity fused into a
-   single column of colour and the section read as two groups instead of four
-   items. The owner asked for padding between the bars, so the seam became a
-   gap you can actually see.
+   ONE ITEM IS ONE STRIPE, AND IT LOOKS THE SAME IN BOTH PLACES. The action
+   bar above ("Needs you today") draws the same severity for the same item,
+   so the two marks have to be the same mark - a reader comparing them should
+   not have to wonder whether a different shape means something.
 
-   The ends stay square - that is a separate decision, made separately. The
-   last stripe no longer stretches into the wrapper's corner either: with a
-   gap above it and none below, it was the one mark taller than its row. */
+   These are the action bar's own numbers, measured rather than guessed:
+   6px wide, 3px radius, and 16px of clear space between one stripe and the
+   next. The bar gets that 16px from the grid gap between its cards; a table
+   row has no gap of its own, so the whole 16 comes out of the two insets.
+
+   It was a 1px inset once, which is not a gap at any real viewing size: two
+   adjacent rows of one severity fused into a single column of colour and the
+   section read as two groups instead of four items. */
 tr.hp>td:first-child{{position:relative;padding-left:18px;--sev:var(--line-strong)}}
-tr.hp>td:first-child::before{{content:"";position:absolute;left:0;top:6px;bottom:6px;width:6px;background:var(--sev)}}
+tr.hp>td:first-child::before{{content:"";position:absolute;left:0;top:8px;bottom:8px;width:6px;border-radius:3px;background:var(--sev)}}
 tr.hp.warn>td:first-child{{--sev:var(--warning)}}
 tr.hp.neg>td:first-child{{--sev:var(--negative)}}
 tr.hp.info>td:first-child{{--sev:var(--accent)}}

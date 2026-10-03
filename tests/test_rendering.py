@@ -631,7 +631,9 @@ class TestTrendReadoutInTheBrowser(_BrowserCase):
 
         Measured in the browser rather than read off the CSS, because what
         matters is the distance between the drawn marks. The bound was once
-        1.5-6px, deliberately a seam; the owner asked for padding instead.
+        1.5-6px, deliberately a seam; the owner asked for padding instead, and
+        then for Section 1 to match the action bar exactly. So this no longer
+        pins a number — it pins the two to EACH OTHER.
         """
         pg = self._page(1200)
         gaps = pg.evaluate("""() => {
@@ -648,9 +650,19 @@ class TestTrendReadoutInTheBrowser(_BrowserCase):
           return out;
         }""")
         self.assertTrue(gaps, "no high-priority rows to measure")
+        # The action bar above draws the same severity for the same item, so
+        # the two stripe systems must agree. Measured against each other
+        # rather than against a number, so neither can drift alone.
+        bar = pg.evaluate("""() => {
+          const s = [...document.querySelectorAll('.act .stripe')]
+                      .map(el => el.getBoundingClientRect());
+          return s.slice(1).map((b, i) => b.top - s[i].bottom);
+        }""")
+        self.assertTrue(bar, "no action-bar stripes to compare against")
+        want = bar[0]
         for gap in gaps:
-            self.assertGreaterEqual(gap, 8,
-                                    f"stripes are {gap:.1f}px apart — that is a seam, not padding")
-            self.assertLessEqual(gap, 16,
-                                 f"stripes are {gap:.1f}px apart — the column stops reading as a column")
+            self.assertAlmostEqual(
+                gap, want, delta=1.0,
+                msg=f"a High priority stripe is {gap:.1f}px from the next while the "
+                    f"action bar's are {want:.1f}px — the same mark, drawn two ways")
         pg.close()

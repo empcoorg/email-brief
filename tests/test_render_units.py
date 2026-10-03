@@ -1869,20 +1869,26 @@ class TestThePageDeclaresItsEncoding(unittest.TestCase):
 
 
 class TestSeverityStripeIsOneBarPerRow(unittest.TestCase):
-    def test_the_stripe_has_square_ends_and_is_padded_clear_of_its_row(self):
-        """Square ends, and a gap big enough to read as padding.
+    def test_the_stripe_is_shaped_like_the_action_bars_own_stripe(self):
+        """Section 1 and the action bar draw the SAME severity for the same
+        item, so they draw it the same way.
 
-        The inset was 1px, which is a seam rather than a gap: two adjacent
-        rows of one severity fused into a single column of colour. The owner
-        asked for padding between the bars. The ENDS are a separate decision
-        and stay square.
+        A reader comparing the two should not have to wonder whether a
+        different shape carries a different meaning. The action bar's numbers
+        are the reference: 6px wide, 3px radius, 16px of clear space between
+        one stripe and the next. The bar gets that 16px from the gap between
+        its cards; a table row has no gap of its own, so the whole 16 comes
+        out of the two insets — hence 8px rather than the bar's 4px.
         """
         f, _em, _tx = render_all(payload())
         css = f.split("<style>")[1].split("</style>")[0]
         rule = [r for r in css.split("}") if "tr.hp>td:first-child::before" in r][0]
-        self.assertNotIn("border-radius", rule, "square ends, not rounded")
-        self.assertIn("top:6px", rule)
-        self.assertIn("bottom:6px", rule)
+        bar = [r for r in css.split("}") if ".act .stripe{" in r][0]
+        self.assertIn("border-radius:3px", rule)
+        self.assertIn("border-radius:3px", bar, "the reference is the action bar")
+        self.assertIn("width:6px", rule)
+        self.assertIn("top:8px", rule)
+        self.assertIn("bottom:8px", rule)
         # no stripe is stretched to the wrapper's corner: with a gap above and
         # none below, the last one was the only mark taller than its own row
         self.assertNotIn("tr.hp:last-child", css)
