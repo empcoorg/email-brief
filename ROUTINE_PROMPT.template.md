@@ -20,12 +20,50 @@ the code fences is the prompt; nothing outside them gets deployed.
 | `{{POSTAL_FILTER_NAME}}` | Your name, for the postal addressee filter (OPTIONAL USPS section, US only). NOT an exact string — matching ignores case and word order, treats initials as their full name, and allows extra or missing middle names. Give your usual full name; if senders also use a nickname, a maiden name or another spelling, list those too, separated by SEMICOLONS (a comma can't separate them, because mail itself often reads "Sample, Alex"). | `Alex Q. Sample` or `Alex Q. Sample; Lex Sample` |
 | `{{RETAILERS}}` | Retail senders whose sale emails you want summarized (OPTIONAL) | `Nordstrom, REI` |
 | `{{LOYALTY_NOTES}}` | Loyalty/rewards balance lines to extract from those emails, if any (OPTIONAL) | `REI dividend balance emails` |
+| `{{MARKET_INDEXES}}` | The index rows, as one `--index "Name=SYMBOL"` per index, from the setup answer below. The NAME is what the brief prints and what its trend series is keyed by | `--index "S&P 500=^GSPC" --index "Dow=^DJI"` |
+| `{{CRYPTO_COINS}}` | The coin rows, as one `--crypto "Name=coingecko-id"` per coin. Delete the Cryptocurrency block instead if you don't want the section | `--crypto "Bitcoin=bitcoin" --crypto "Ethereum=ethereum"` |
+| `{{TREND_SERIES}}` | OPTIONAL `--series "NAME=SYMBOL"` pairs that add a trend drawing to a fund or large-cap row the brief gathers by hand. Exchange-traded only — a mutual fund's NAV is struck once a day, so it has no intraday line and simply gets none. Delete if unwanted | `--series "VOO=VOO" --series "Apple=AAPL"` |
 | `{{FUND_TICKERS}}` | Mutual funds/ETFs for the daily NAV table (OPTIONAL market section) | `VTSAX, VTIAX` |
 | `{{LARGE_CAPS}}` | Individual stocks for the Large caps table (OPTIONAL market section). Tickers, or a company name when you are unsure of the ticker; a private company is allowed and is reported by valuation instead | `AAPL, MSFT, AMGN` |
 | `{{JOURNALS}}` | Your top few scientific journals to scan for relevant new publications — during setup, ask the owner to list them, or omit the section if they're not interested (OPTIONAL research section) | `Science, Nature, Journal of Phycology` |
 | `{{CONNECTOR_FLAG}}` | Which connector the brief is SENT from, as the renderer names it: `gmail`, `outlook` (outlook.com) or `microsoft365`. The send is capped at 98% of that connector's limit | `gmail` |
-| `{{AI_SPEND_BASIS}}` | OPTIONAL opening balance for the AI-billing total: what a service had already billed this year before the brief started counting, as `--basis "<Service>=<USD>" --basis-year <year>`. Delete the placeholder entirely when every service starts at $0.00 | `--basis "Acme AI=250.00" --basis-year 2026` |
+| `{{AI_SPEND_BASIS}}` | OPTIONAL opening balances for the AI-billing table, for a brief started mid-year. `--basis "<Service>=<USD>" --basis-year <year>` gives ONE service a starting figure; `--total-basis <USD> --total-basis-year <year>` gives the TOTAL row spend that no service row accounts for. Use either or both; delete the placeholder when every service starts at $0.00 | `--basis "Acme AI=250.00" --basis-year 2026 --total-basis 90.00 --total-basis-year 2026` |
 | `{{EVENING_RUN_TIME}}` | Local time of the OPTIONAL evening update. It is a second Routine whose prompt is this same prompt with `EVENING RUN.` as its very first line; it sends only when something important arrived since the morning or the morning email could not show a section. Delete the EVENING UPDATE block if you don't want one | `6:00 PM` |
+
+### Symbols for `{{MARKET_INDEXES}}`, `{{CRYPTO_COINS}}` and `{{TREND_SERIES}}`
+
+Every symbol below was checked against the endpoints `brief markets` actually calls, so a
+setup answer turns into a working flag without anyone guessing. The CURRENCY column is also
+what that index's `QUOTE_CCY` should say.
+
+| Index | Symbol | Currency | | Index | Symbol | Currency |
+|---|---|---|---|---|---|---|
+| S&P 500 | `^GSPC` | USD | | S&P/TSX | `^GSPTSE` | CAD |
+| Dow | `^DJI` | USD | | ASX 200 | `^AXJO` | AUD |
+| Nasdaq | `^IXIC` | USD | | BSE Sensex | `^BSESN` | INR |
+| Russell 2000 | `^RUT` | USD | | Nifty 50 | `^NSEI` | INR |
+| NYSE Composite | `^NYA` | USD | | Bovespa | `^BVSP` | BRL |
+| FTSE 100 | `^FTSE` | GBP | | IPC Mexico | `^MXX` | MXN |
+| DAX | `^GDAXI` | EUR | | SMI | `^SSMI` | CHF |
+| CAC 40 | `^FCHI` | EUR | | AEX | `^AEX` | EUR |
+| Euro Stoxx 50 | `^STOXX50E` | EUR | | IBEX 35 | `^IBEX` | EUR |
+| Nikkei 225 | `^N225` | JPY | | FTSE MIB | `FTSEMIB.MI` | EUR |
+| Hang Seng | `^HSI` | HKD | | OMX Stockholm 30 | `^OMX` | SEK |
+| Shanghai Composite | `000001.SS` | CNY | | KOSPI | `^KS11` | KRW |
+
+TOPIX is deliberately absent: it has no index symbol on the quote endpoint, and the ticker
+that looks like one (`1306.T`) is an ETF tracking it, not the index. Offer it only if the
+owner accepts a tracking fund in place of the index, and label it as such.
+
+| Coin | CoinGecko id | | Coin | CoinGecko id |
+|---|---|---|---|---|
+| Bitcoin | `bitcoin` | | Cardano | `cardano` |
+| Ethereum | `ethereum` | | Avalanche | `avalanche-2` |
+| Solana | `solana` | | Chainlink | `chainlink` |
+| XRP | `ripple` | | Polkadot | `polkadot` |
+| BNB | `binancecoin` | | Dogecoin | `dogecoin` |
+
+Any other coin works too — the id is the last part of its coingecko.com/en/coins/… address.
 
 ```
 EMAIL BRIEFING for {{OWNER_NAME}} ({{OWNER_EMAIL}}). Timezone {{TIMEZONE}}. Schedule: {{SCHEDULE}} at {{RUN_TIME}}. This is one scheduled run.
@@ -116,7 +154,7 @@ Then add these CONDITIONAL SECTIONS — include a heading ONLY when there is som
 A TABLE IS NOT OPTIONAL BECAUSE ONE OF ITS FIELDS IS HARD. If a row's YTD baseline, or any other single figure, cannot be verified, STILL BUILD THE TABLE: put the figures you did verify in their fields, pass 0 for the one you could not, and say which figure is unverified in that table's caption. Dropping the table and writing the numbers as prose bullets instead loses the axes, the bars, the trend and the colour - everything the section exists for - and it has happened for funds, large caps and crypto in the same run. The ONLY case for omitting a table is having NO rows at all.
 NEVER WRITE ABOUT THE RUN INSIDE THE BRIEF. No "TEST NOTE", no "not re-verified this test run", no explanation of what a live run would have done differently, no apology for what you could not fetch beyond the one-line "not verified" a caption may carry. The brief is read by someone who wants today's facts; commentary about the process belongs in your chat reply, which nobody archives. A brief that opens with an excuse reads as a broken brief.
 A SESSION SERIES NEEDS ENOUGH POINTS TO BE A SESSION. Three points across "09:30 → 16:00" draws a triangle, not a trading day. Give 12 to 60 points per SPARKS series, spaced roughly evenly across the window it names - a reading every 15 to 30 minutes for a session, hourly for a 24-hour crypto window. If the source gives you only a handful, name the real window ("09:30 → 10:00 ET") rather than claiming a whole day.
-WHICH MARKETS THIS BRIEF FOLLOWS IS THE OWNER'S CHOICE, ASKED AT SETUP IN TWO STEPS. First: "Do you want the US market section (S&P 500, Dow, Nasdaq, Russell 2000, NYSE Composite)?" Then, WHETHER THEY SAID YES OR NO, ask the second: "Would you like any international markets or exchanges as well?" and if so, which - offer a list to pick from (FTSE 100 · DAX · CAC 40 · Euro Stoxx 50 · Nikkei 225 · TOPIX · Hang Seng · Shanghai Composite · KOSPI · S&P/TSX · ASX 200 · BSE Sensex · Nifty 50 · Bovespa · IPC Mexico · SMI · AEX · IBEX 35 · FTSE MIB · OMX Stockholm 30) and accept any exchange they name that is not on it. The answers become the index rows this brief carries; a "no" to the first with a "yes" to the second is a perfectly ordinary brief that simply has no US indexes in it.
+WHICH MARKETS THIS BRIEF FOLLOWS IS THE OWNER'S CHOICE, ASKED AT SETUP IN TWO STEPS. First: "Do you want the US market section (S&P 500, Dow, Nasdaq, Russell 2000, NYSE Composite)?" Then, WHETHER THEY SAID YES OR NO, ask the second: "Would you like any international markets or exchanges as well?" and if so, which - offer a list to pick from (FTSE 100 · DAX · CAC 40 · Euro Stoxx 50 · Nikkei 225 · TOPIX · Hang Seng · Shanghai Composite · KOSPI · S&P/TSX · ASX 200 · BSE Sensex · Nifty 50 · Bovespa · IPC Mexico · SMI · AEX · IBEX 35 · FTSE MIB · OMX Stockholm 30) and accept any exchange they name that is not on it. Each answer becomes one `--index "Name=SYMBOL"` in {{MARKET_INDEXES}} — the template's symbol table lists the checked symbol and currency for every name offered here. The answers become the index rows this brief carries; a "no" to the first with a "yes" to the second is a perfectly ordinary brief that simply has no US indexes in it.
 A QUOTE TABLE IS ONE CURRENCY, AND THE HEADING SAYS WHICH. Put the code in the payload's QUOTE_CCY - {"indexes": "USD", "funds": "USD", "stocks": "USD", "crypto": "USD"} - and the column reads "Index · open (USD)". Absent means USD. If the owner follows markets in several currencies, either quote every index in one currency and name it, or keep each in its local currency and say so in the market bullets rather than mixing units under one heading.
 THE INDEX COLUMN FOLLOWS THE HOUR. A MORNING run gives each index the DAY'S OPENING level as the row's second field, because the brief is read hours after the bell and the last close is yesterday's news. An EVENING run gives the day's CLOSE. The renderer heads the column "open" or "close" from the masthead title. STAMP THE FIGURE WITH THE TIME IT WAS TAKEN, dated: "Tue Mar 3, 9:30 AM EST" for today's open, "Mon Mar 2, 5:48 PM ET" for a NAV published after yesterday's close. The renderer prints the time beside the figure on a 24-hour clock and drops the date when it is the brief's own date, so a stamp that says only "9:30 AM" leaves it unable to tell today from yesterday. Write the stamp however the source gives it - 12-hour is fine, it is converted.
 TREND SERIES (OPTIONAL, and worth the trouble): the payload's SPARKS key holds an intraday series per row, keyed by the row's own name - the index name, the fund or stock ticker, the coin - as {"series": [numbers in time order], "window": "9:30 AM → 1:14 PM ET"}. The renderer draws a small red/green sparkline beside the figure, so the brief shows HOW the number got where it is, not just where it ended. At least three points; a dozen to thirty is plenty. For INDEXES and STOCKS run the series from the day's open to the moment the brief is compiled; for CRYPTO, which never closes, run the last 24 hours; for FUNDS, from the prior published NAV. Omit a row's entry rather than invent points: the column simply shows an em dash.
@@ -134,7 +172,7 @@ LARGE CAPS — ALWAYS include a Large caps table for {{LARGE_CAPS}}: one row per
 ALWAYS state the source and the as-of date next to the figure. If EVERY source in the chain fails, write "not verified" and give the fund's last known NAV with its date — never a guess, and never a figure without a source. Record any newly-blocked domain in the allowlist block so the weekly probe picks it up.
 FUND ROWS CARRY A 1D CHANGE BAR on the same diverging even axis as the index and crypto tables, so the change must reach the payload as a NUMBER (percent), alongside the $ amount.
 For FOMC meeting odds use investing.com/central-banks/fed-rate-monitor (static page, stamped) rather than CME FedWatch (JS-only, unreadable).
-- CRYPTOCURRENCY — research the web for what MOVED and WHY: major price moves, regulatory developments, significant protocol or exchange events. The price table itself comes from STEP 2b, not from searching — pass a --crypto for each coin you want.
+- CRYPTOCURRENCY — research the web for what MOVED and WHY: major price moves, regulatory developments, significant protocol or exchange events. The price table itself comes from STEP 2b, not from searching: its rows are exactly the coins in {{CRYPTO_COINS}}. ASKED AT SETUP — "which coins should the brief follow?", offering Bitcoin · Ethereum · Solana · XRP · BNB · Dogecoin · Cardano · Avalanche · Chainlink · Polkadot and accepting any other coin named; the template's symbol table has the id for each.
 EVERY RESEARCHED ROW'S LINK GOES TO THE SOURCE ITSELF, not to a search result or an aggregator: the renderer names the link after its host ("arXiv", "The Register", "GitHub"), so a link to a search page tells the reader the source was a search page.
 - AI & PROGRAMMING TRENDS — research the web. Significant model releases, tooling and framework news, notable technical developments. Substance over hype; skip routine product announcements.
 JOURNAL ROWS MAY CARRY A 7TH FIELD: the first author's INSTITUTION, which is what a reader recognises. Give the first author's affiliation; if the author list cannot be read, give the last author's (the PI's) institution; if you have an institution but no readable authors, give the institution alone and leave the authors field empty. NEVER write "not captured (et al.)" or any other apology - a row's worth of space spent saying nothing. The renderer prints "Okafor et al. · Cascade Institute of Marine Science", or whichever half it was given, or nothing at all.
@@ -223,10 +261,7 @@ STEP 2 — write ONE payload file, /tmp/eb/payload.json, holding everything you 
 
 STEP 2b — FETCH the index, crypto and trend numbers; do NOT search for them:
   cd /tmp/eb && python3 -m brief markets --into payload.json \
-      --index "S&P 500=^GSPC" --index "Dow=^DJI" --index "Nasdaq=^IXIC" \
-      --index "Russell 2000=^RUT" --index "NYSE Composite=^NYA" \
-      --crypto "Bitcoin=bitcoin" --crypto "Ethereum=ethereum" \
-      --series "VOO=VOO"
+      {{MARKET_INDEXES}} {{CRYPTO_COINS}} {{TREND_SERIES}}
   It writes MKT_ROWS, CRYPTO_ROWS and SPARKS straight into the payload, from two JSON endpoints already on the allowlist. This REPLACES searching for index levels, percentage moves and intraday series — roughly a hundred searches and fetches, every number arriving through a model reading a rendered page, which is wrong in a way nothing downstream can detect because a misread digit validates perfectly.
   --series is for rows this command does not build: pass one for any exchange-traded fund or large cap in your tables, named EXACTLY as the row names it. A mutual fund has no intraday series — its NAV is struck once a day — so it will report "fewer than 3 points" and simply have no trend drawing. That is correct, not an error.
   Exit 7 means some sources could not be read. They are ABSENT from the payload, never guessed at: say which in the brief and leave the row out. Do NOT fill a missing row in by hand.

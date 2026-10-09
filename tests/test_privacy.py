@@ -55,6 +55,14 @@ def read(path):
 # anything NOT on this list still has to say MOCK, SAMPLE, FAKE or the rest.
 INVENTED_CODES = {"XGGF4"}
 
+# PUBLIC MARKET SYMBOLS, which are facts about an exchange and not about any
+# person. CLAUDE.md draws this line explicitly: a ticker or index name
+# identifies an instrument, never an owner. They are listed one by one rather
+# than matched by a pattern, because "looks like a ticker" is exactly how a
+# booking reference would talk its way through — STOXX50E and a real PNR are
+# the same shape, and only a human knows which is which.
+PUBLIC_SYMBOLS = {"STOXX50E"}
+
 
 class TestNoRealIdentifiers(unittest.TestCase):
     def test_confirmation_codes_are_obviously_fictional(self):
@@ -100,6 +108,7 @@ class TestNoRealIdentifiers(unittest.TestCase):
             text = hex_colour.sub("#", read(f))
             for code in shaped.findall(text):
                 if (not_a_pnr.match(code) or code in INVENTED_CODES
+                        or code in PUBLIC_SYMBOLS
                         or any(m in code for m in FICTION_MARKERS)):
                     continue
                 hits.append(f"{f}: {code}")
