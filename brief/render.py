@@ -268,21 +268,52 @@ def detail_html_email(detail):
     return "<br>".join(out)
 
 
-def no_figure(amount):
-    """True when a horizon's amount is not a figure at all.
+def _is_zero(amount):
+    """True when the amount's digits add up to nothing: "0", "0.00", "$0", "0 pts"."""
+    digits = _re.sub(r"[^\d.]", "", str(amount or ""))
+    try:
+        return float(digits) == 0.0
+    except ValueError:
+        return False
 
-    A run that cannot get a number for one window writes "n/a" (or "\u2014", or
-    "not available") into the amount and, having no change to report, 0.0 into
-    the percentage. Taken at face value that renders as a green \u25b2 at +0.00%
-    over a zero-width bar: the brief states a flat session where it actually
-    knows nothing. Missing is not unchanged, and the two must not look alike.
+
+def no_figure(amount, pct=None):
+    """True when a horizon has no figure to show - in EITHER of its two forms.
+
+    A run that cannot price a window says so in one of two ways, and both mean
+    the same thing:
+
+      "n/a"  - it writes a word, and 0.0 into the percentage beside it
+      0      - it writes a ZERO, and 0.0 into the percentage beside it
+
+    The first was handled; the second was not, and it is the commoner one. On
+    2026-10-09 a brief carried eight cells reading "0 pts \u25b2 +0.00%" for the
+    S&P 500, the Dow and the Nasdaq over 1W and YTD - a green arrow asserting
+    three indexes finished a week and a year EXACTLY unchanged, because the
+    run's quote sources had returned 403 and it wrote zeros. Nothing in the
+    brief said the figure was missing; it said the market did not move.
+
+    So a zero amount beside a zero percentage reads as absent. The trade is
+    deliberate and it is not free: a window that genuinely did not move to the
+    cent now shows as unknown. That is the better error by a wide margin - an
+    index unchanged to the cent over a week is near-impossible, "unknown" sends
+    a reader to look it up, and "unchanged" sends them away believing a thing
+    that is not so.
     """
-    return not _re.search(r"\d", str(amount or ""))
+    if not _re.search(r"\d", str(amount or "")):
+        return True
+    return pct is not None and float(pct) == 0.0 and _is_zero(amount)
 
 
 def missing_word(amount):
-    """What to print in place of the figure. Short, because the column is."""
+    """What to print in place of the figure. Short, because the column is.
+
+    A zero prints as an em dash rather than as "0": echoing the run's zero back
+    would say the very thing this is here to stop saying.
+    """
     word = str(amount or "").strip()
+    if _is_zero(word):
+        return "\u2014"
     return word if 0 < len(word) <= 12 else "n/a"
 
 
@@ -298,7 +329,7 @@ def horizon_cell_file(amount, pct, axis, unit="", reverse=False):
     `reverse` puts the percentage first, which reads better where the absolute
     move is a price delta rather than index points.
     """
-    if no_figure(amount):
+    if no_figure(amount, pct):
         return ('<span class="barfig trio mono">'
                 f'<span class="c na">{e(missing_word(amount))}</span></span>')
     cls = "dir-pos" if pct >= 0 else "dir-neg"
@@ -981,7 +1012,7 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
         research.append(f'<div class="card wide"><h2><span class="num">{num()}.</span> US market</h2>')
         if MKT_ROWS:
             stamp = shared_asof([r[8:] for r in MKT_ROWS])
-            research.append('<div class="tbl-wrap"><table><thead><tr><th>Index · {3}</th><th class="sp-head">{4}</th><th>1D{0}</th><th>1W{1}</th><th>YTD{2}</th></tr></thead><tbody>'.format(axis_div(MKT_24), axis_div(MKT_7D), axis_div(MKT_YTD), quote_head_line(quote_word().lower(), "indexes"), spark_head()))
+            research.append('<div class="tbl-wrap"><table><thead><tr><th>Index · {3}</th><th class="sp-head">{4}</th><th>1D{0}</th><th>1W{1}</th><th>YTD{2}</th></tr></thead><tbody>'.format(axis_div(MKT_24), axis_div(MKT_7D), axis_div(MKT_YTD), quote_head_line(quote_word().lower(), "indexes"), spark_head([r[0] for r in MKT_ROWS])))
             for n, c, p1, v1, p7, v7, py, vy, *asof in MKT_ROWS:
                 research.append('<tr>' + tdl(f'Index · {quote_head_line(quote_word().lower(), "indexes")}', quote_lead(n, c, v1, stamp, asof), "mono")
                                 + tdl(spark_head(), spark_cell_file(n), "spark-cell")
@@ -994,7 +1025,7 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
             # No trailing date column: each NAV states its own time beside the
             # figure, so the column would be that string once more per fund.
             asof_th = ""
-            research.append(f'<h3>Vanguard funds</h3><div class="tbl-wrap"><table><thead><tr><th>Fund · {quote_head_line("NAV", "funds")}</th><th class="sp-head">{spark_head()}</th><th>1D{axis_div(FUND_1D)}</th><th>1W{axis_div(FUND_1W)}</th><th>YTD{axis_div(FUND_YTD)}</th>{asof_th}</tr></thead><tbody>')
+            research.append(f'<h3>Vanguard funds</h3><div class="tbl-wrap"><table><thead><tr><th>Fund · {quote_head_line("NAV", "funds")}</th><th class="sp-head">{spark_head([r[0] for r in FUNDS])}</th><th>1D{axis_div(FUND_1D)}</th><th>1W{axis_div(FUND_1W)}</th><th>YTD{axis_div(FUND_YTD)}</th>{asof_th}</tr></thead><tbody>')
             for tk, nm, nav, a1, v1, a7, v7, ay, vy, asof, note in FUNDS:
                 research.append('<tr>' + tdl(f'Fund · {quote_head_line("NAV", "funds")}', quote_lead(tk, nav, v1, stamp, asof)
                                              + f'<br><span class="meta">{e(nm)}</span>', "mono")
@@ -1006,7 +1037,7 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
             research.append(f'</tbody></table></div>{axis_foot(FUND_1D, "1D NAV change, %")}{axis_foot(FUND_1W, "1W NAV change, %")}{axis_foot(FUND_YTD, "YTD NAV change, %")}<div class="cap">Change from the prior published NAV (1D), over one trading week (1W), and since the previous year-end (YTD) - each in $ and %. {axis_note(FUND_1D, "1D axis")}; {axis_note(FUND_1W, "1W axis")}; {axis_note(FUND_YTD, "YTD axis")}. ' + e(" ".join(f"{tk}: {note}" for tk, nm, nav, a1, v1, a7, v7, ay, vy, asof, note in FUNDS)) + '</div>')
         if STOCKS:
             stamp = shared_asof([r[8:] for r in STOCKS])
-            research.append(f'<h3>Large caps</h3><div class="tbl-wrap"><table><thead><tr><th>Ticker · {quote_head_line("price", "stocks")}</th><th class="sp-head">{spark_head()}</th><th>1D{axis_div(STK_1D)}</th><th>1W{axis_div(STK_1W)}</th><th>YTD{axis_div(STK_YTD)}</th></tr></thead><tbody>')
+            research.append(f'<h3>Large caps</h3><div class="tbl-wrap"><table><thead><tr><th>Ticker · {quote_head_line("price", "stocks")}</th><th class="sp-head">{spark_head([r[0] for r in STOCKS])}</th><th>1D{axis_div(STK_1D)}</th><th>1W{axis_div(STK_1W)}</th><th>YTD{axis_div(STK_YTD)}</th></tr></thead><tbody>')
             for tk, pr, a1, v1, a7, v7, ay, vy, *asof in STOCKS:
                 research.append('<tr>' + tdl(f'Ticker · {quote_head_line("price", "stocks")}', quote_lead(tk, pr, v1, stamp, asof), "mono")
                                 + tdl(spark_head(), spark_cell_file(tk), "spark-cell")
@@ -1021,7 +1052,7 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
         research.append(f'<div class="card wide"><h2><span class="num">{num()}.</span> Cryptocurrency</h2>')
         if CRYPTO_ROWS:
             stamp = shared_asof([r[8:] for r in CRYPTO_ROWS])
-            research.append(f'<div class="tbl-wrap"><table><thead><tr><th>Asset · {quote_head_line("price", "crypto")}</th><th class="sp-head">{spark_head()}</th><th>1D{axis_div(CRY_24)}</th><th>1W{axis_div(CRY_7D)}</th><th>YTD{axis_div(CRY_YTD)}</th></tr></thead><tbody>')
+            research.append(f'<div class="tbl-wrap"><table><thead><tr><th>Asset · {quote_head_line("price", "crypto")}</th><th class="sp-head">{spark_head([r[0] for r in CRYPTO_ROWS])}</th><th>1D{axis_div(CRY_24)}</th><th>1W{axis_div(CRY_7D)}</th><th>YTD{axis_div(CRY_YTD)}</th></tr></thead><tbody>')
             for n, pr, v1, a1, v7, a7, vy, ay, *asof in CRYPTO_ROWS:
                 research.append('<tr>' + tdl(f'Asset · {quote_head_line("price", "crypto")}', quote_lead(n, pr, v1, stamp, asof), "mono")
                                 + tdl(spark_head(), spark_cell_file(n), "spark-cell")
@@ -1647,9 +1678,18 @@ def spark_for(name):
     return entry.get("series") or [], clock24(str(entry.get("window") or "").strip())
 
 
-def spark_head():
+def spark_head(names=()):
     """The trend column's heading. It says nothing about scale, because each
-    row is scaled to itself - the labels that matter are in the cell."""
+    row is scaled to itself - the labels that matter are in the cell.
+
+    When NOT ONE row in the table has a series, the heading says so. An empty
+    column of dashes looks like the drawing broke, and it has been read that
+    way more than once; the drawing is fine, the payload simply carried no
+    series. The reader should be able to tell those apart without opening a
+    repo, and the run should see its own omission printed in the brief.
+    """
+    if names and not any(spark_for(n)[0] for n in names):
+        return 'Trend <span class="muted">· no series this run</span>'
     return "Trend"
 
 
@@ -2354,7 +2394,7 @@ def em_horizon(amount, pct, axis, unit="", reverse=False):
     so it prints the word and stops. Drawing an arrow and a bar for it would
     invent a flat session out of a gap in the data.
     """
-    if no_figure(amount):
+    if no_figure(amount, pct):
         return (f'<div align="center" style="color:{L["ink3"]};font-weight:400">'
                 f'{e(missing_word(amount))}</div>')
     colour = L["pos"] if pct >= 0 else L["neg"]

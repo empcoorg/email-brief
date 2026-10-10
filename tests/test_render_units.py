@@ -2013,12 +2013,18 @@ class TestThePageLayoutIsPinned(unittest.TestCase):
 
     def test_a_row_whose_series_is_missing_still_keeps_its_cell(self):
         """The column stays; only the drawing is absent. A run that sends no
-        SPARKS gets the same table with em dashes, not a different layout."""
+        SPARKS gets the same table with em dashes, not a different layout.
+
+        The heading also NAMES the gap when no row in the table drew anything,
+        so a column of dashes cannot be mistaken for a broken renderer — which
+        it has been, repeatedly. The column itself is what must not move.
+        """
         p = payload()
         p["SPARKS"] = {}
         f, _em, _tx = render_all(p)
         cols = self.columns(f, "US market")
-        self.assertEqual(cols[1], "Trend")
+        self.assertTrue(cols[1].startswith("Trend"), cols[1])
+        self.assertIn("no series this run", cols[1])
         market = f.split("US market")[1].split("</table>")[0]
         self.assertIn("—", market.split("<tbody>")[1])
         self.assertNotIn("<svg", market.split("<tbody>")[1])
@@ -2196,3 +2202,87 @@ class TestATileTakesANumberAsMoney(unittest.TestCase):
         from brief.render import tile_amount
         self.assertEqual(tile_amount("MX$10,200.00 MXN"), ("MX$10,200.00", "MXN"))
         self.assertEqual(tile_amount("$1,294.65 USD"), ("$1,294.65", "USD"))
+
+
+class TestAZeroIsNotAFlatSession(unittest.TestCase):
+    """A run that cannot price a window writes a ZERO at least as often as it
+    writes "n/a", and both mean the same thing.
+
+    2026-10-09: a brief carried eight cells reading "0 pts ▲ +0.00%" for the
+    S&P 500, the Dow and the Nasdaq over 1W and YTD — a green arrow asserting
+    three indexes finished a week and a year exactly unchanged, because the
+    run's quote sources returned 403 and it wrote zeros. The earlier fix
+    caught only the worded form.
+    """
+
+    def test_a_zero_beside_a_zero_percent_reads_as_absent(self):
+        from brief.render import no_figure
+        for amount in ("0", "0.0", "0 pts", "$0.00", "+0.00"):
+            self.assertTrue(no_figure(amount, 0.0), amount)
+
+    def test_a_zero_with_a_real_percent_is_still_a_figure(self):
+        """Only the PAIR means nothing. A zero amount beside a real move is
+        odd but stated, and the renderer does not get to overrule it."""
+        from brief.render import no_figure
+        self.assertFalse(no_figure("0 pts", -0.31))
+        self.assertFalse(no_figure("0.00", 1.2))
+
+    def test_a_real_figure_is_untouched(self):
+        from brief.render import no_figure
+        for amount, pct in (("+152.32 pts", 2.02), ("+$1.58", 1.21), ("−26.26 pts", -0.34)):
+            self.assertFalse(no_figure(amount, pct), amount)
+
+    def test_the_cell_prints_a_dash_not_the_runs_zero(self):
+        """Echoing "0" back would say the very thing this exists to stop."""
+        from brief.render import missing_word
+        self.assertEqual(missing_word("0 pts"), "—")
+        self.assertEqual(missing_word("0"), "—")
+        self.assertEqual(missing_word("n/a"), "n/a")
+
+    def test_neither_body_draws_an_arrow_or_a_bar_for_it(self):
+        import brief.render as R
+        R.render_all(payload())
+        for cell in (R.horizon_cell_file("0 pts", 0.0, R.MKT_7D, "pts"),
+                     R.em_horizon("0 pts", 0.0, R.MKT_7D, "pts")):
+            self.assertNotIn("▲", cell)
+            self.assertNotIn("+0.00%", cell)
+            self.assertNotIn("dbar", cell)
+
+
+class TestAnEmptyTrendColumnSaysWhy(unittest.TestCase):
+    """A column of dashes looks like the drawing broke. It has been read that
+    way more than once; the drawing is fine and the payload carried no series.
+
+    The reader should be able to tell those apart without opening the repo,
+    and the run should see its own omission printed in the brief.
+    """
+
+    def test_the_heading_says_so_when_no_row_has_a_series(self):
+        import brief.render as R
+        p = payload()
+        p["SPARKS"] = {}
+        page = R.render_all(p)[0]
+        self.assertIn("no series this run", page)
+        self.assertEqual(page.count('class="spark '), 0)
+
+    def test_the_heading_stays_plain_when_the_series_are_there(self):
+        import brief.render as R
+        page = R.render_all(payload())[0]
+        self.assertNotIn("no series this run", page)
+        self.assertGreater(page.count('class="spark '), 0)
+
+    def test_one_row_with_a_series_is_enough_to_keep_it_plain(self):
+        """The note is for a column that drew NOTHING — a single missing row
+        is already said by that row's own dash."""
+        import brief.render as R
+        p = payload()
+        keep = p["MKT_ROWS"][0][0]
+        p["SPARKS"] = {keep: p["SPARKS"][keep]} if keep in (p.get("SPARKS") or {}) else {}
+        if not p["SPARKS"]:
+            self.skipTest("sample carries no series for the first index row")
+        page = R.render_all(p)[0]
+        # scoped to the index table: the fund, stock and crypto tables have had
+        # their series removed too and SHOULD each carry the note
+        index_head = page.split("Index \u00b7")[1].split("</thead>")[0]
+        self.assertNotIn("no series this run", index_head)
+        self.assertIn("no series this run", page, "the other tables still say it")
