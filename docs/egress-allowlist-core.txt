@@ -22,6 +22,17 @@
 # that would take a payload. The prompt's own rule - nothing from the mailbox
 # ever goes into a web request - is what actually keeps the two apart.
 
+# THESE TWO FIRST. They are the only hosts `brief markets` calls, and that one
+# command is where the index levels, the crypto prices and EVERY trend series
+# come from. Without them the quote tables fall back to a scraping chain that
+# has been returning 403, and SPARKS arrives empty — which is a brief with no
+# trend drawings and horizons it had to guess at.
+# Exact hostnames, not the registered domain: this proxy matched
+# www.coingecko.com as blocked while coingecko.com was listed, so a wildcard
+# is not something to rely on for the hosts that matter most.
+query1.finance.yahoo.com
+api.coingecko.com
+
 # Quotes, funds and crypto — the tables that come out empty without these
 *.stockanalysis.com
 *.stooq.com

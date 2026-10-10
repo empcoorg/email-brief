@@ -160,7 +160,15 @@ class TestTheShortAllowlist(unittest.TestCase):
             return [l.strip() for l in fh if l.strip() and not l.startswith("#")]
 
     def test_every_entry_is_one_site_not_a_whole_suffix(self):
+        """A wildcard entry names ONE site. An exact hostname is also allowed,
+        and is what the hosts the code itself fetches are listed as: this proxy
+        blocked www.coingecko.com while coingecko.com was listed, so a wildcard
+        is not something to rely on where it matters most."""
         for d in self.entries():
+            if not d.startswith("*."):
+                self.assertRegex(d, r"^[a-z0-9-]+(\.[a-z0-9-]+)+$",
+                                 f"{d}: an exact hostname, or a *.site wildcard")
+                continue
             self.assertRegex(d, r"^\*\.[a-z0-9-]+\.[a-z.]{2,6}$",
                              f"{d}: one wildcard, one site")
             self.assertNotRegex(d, r"^\*\.[a-z]{2,6}$", f"{d}: that is a whole suffix")
@@ -216,3 +224,78 @@ class TestTheAllowlistFeeder(unittest.TestCase):
 
     def test_the_readme_mentions_it(self):
         self.assertIn("allowlist_feed.py", README)
+
+
+class TestTheAllowlistCoversWhatTheCodeCalls(unittest.TestCase):
+    """Every host brief/ fetches from must be on the list the owner types.
+
+    `brief markets` shipped calling query1.finance.yahoo.com and
+    api.coingecko.com while the allowlist carried only *.yahoo.com and
+    *.coingecko.com — and its own commit message claimed both endpoints were
+    "already on the egress allowlist". They were not. The run fетched
+    nothing, SPARKS arrived empty, and the brief lost its trend drawings and
+    guessed at horizons it should have refused.
+
+    The allowlist is prose about the code, so prose is the wrong place to
+    keep it true. This derives the hosts FROM THE SOURCE.
+    """
+
+    CORE = os.path.join(ROOT, "docs", "egress-allowlist-core.txt")
+    FULL = os.path.join(ROOT, "docs", "egress-allowlist.txt")
+
+    # Only the module that makes requests. Every other https:// literal under
+    # brief/ is a link the renderer BUILDS for the reader to click — arxiv.org,
+    # a job posting, example.com in a docstring — and the run never fetches
+    # those, so requiring egress for them would be noise that gets ignored.
+    FETCHING_MODULES = ("markets.py",)
+
+    def hosts_the_code_calls(self):
+        """Hostnames of the request URLs in the modules that fetch."""
+        import urllib.parse
+        found = set()
+        for name in self.FETCHING_MODULES:
+            text = open(os.path.join(ROOT, "brief", name), encoding="utf-8").read()
+            # the URL CONSTANTS, not every https:// literal — the module also
+            # carries its own project address in the User-Agent, which it
+            # identifies itself with and never fetches
+            for url in re.findall(r"^[A-Z][A-Z0-9_]*\s*=\s*[\"']?(https://[A-Za-z0-9.\-]+)",
+                                  text, re.M):
+                host = urllib.parse.urlparse(url).netloc
+                if host:
+                    found.add(host)
+        return found
+
+    def test_the_fetching_modules_are_the_ones_that_fetch(self):
+        """If a new module starts making requests, this list must grow with it,
+        or the check above silently stops covering the repo."""
+        import glob
+        fetchers = {os.path.basename(p) for p in glob.glob(os.path.join(ROOT, "brief", "*.py"))
+                    if "urllib.request" in open(p, encoding="utf-8").read()}
+        self.assertEqual(fetchers, set(self.FETCHING_MODULES),
+                         "a module gained (or lost) network access; update FETCHING_MODULES")
+
+    def listed(self, path):
+        with open(path, encoding="utf-8") as fh:
+            return {ln.strip() for ln in fh
+                    if ln.strip() and not ln.strip().startswith("#")}
+
+    def _covered(self, host, entries):
+        if host in entries:
+            return True
+        parts = host.split(".")
+        # a wildcard covers one level down, which is how the file writes them
+        return any(f"*.{'.'.join(parts[i:])}" in entries for i in range(1, len(parts) - 1))
+
+    def test_every_fetched_host_is_on_the_short_list(self):
+        entries = self.listed(self.CORE)
+        missing = sorted(h for h in self.hosts_the_code_calls()
+                         if not self._covered(h, entries))
+        self.assertEqual(missing, [], f"brief/ fetches these and the short allowlist "
+                                      f"does not carry them: {missing}")
+
+    def test_every_fetched_host_is_on_the_reference_list_by_name(self):
+        """By NAME, not by wildcard: the file's own header records that this
+        proxy blocked www.coingecko.com while coingecko.com was listed."""
+        entries = self.listed(self.FULL)
+        missing = sorted(h for h in self.hosts_the_code_calls() if h not in entries)
+        self.assertEqual(missing, [], f"not listed by exact hostname: {missing}")

@@ -62,6 +62,7 @@ www.fedratecalc.com
 fidelity.com
 www.fidelity.com
 finance.yahoo.com
+query1.finance.yahoo.com
 finra.org
 www.finra.org
 finviz.com
@@ -191,6 +192,7 @@ coinbase.com
 www.coinbase.com
 coindesk.com
 www.coindesk.com
+api.coingecko.com
 coingecko.com
 www.coingecko.com
 coinglass.com
