@@ -1034,7 +1034,7 @@ footer{{margin-top:28px;font-size:12.5px;color:var(--ink-3);border-top:1px solid
                                 + tdl("1W", horizon_cell_file(a7, v7, FUND_1W))
                                 + tdl("YTD", horizon_cell_file(ay, vy, FUND_YTD))
                                 + '</tr>')
-            research.append(f'</tbody></table></div>{axis_foot(FUND_1D, "1D NAV change, %")}{axis_foot(FUND_1W, "1W NAV change, %")}{axis_foot(FUND_YTD, "YTD NAV change, %")}<div class="cap">Change from the prior published NAV (1D), over one trading week (1W), and since the previous year-end (YTD) - each in $ and %. {axis_note(FUND_1D, "1D axis")}; {axis_note(FUND_1W, "1W axis")}; {axis_note(FUND_YTD, "YTD axis")}. ' + e(" ".join(f"{tk}: {note}" for tk, nm, nav, a1, v1, a7, v7, ay, vy, asof, note in FUNDS)) + '</div>')
+            research.append(f'</tbody></table></div>{axis_foot(FUND_1D, "1D NAV change, %")}{axis_foot(FUND_1W, "1W NAV change, %")}{axis_foot(FUND_YTD, "YTD NAV change, %")}<div class="cap">Change from the prior published NAV (1D), over one trading week (1W), and since the previous year-end (YTD) - each in $ and %. {axis_note(FUND_1D, "1D axis")}; {axis_note(FUND_1W, "1W axis")}; {axis_note(FUND_YTD, "YTD axis")}. ' + e(fund_notes_text()) + '</div>')
         if STOCKS:
             stamp = shared_asof([r[8:] for r in STOCKS])
             research.append(f'<h3>Large caps</h3><div class="tbl-wrap"><table><thead><tr><th>Ticker · {quote_head_line("price", "stocks")}</th><th class="sp-head">{spark_head([r[0] for r in STOCKS])}</th><th>1D{axis_div(STK_1D)}</th><th>1W{axis_div(STK_1W)}</th><th>YTD{axis_div(STK_YTD)}</th></tr></thead><tbody>')
@@ -1218,6 +1218,41 @@ def tile_amount(value):
     if m:
         return m.group(1), m.group(2)
     return v, ("USD" if v[:1] in "$-\u2212+" or v[:2] in ("MX", "US") else "")
+
+
+def fund_notes_text():
+    """The funds' sourcing notes, said once each instead of once per row.
+
+    Every row carries its own note, and a run that sourced the whole table the
+    same way writes the SAME sentence into all of them. Joining them verbatim
+    printed it five times:
+
+        VFIAX: Yahoo Finance history (...); YTD base = Dec 31, 2025 close
+        VIGAX: Yahoo Finance history (...); YTD base = Dec 31, 2025 close
+        ... three more, run together with no separator between them
+
+    A caption is read once. Identical notes collapse to one line with no
+    ticker prefix at all; where notes genuinely differ, the tickers that share
+    each one are listed against it and the groups are separated by a middot,
+    which is also the first time the boundary between two notes is visible.
+    """
+    groups = []                      # [(note, [tickers])], first-seen order
+    for row in FUNDS:
+        tk, note = row[0], str(row[10]).strip()
+        if not note:
+            continue
+        for seen, tickers in groups:
+            if seen == note:
+                tickers.append(tk)
+                break
+        else:
+            groups.append((note, [tk]))
+    if not groups:
+        return ""
+    if len(groups) == 1:
+        # one source for the whole table: naming the rows adds nothing
+        return groups[0][0]
+    return " \u00b7 ".join(f"{', '.join(tickers)}: {note}" for note, tickers in groups)
 
 
 def actions_sub():
@@ -2949,7 +2984,7 @@ def email_html(budget=None):
                 rws.append([td(f'{lead(tk)}<br>{quote_cell_email(nav, v1, asof)}<br>{sp(f"YTD {pct_str(vy)} {arrow(vy)}", ky)}{spark_row_email(tk, dircol)}', mono=True),
                             td(em_horizon(a1, v1, FUND_1D), mono=True),
                             td(em_horizon(a7, v7, FUND_1W), mono=True)])
-            inner += h3("Vanguard funds") + tbl([f'Fund · {quote_head_line("NAV", "funds")} · YTD', th_axis("1D", pct_labels(FUND_1D)), th_axis("1W", pct_labels(FUND_1W))], rws, ["30%", "35%", "35%"]) + cap("Change from the prior published NAV (1D), over one trading week (1W), and since the previous year-end (YTD). " + " ".join(f"{tk}: {note}" for tk, nm, nav, a1, v1, a7, v7, ay, vy, asof, note in FUNDS))
+            inner += h3("Vanguard funds") + tbl([f'Fund · {quote_head_line("NAV", "funds")} · YTD', th_axis("1D", pct_labels(FUND_1D)), th_axis("1W", pct_labels(FUND_1W))], rws, ["30%", "35%", "35%"]) + cap("Change from the prior published NAV (1D), over one trading week (1W), and since the previous year-end (YTD). " + fund_notes_text())
         if STOCKS:
             inner += large_caps_email()
         if MKT_BULLETS:

@@ -2286,3 +2286,61 @@ class TestAnEmptyTrendColumnSaysWhy(unittest.TestCase):
         index_head = page.split("Index \u00b7")[1].split("</thead>")[0]
         self.assertNotIn("no series this run", index_head)
         self.assertIn("no series this run", page, "the other tables still say it")
+
+
+class TestAFundNoteIsSaidOnce(unittest.TestCase):
+    """A caption is read once, so it says each thing once.
+
+    Every fund row carries its own sourcing note, and a run that sourced the
+    whole table one way writes the same sentence into all of them. Joined
+    verbatim that printed the sentence five times, run together with no
+    separator between one row's note and the next row's ticker.
+    """
+
+    def _with_notes(self, notes):
+        """The sample carries two fund rows; repeat one to reach the length
+        a case needs, so the test states its own fixture rather than
+        depending on how many funds the sample happens to hold."""
+        p = payload()
+        rows = [list(r) for r in p["FUNDS"]]
+        while len(rows) < len(notes):
+            extra = list(rows[0])
+            extra[0] = f"{rows[0][0]}{len(rows)}"        # a distinct ticker
+            rows.append(extra)
+        p["FUNDS"] = rows[:len(notes)]
+        for row, note in zip(p["FUNDS"], notes):
+            row[10] = note
+        return p
+
+    def test_one_shared_note_is_printed_once_without_tickers(self):
+        import brief.render as R
+        note = "Yahoo Finance history; YTD base = Dec 31, 2025 close"
+        R.render_all(self._with_notes([note, note, note]))
+        self.assertEqual(R.fund_notes_text(), note)
+
+    def test_distinct_notes_group_the_tickers_that_share_them(self):
+        import brief.render as R
+        p = self._with_notes(["source A", "source B", "source A"])
+        tickers = [r[0] for r in p["FUNDS"]]
+        R.render_all(p)
+        out = R.fund_notes_text()
+        self.assertIn(f"{tickers[0]}, {tickers[2]}: source A", out)
+        self.assertIn(f"{tickers[1]}: source B", out)
+        self.assertIn(" · ", out, "the boundary between two notes is visible")
+
+    def test_an_empty_note_is_not_a_group(self):
+        import brief.render as R
+        R.render_all(self._with_notes(["", "", ""]))
+        self.assertEqual(R.fund_notes_text(), "")
+
+    def test_the_caption_stops_repeating_itself_in_both_bodies(self):
+        import brief.render as R
+        note = "Yahoo Finance history; YTD base = Dec 31, 2025 close"
+        p = payload()
+        p["FUNDS"] = [list(r) for r in p["FUNDS"]]
+        for row in p["FUNDS"]:
+            row[10] = note
+        self.assertGreater(len(p["FUNDS"]), 1)
+        page, em, _tx = R.render_all(p)
+        self.assertEqual(page.count(note), 1)
+        self.assertEqual(em.count(note), 1)
